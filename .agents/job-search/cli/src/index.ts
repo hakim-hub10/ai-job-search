@@ -37,6 +37,15 @@ export type {
   ApplicationRepositoryResult,
 } from "./application-repository"
 export {
+  createApplicationWorkflow,
+  type ApplicationWorkflow,
+  type StartApplicationInput,
+  type UpdateApplicationStatusAndSaveInput,
+  type AddApplicationNoteAndSaveInput,
+  type ApplicationWorkflowError,
+  type ApplicationWorkflowResult,
+} from "./application-workflow"
+export {
   createRequirementDescriptor,
   createRequirementIdentity,
   normalizeRequirementText,
