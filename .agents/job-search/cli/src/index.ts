@@ -4,6 +4,11 @@ export { dedupeJobs } from "./dedupe"
 export { normalizeJob } from "./utils"
 export { registerBuiltInSourceAdapters } from "./adapters"
 export {
+  analyzeJobs,
+  type CareerAnalysisOptions,
+  type CareerAnalysisResult,
+} from "./orchestrator"
+export {
   createRequirementDescriptor,
   createRequirementIdentity,
   normalizeRequirementText,
