@@ -139,6 +139,23 @@ export {
   type GeneratedApplicationDocumentWorkflowResult,
 } from "./document-workflow"
 export {
+  createFileApplicationDocumentRepository,
+} from "./application-document-file-repository"
+export type {
+  ApplicationDocumentRecord,
+  ApplicationDocumentRepository,
+  ApplicationDocumentRepositoryErrorCode,
+  ApplicationDocumentRepositoryError,
+  ApplicationDocumentRepositoryResult,
+} from "./application-document-repository"
+export {
+  createApplicationDocumentStorageWorkflow,
+  type SaveGeneratedApplicationDocumentInput,
+  type ApplicationDocumentStorageWorkflowError,
+  type ApplicationDocumentStorageWorkflowResult,
+  type ApplicationDocumentStorageWorkflow,
+} from "./application-document-storage-workflow"
+export {
   createRequirementDescriptor,
   createRequirementIdentity,
   normalizeRequirementText,
