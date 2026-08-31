@@ -174,6 +174,11 @@ export {
   type EmploymentType,
 } from "./profile"
 export {
+  CandidateProfileInputError,
+  parseCandidateProfile,
+  loadCandidateProfile,
+} from "./profile-input"
+export {
   matchProfile,
   type MatchingResult,
   type MatchEvidence,

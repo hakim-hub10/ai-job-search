@@ -1,0 +1,38 @@
+{
+  "headline": "Example operations and service professional",
+  "targetRoles": ["Operations Coordinator", "Customer Service Coordinator"],
+  "locationPreferences": ["Example City", "Remote"],
+  "workMode": "hybrid",
+  "remotePreference": true,
+  "preferredIndustries": ["Services", "Logistics"],
+  "preferredEmploymentType": ["full-time", "open"],
+  "skills": {
+    "technical": ["Scheduling", "Spreadsheet analysis"],
+    "soft": ["Communication", "Coordination"]
+  },
+  "workExperience": [
+    {
+      "title": "Service Coordinator",
+      "company": "Example Services Ltd.",
+      "location": "Example City",
+      "startDate": "2022-01",
+      "summary": "Coordinated customer requests and daily schedules."
+    }
+  ],
+  "education": [
+    {
+      "degree": "Diploma",
+      "field": "Business Administration",
+      "institution": "Example College",
+      "endYear": 2021
+    }
+  ],
+  "certifications": ["Example workplace safety certificate"],
+  "languages": [
+    { "name": "English", "level": "Professional working proficiency" },
+    { "name": "Swedish", "level": "Professional working proficiency" }
+  ],
+  "yearsOfExperience": 4,
+  "careerGoals": ["Develop operational coordination skills"],
+  "summary": "Synthetic example only; not a real candidate profile."
+}
