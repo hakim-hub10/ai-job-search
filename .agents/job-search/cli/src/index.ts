@@ -92,6 +92,7 @@ export {
   type TailoringResult,
   type TailoringValidationResult,
 } from "./document-tailoring"
+export { renderApplicationDocument, type RenderFormat, type RenderWarningCode, type RenderWarning, type RenderMapEntry, type RenderedDocument, type RenderErrorCode, type RenderError, type RenderResult } from "./document-rendering"
 export {
   createRequirementDescriptor,
   createRequirementIdentity,
