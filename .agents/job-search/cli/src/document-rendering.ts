@@ -1,5 +1,6 @@
 import { validateTailoringPlan, type TailoringPlan, type TailoringWarning } from "./document-tailoring"
 import type { ApplicationDocumentFoundation, DocumentLanguage, DocumentType, DocumentWarning } from "./application-documents"
+import type { GeneratedDocumentClaim, GeneratedDocumentSection } from "./document-generation"
 
 export type RenderFormat = "markdown"
 export type RenderWarningCode = "NO_SUMMARY" | "SPARSE_RENDERED_CV" | "MISSING_IDENTITY_HEADER" | "COVER_LETTER_OUTLINE_ONLY"
@@ -9,7 +10,32 @@ export interface RenderedDocument {
   applicationId: string; type: DocumentType; language: DocumentLanguage; format: RenderFormat; content: string
   renderMap: RenderMapEntry[]; warnings: Array<DocumentWarning | TailoringWarning | RenderWarning>
 }
-export type RenderErrorCode = "INVALID_TAILORING_PLAN" | "INVALID_EVIDENCE_REFERENCE" | "UNSUPPORTED_DOCUMENT_TYPE" | "UNSUPPORTED_LANGUAGE" | "UNSUPPORTED_FORMAT" | "MALFORMED_RENDER_INPUT"
+export interface GeneratedApplicationDocument {
+  applicationId: string
+  documentType: DocumentType
+  language: DocumentLanguage
+  sections: GeneratedDocumentSection[]
+  requiresHumanReview: boolean
+  warnings: Array<DocumentWarning | TailoringWarning>
+}
+export interface GeneratedRenderMapEntry {
+  sectionId: string
+  claimId: string
+  blockIndex: number
+  evidenceIds: string[]
+  provenance: GeneratedDocumentClaim["provenance"]
+}
+export interface GeneratedDocumentRenderResult {
+  applicationId: string
+  documentType: DocumentType
+  language: DocumentLanguage
+  format: RenderFormat
+  content: string
+  renderMap: GeneratedRenderMapEntry[]
+  requiresHumanReview: boolean
+  warnings: Array<DocumentWarning | TailoringWarning>
+}
+export type RenderErrorCode = "INVALID_TAILORING_PLAN" | "INVALID_EVIDENCE_REFERENCE" | "UNSUPPORTED_DOCUMENT_TYPE" | "UNSUPPORTED_LANGUAGE" | "UNSUPPORTED_FORMAT" | "MALFORMED_RENDER_INPUT" | "INVALID_GENERATED_DOCUMENT"
 export interface RenderError { code: RenderErrorCode; message: string }
 export type RenderResult<T> = { ok: true; value: T } | { ok: false; error: RenderError }
 
@@ -63,4 +89,73 @@ export function renderApplicationDocument(foundation: ApplicationDocumentFoundat
   if (plan.type === "cv" && blocks < 3) warnings.push({ code: "SPARSE_RENDERED_CV", message: "Rendered CV contains limited selected evidence; no filler was added." })
   if (plan.type === "coverLetter") warnings.push({ code: "COVER_LETTER_OUTLINE_ONLY", message: "This is a structured outline, not a finished cover letter." })
   return { ok: true, value: { applicationId: plan.applicationId, type: plan.type, language: plan.language, format, content: lines.join("\n"), renderMap, warnings } }
+}
+
+/**
+ * Renders only the validated generated-document domain model. Raw provider
+ * responses must first pass Phase 4.4.1 validation and workflow conversion.
+ */
+export function renderGeneratedApplicationDocument(
+  document: GeneratedApplicationDocument,
+  format: RenderFormat = "markdown",
+): RenderResult<GeneratedDocumentRenderResult> {
+  if (format !== "markdown") return failure("UNSUPPORTED_FORMAT", "Phase 4.3 supports only markdown rendering.")
+  if (!document || typeof document !== "object" || !Array.isArray(document.sections) || !Array.isArray(document.warnings)
+    || typeof document.applicationId !== "string" || !document.applicationId.trim() || typeof document.requiresHumanReview !== "boolean") {
+    return failure("INVALID_GENERATED_DOCUMENT", "Rendering requires a validated generated application document.")
+  }
+  if (document.documentType !== "cv" && document.documentType !== "coverLetter") return failure("UNSUPPORTED_DOCUMENT_TYPE", "Unsupported document type.")
+  if (document.language !== "en" && document.language !== "sv") return failure("UNSUPPORTED_LANGUAGE", "Unsupported document language.")
+  const labels = headings[document.language]
+  const lines: string[] = []
+  const renderMap: GeneratedRenderMapEntry[] = []
+  let blocks = 0
+  for (const section of document.sections) {
+    if (!section || typeof section.id !== "string" || !Array.isArray(section.claims)) {
+      return failure("INVALID_GENERATED_DOCUMENT", "Every generated document section must contain structured claims.")
+    }
+    const claims = section.claims
+    if (!claims.every((claim) => claim && typeof claim.id === "string" && typeof claim.text === "string" && Array.isArray(claim.evidenceIds))) {
+      return failure("INVALID_GENERATED_DOCUMENT", "Every generated document claim must be structured.")
+    }
+    if (section.kind === "identity") {
+      if (claims.length) {
+        lines.push(`# ${claims.map((claim) => escape(claim.text)).join(" | ")}`)
+        for (const claim of claims) {
+          renderMap.push({
+            sectionId: section.id,
+            claimId: claim.id,
+            blockIndex: blocks++,
+            evidenceIds: [...claim.evidenceIds],
+            provenance: claim.provenance,
+          })
+        }
+      }
+    } else if (claims.length) {
+      lines.push(`## ${labels[section.kind] ?? labels.other}`)
+      for (const claim of claims) {
+        lines.push(`- ${escape(claim.text)}`)
+        renderMap.push({
+          sectionId: section.id,
+          claimId: claim.id,
+          blockIndex: blocks++,
+          evidenceIds: [...claim.evidenceIds],
+          provenance: claim.provenance,
+        })
+      }
+    }
+  }
+  return {
+    ok: true,
+    value: {
+      applicationId: document.applicationId,
+      documentType: document.documentType,
+      language: document.language,
+      format,
+      content: lines.join("\n"),
+      renderMap,
+      requiresHumanReview: document.requiresHumanReview,
+      warnings: structuredClone(document.warnings),
+    },
+  }
 }

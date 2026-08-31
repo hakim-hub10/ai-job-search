@@ -92,7 +92,21 @@ export {
   type TailoringResult,
   type TailoringValidationResult,
 } from "./document-tailoring"
-export { renderApplicationDocument, type RenderFormat, type RenderWarningCode, type RenderWarning, type RenderMapEntry, type RenderedDocument, type RenderErrorCode, type RenderError, type RenderResult } from "./document-rendering"
+export {
+  renderApplicationDocument,
+  renderGeneratedApplicationDocument,
+  type RenderFormat,
+  type RenderWarningCode,
+  type RenderWarning,
+  type RenderMapEntry,
+  type RenderedDocument,
+  type GeneratedApplicationDocument,
+  type GeneratedRenderMapEntry,
+  type GeneratedDocumentRenderResult,
+  type RenderErrorCode,
+  type RenderError,
+  type RenderResult,
+} from "./document-rendering"
 export {
   buildDocumentGenerationRequest,
   validateGeneratedDocumentProposal,
@@ -117,6 +131,13 @@ export {
   type DocumentGenerationOptions,
 } from "./document-generation"
 export { createOpenAIDocumentGenerator, type OpenAIDocumentGeneratorConfig } from "./providers/openai-document-generator"
+export {
+  generateApplicationDocument,
+  type GenerateApplicationDocumentInput,
+  type GeneratedApplicationDocumentResult,
+  type GeneratedApplicationDocumentError,
+  type GeneratedApplicationDocumentWorkflowResult,
+} from "./document-workflow"
 export {
   createRequirementDescriptor,
   createRequirementIdentity,

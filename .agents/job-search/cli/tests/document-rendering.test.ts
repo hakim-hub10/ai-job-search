@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test"
-import { createRequirementDescriptor, renderApplicationDocument, type ApplicationDocumentFoundation, type TailoringPlan } from "../src/index"
+import { createRequirementDescriptor, renderApplicationDocument, renderGeneratedApplicationDocument, type ApplicationDocumentFoundation, type GeneratedApplicationDocument, type TailoringPlan } from "../src/index"
 
 const requirement = createRequirementDescriptor("skill", "Scheduling", "required")
 function foundation(): ApplicationDocumentFoundation { return { applicationContext: { applicationId: "a", jobId: "j", source: "test", sourceId: "s", jobTitle: "Senior Kubernetes Engineer", company: "Example", confidence: 1, confidenceLabel: "high" }, catalog: { evidence: [
@@ -13,4 +13,12 @@ describe("Phase 4.3 rendering", () => {
   it("renders a deterministic CV in plan order with exact evidence and provenance", () => { const a=renderApplicationDocument(foundation(),plan()); const b=renderApplicationDocument(foundation(),plan()); expect(a).toEqual(b); if(!a.ok) throw Error(a.error.message); expect(a.value).toMatchObject({applicationId:"a",type:"cv",language:"en",format:"markdown"}); expect(a.value.content).toContain("# Cloud Engineer"); expect(a.value.content).not.toContain("Senior Kubernetes Engineer"); expect(a.value.content).toContain("&lt;script&gt;x&lt;/script&gt;"); expect(a.value.renderMap.map(x=>x.evidenceIds[0])).toEqual(["summary","experience","skill"]); })
   it("uses Swedish headings and produces an outline only for cover letters", () => { const r=renderApplicationDocument(foundation(),plan("coverLetter","sv")); if(!r.ok) throw Error(r.error.message); expect(r.value.content).toContain("## Personligt brev – disposition"); expect(r.value.warnings).toContainEqual(expect.objectContaining({code:"COVER_LETTER_OUTLINE_ONLY"})); })
   it("rejects invalid plans and does not invent sparse content", () => { const bad=plan(); bad.selections[0].evidenceId="missing"; expect(renderApplicationDocument(foundation(),bad)).toMatchObject({ok:false,error:{code:"INVALID_TAILORING_PLAN"}}); const sparse=plan(); sparse.sections=sparse.sections.slice(0,1); sparse.selections=sparse.selections.slice(0,1); sparse.requirementSupport[0].evidenceIds=[]; const r=renderApplicationDocument(foundation(),sparse); if(!r.ok) throw Error(r.error.message); expect(r.value.warnings).toContainEqual(expect.objectContaining({code:"NO_SUMMARY"})); })
+  it("additively renders validated generated claims with provenance and review metadata", () => {
+    const document: GeneratedApplicationDocument = { applicationId: "a", documentType: "coverLetter", language: "sv", requiresHumanReview: true, warnings: [], sections: [{ id: "summary", kind: "summary", claims: [{ id: "claim-1", kind: "candidateFact", provenance: "paraphrased", text: "<säker sammanfattning>", evidenceIds: ["summary"] }] }, { id: "context", kind: "context", claims: [{ id: "claim-2", kind: "neutralContext", provenance: "neutral", text: "Ansökningskontext", evidenceIds: [] }] }] }
+    const first=renderGeneratedApplicationDocument(document); const second=renderGeneratedApplicationDocument(document)
+    expect(first).toEqual(second); if(!first.ok) throw Error(first.error.message)
+    expect(first.value).toMatchObject({ applicationId: "a", documentType: "coverLetter", language: "sv", requiresHumanReview: true })
+    expect(first.value.content).toContain("## Profil"); expect(first.value.content).toContain("&lt;säker sammanfattning&gt;")
+    expect(first.value.renderMap).toEqual([{ sectionId: "summary", claimId: "claim-1", blockIndex: 0, evidenceIds: ["summary"], provenance: "paraphrased" }, { sectionId: "context", claimId: "claim-2", blockIndex: 1, evidenceIds: [], provenance: "neutral" }])
+  })
 })
