@@ -76,6 +76,23 @@ export {
   type DocumentValidationResult,
 } from "./application-documents"
 export {
+  createTailoringPlan,
+  validateTailoringPlan,
+  type TailoringReasonCode,
+  type TailoringReason,
+  type TailoringOptions,
+  type TailoringSelection,
+  type TailoringSection,
+  type TailoringRequirementSupport,
+  type TailoringWarningCode,
+  type TailoringWarning,
+  type TailoringPlan,
+  type TailoringErrorCode,
+  type TailoringError,
+  type TailoringResult,
+  type TailoringValidationResult,
+} from "./document-tailoring"
+export {
   createRequirementDescriptor,
   createRequirementIdentity,
   normalizeRequirementText,
