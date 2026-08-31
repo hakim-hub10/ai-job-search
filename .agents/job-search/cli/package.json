@@ -10,6 +10,7 @@
   "scripts": {
     "start": "bun run src/cli.ts",
     "test": "bun test --timeout 30000",
+    "test:live": "LIVE_TESTS=1 bun test tests/engine.live.test.ts --timeout 30000",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

@@ -2,11 +2,11 @@ import { describe, expect, it } from "bun:test"
 import {
   dedupeJobs,
   normalizeJob,
-  registerBuiltInSourceAdapters,
   searchJobs,
   type JobSourceAdapter,
   type NormalizedJob,
 } from "../src/index"
+import { createSourceAdapter } from "../src/adapters"
 
 describe("normalizeJob", () => {
   it("maps source-specific fields into the shared model", () => {
@@ -76,8 +76,12 @@ describe("dedupeJobs", () => {
 })
 
 describe("source failures and malformed output", () => {
-  it("does not invent unsupported location flags for source CLIs", async () => {
-    const adapter = registerBuiltInSourceAdapters().jobnet
+  it("does not pass unsupported location flags to the Jobnet adapter command", async () => {
+    const adapter = createSourceAdapter(
+      "jobnet",
+      ["tests/fixtures/jobnet-argument-fixture.ts"],
+      process.cwd(),
+    )
     const result = await adapter.search({
       query: "IT Coordinator",
       location: "Jönköping, Sweden",
@@ -86,9 +90,6 @@ describe("source failures and malformed output", () => {
     })
 
     expect(result.status).toBe("ok")
-    if (result.error) {
-      expect(result.error).not.toContain("municipality")
-    }
   })
 
   it("keeps successful sources working even when one fails", async () => {
@@ -121,7 +122,16 @@ describe("source failures and malformed output", () => {
 
     expect(result.jobs).toHaveLength(1)
     expect(result.sourceStatus).toHaveLength(2)
-    expect(result.sourceStatus[0].status).toBe("error")
+    expect(result.sourceStatus).toEqual([
+      { source: "linkedin", status: "error", count: 0, error: "boom" },
+      { source: "jobindex", status: "ok", count: 1, error: undefined },
+    ])
+    expect(result.jobs[0]).toMatchObject({
+      id: "j1",
+      source: "jobindex",
+      sourceId: "j1",
+      url: "https://example.com/j1",
+    })
   })
 
   it("returns empty results when a source JSON payload is malformed", async () => {
@@ -139,22 +149,81 @@ describe("source failures and malformed output", () => {
     expect(result.jobs).toHaveLength(0)
     expect(result.sourceStatus[0].status).toBe("error")
   })
-})
 
-describe("searchJobs", () => {
-  it("runs all configured sources and preserves source attribution", async () => {
-    const adapterMap = registerBuiltInSourceAdapters()
+  it("isolates a thrown adapter exception while retaining successful results", async () => {
+    const throwingAdapter: JobSourceAdapter = {
+      name: "jobnet",
+      search: async () => { throw new Error("offline fixture exception") },
+    }
+    const workingAdapter: JobSourceAdapter = {
+      name: "jobbank",
+      search: async () => ({
+        jobs: [normalizeJob({
+          id: "safe-result",
+          title: "Operations Coordinator",
+          company: "Example employer",
+          location: "Aarhus",
+          source: "jobbank",
+          sourceId: "safe-source-id",
+          url: "https://example.com/safe-result",
+        })],
+        status: "ok",
+        source: "jobbank",
+      }),
+    }
+
     const result = await searchJobs({
-      query: "IT Coordinator",
-      location: "Jönköping, Sweden",
-      jobage: 30,
-      limit: 10,
-      adapters: [adapterMap.linkedin, adapterMap.jobindex],
+      adapters: [throwingAdapter, workingAdapter],
       includeSourceStatus: true,
     })
 
-    expect(result.jobs.length).toBeGreaterThanOrEqual(0)
-    expect(result.sourceStatus.length).toBeGreaterThanOrEqual(2)
-    expect(result.sourceStatus.some((s) => s.source === "linkedin" || s.source === "jobindex")).toBe(true)
+    expect(result.jobs).toHaveLength(1)
+    expect(result.sourceStatus).toEqual([
+      { source: "jobnet", status: "error", error: "offline fixture exception" },
+      { source: "jobbank", status: "ok", count: 1, error: undefined },
+    ])
+  })
+
+  it("deduplicates results returned by multiple successful adapters", async () => {
+    const firstAdapter: JobSourceAdapter = {
+      name: "linkedin",
+      search: async () => ({
+        jobs: [normalizeJob({
+          id: "first",
+          title: "Data Analyst",
+          company: "Example employer",
+          location: "Aarhus",
+          source: "linkedin",
+          sourceId: "same-source-id",
+          url: "https://example.com/data-analyst",
+        })],
+        status: "ok",
+        source: "linkedin",
+      }),
+    }
+    const secondAdapter: JobSourceAdapter = {
+      name: "jobindex",
+      search: async () => ({
+        jobs: [normalizeJob({
+          id: "duplicate",
+          title: "Data Analyst",
+          company: "Example employer",
+          location: "Aarhus",
+          source: "linkedin",
+          sourceId: "same-source-id",
+          url: "https://example.com/data-analyst",
+        })],
+        status: "ok",
+        source: "jobindex",
+      }),
+    }
+
+    const result = await searchJobs({ adapters: [firstAdapter, secondAdapter], includeSourceStatus: true })
+
+    expect(result.jobs).toHaveLength(1)
+    expect(result.sourceStatus).toEqual([
+      { source: "linkedin", status: "ok", count: 1, error: undefined },
+      { source: "jobindex", status: "ok", count: 1, error: undefined },
+    ])
   })
 })
