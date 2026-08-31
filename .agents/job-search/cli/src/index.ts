@@ -94,6 +94,29 @@ export {
 } from "./document-tailoring"
 export { renderApplicationDocument, type RenderFormat, type RenderWarningCode, type RenderWarning, type RenderMapEntry, type RenderedDocument, type RenderErrorCode, type RenderError, type RenderResult } from "./document-rendering"
 export {
+  buildDocumentGenerationRequest,
+  validateGeneratedDocumentProposal,
+  generateDocumentProposal,
+  type ApplicationDocumentGenerator,
+  type GenerationEvidence,
+  type GenerationRequirementSupport,
+  type GenerationConstraints,
+  type DocumentGenerationRequest,
+  type GeneratedClaimKind,
+  type GeneratedClaimProvenance,
+  type GeneratedDocumentClaim,
+  type GeneratedDocumentSection,
+  type GeneratedDocumentProposal,
+  type ProviderGenerationErrorCode,
+  type ProviderGenerationError,
+  type ProviderGenerationResponse,
+  type DocumentGenerationErrorCode,
+  type DocumentGenerationError,
+  type GeneratedProposalValidation,
+  type DocumentGenerationResult,
+  type DocumentGenerationOptions,
+} from "./document-generation"
+export {
   createRequirementDescriptor,
   createRequirementIdentity,
   normalizeRequirementText,
