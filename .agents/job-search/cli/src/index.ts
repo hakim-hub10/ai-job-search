@@ -116,6 +116,7 @@ export {
   type DocumentGenerationResult,
   type DocumentGenerationOptions,
 } from "./document-generation"
+export { createOpenAIDocumentGenerator, type OpenAIDocumentGeneratorConfig } from "./providers/openai-document-generator"
 export {
   createRequirementDescriptor,
   createRequirementIdentity,
