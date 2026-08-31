@@ -28,6 +28,15 @@ export {
   type ApplicationDuplicateMatch,
 } from "./applications"
 export {
+  createFileApplicationRepository,
+} from "./application-file-repository"
+export type {
+  ApplicationRepository,
+  ApplicationRepositoryErrorCode,
+  ApplicationRepositoryError,
+  ApplicationRepositoryResult,
+} from "./application-repository"
+export {
   createRequirementDescriptor,
   createRequirementIdentity,
   normalizeRequirementText,
