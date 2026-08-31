@@ -1,8 +1,15 @@
 import type { CandidateProfile } from "./profile"
 import type { RankedJob } from "./ranking"
 import type { GapSeverity, GapType, SkillGap } from "./skillgaps"
+import {
+  createRequirementIdentity,
+  normalizeRequirementText,
+  parseLegacyRequirement,
+  requirementCategoryForGapType,
+  type RequirementImportance,
+} from "./requirements"
 
-export type RequirementImportance = "required" | "useful" | "unspecified"
+export type { RequirementImportance } from "./requirements"
 
 export interface PrioritizedSkillGap {
   /** Requirement text from SkillGap.jobRequirement, without its importance prefix. */
@@ -13,6 +20,8 @@ export interface PrioritizedSkillGap {
   priority: number
   frequencyScore: number
   impactScore: number
+  canonicalKey: string
+  sourceRequirements: string[]
   relatedJobs: Array<{ title: string; rank: number; score: number }>
   reason: string
   candidateHas?: string
@@ -50,32 +59,18 @@ interface GroupedGap {
   importance: RequirementImportance
   severity: GapSeverity
   occurrences: GapOccurrence[]
+  sourceRequirements: Set<string>
 }
 
 const SEVERITY_WEIGHTS: Record<GapSeverity, number> = { critical: 100, high: 75, medium: 50, low: 25 }
-const IMPORTANCE_WEIGHTS: Record<RequirementImportance, number> = { required: 100, useful: 75, unspecified: 50 }
+const IMPORTANCE_WEIGHTS: Record<RequirementImportance, number> = {
+  required: 100,
+  preferred: 75,
+  optional: 75,
+  useful: 75,
+  unspecified: 50,
+}
 const SEVERITY_ORDER: Record<GapSeverity, number> = { critical: 4, high: 3, medium: 2, low: 1 }
-
-/**
- * Current SkillGap has neither a canonical requirement identifier nor an
- * importance enum. jobRequirement is the least presentation-oriented existing
- * field, so only its explicit, domain-neutral prefixes are interpreted here.
- */
-function parseRequirement(requirement: string): { value: string; importance: RequirementImportance } {
-  const trimmed = requirement.trim().replace(/\s+/g, " ")
-  const match = /^(?:job )?(required|requires|preferred|optional|useful)\s*:\s*(.+)$/i.exec(trimmed)
-  if (!match) return { value: trimmed, importance: "unspecified" }
-
-  const marker = match[1].toLowerCase()
-  return {
-    value: match[2].trim(),
-    importance: marker === "required" || marker === "requires" ? "required" : "useful",
-  }
-}
-
-function canonicalize(value: string): string {
-  return value.trim().replace(/\s+/g, " ").toLocaleLowerCase()
-}
 
 function candidateKnownRequirements(candidate: CandidateProfile): Set<string> {
   return new Set([
@@ -84,7 +79,7 @@ function candidateKnownRequirements(candidate: CandidateProfile): Set<string> {
     ...candidate.certifications,
     ...candidate.languages.map((language) => language.name),
     ...candidate.education.map((education) => education.degree),
-  ].map(canonicalize))
+  ].map(normalizeRequirementText))
 }
 
 function groupGapsByRequirement(rankedJobs: RankedJob[], candidate: CandidateProfile): Map<string, GroupedGap> {
@@ -93,12 +88,16 @@ function groupGapsByRequirement(rankedJobs: RankedJob[], candidate: CandidatePro
 
   for (const rankedJob of rankedJobs) {
     for (const gap of rankedJob.skillGapResult.gaps) {
-      const parsed = parseRequirement(gap.jobRequirement)
-      const requirementKey = canonicalize(parsed.value)
+      const legacy = parseLegacyRequirement(gap.jobRequirement)
+      const descriptor = gap.requirement ?? {
+        identity: createRequirementIdentity(requirementCategoryForGapType(gap.type), legacy.original),
+        importance: legacy.importance,
+      }
+      const requirementKey = descriptor.identity.key
       // A stale result must not turn a profile-confirmed skill into a learning gap.
-      if (!requirementKey || knownRequirements.has(requirementKey)) continue
+      if (!descriptor.identity.normalized || knownRequirements.has(descriptor.identity.normalized)) continue
 
-      const key = `${gap.type}:${requirementKey}`
+      const key = requirementKey
       const occurrence: GapOccurrence = {
         gap,
         jobId: rankedJob.job.id,
@@ -111,18 +110,20 @@ function groupGapsByRequirement(rankedJobs: RankedJob[], candidate: CandidatePro
       if (!existing) {
         groups.set(key, {
           key,
-          requirement: parsed.value,
+          requirement: descriptor.identity.original,
           type: gap.type,
-          importance: parsed.importance,
+          importance: descriptor.importance,
           severity: gap.severity,
           occurrences: [occurrence],
+          sourceRequirements: new Set([descriptor.identity.original]),
         })
         continue
       }
 
       existing.occurrences.push(occurrence)
+      existing.sourceRequirements.add(descriptor.identity.original)
       if (SEVERITY_ORDER[gap.severity] > SEVERITY_ORDER[existing.severity]) existing.severity = gap.severity
-      if (IMPORTANCE_WEIGHTS[parsed.importance] > IMPORTANCE_WEIGHTS[existing.importance]) existing.importance = parsed.importance
+      if (IMPORTANCE_WEIGHTS[descriptor.importance] > IMPORTANCE_WEIGHTS[existing.importance]) existing.importance = descriptor.importance
     }
   }
 
@@ -153,7 +154,11 @@ function calculateImpactScore(occurrences: GapOccurrence[], totalRankedJobs: num
   return (weightedImpact / occurrences.length) * 100
 }
 
-function describePriority(group: GroupedGap, frequencyScore: number, impactScore: number): string {
+function describePriority(
+  group: Pick<GroupedGap, "severity" | "importance"> & { occurrences: GapOccurrence[] },
+  frequencyScore: number,
+  impactScore: number,
+): string {
   const parts = [`${group.severity} severity`, `${group.importance} importance`]
   if (group.occurrences.length > 1) parts.push(`appears in ${group.occurrences.length} target jobs (${Math.round(frequencyScore)}%)`)
   if (impactScore > 0) parts.push(`affects ranked jobs (impact ${Math.round(impactScore)}%)`)
@@ -173,6 +178,9 @@ export function generateLearningPlan(
   const { includeReasons = true, maxGaps, minImpactScore = 0 } = options
   const scored = [...groupGapsByRequirement(rankedJobs, candidate).values()].map((group) => {
     const occurrences = distinctOccurrences(group.occurrences)
+    const sourceRequirements = [...group.sourceRequirements].sort((a, b) =>
+      normalizeRequirementText(a).localeCompare(normalizeRequirementText(b)) || a.localeCompare(b),
+    )
     const frequencyScore = calculateFrequencyScore(occurrences.length, rankedJobs.length)
     const impactScore = calculateImpactScore(occurrences, rankedJobs.length)
     const priorityScore =
@@ -180,7 +188,7 @@ export function generateLearningPlan(
       IMPORTANCE_WEIGHTS[group.importance] * 0.2 +
       frequencyScore * 0.25 +
       impactScore * 0.15
-    return { ...group, occurrences, frequencyScore, impactScore, priorityScore }
+    return { ...group, requirement: sourceRequirements[0] ?? group.requirement, sourceRequirements, occurrences, frequencyScore, impactScore, priorityScore }
   })
 
   const limited = scored
@@ -196,6 +204,8 @@ export function generateLearningPlan(
     priority: index + 1,
     frequencyScore: Math.round(group.frequencyScore),
     impactScore: Math.round(group.impactScore),
+    canonicalKey: group.key,
+    sourceRequirements: group.sourceRequirements,
     relatedJobs: group.occurrences.map((occurrence) => ({ title: occurrence.jobTitle, rank: occurrence.jobRank, score: occurrence.jobScore })),
     reason: includeReasons ? describePriority(group, group.frequencyScore, group.impactScore) : "",
     candidateHas: group.occurrences.find((occurrence) => occurrence.gap.candidateHas)?.gap.candidateHas,

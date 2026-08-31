@@ -53,6 +53,8 @@ describe("skill-gap analysis engine", () => {
     const kubeGap = result.gaps.find((g) => g.title.includes("Kubernetes"))
     expect(kubeGap).toBeDefined()
     expect(kubeGap?.type).toBe("missing_skill")
+    expect(kubeGap?.requirement?.identity).toMatchObject({ key: "skill:kubernetes", original: "Kubernetes" })
+    expect(kubeGap?.requirement?.importance).toBe("required")
   })
 
   it("multiple missing technical skills: identifies all gaps", () => {

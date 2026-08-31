@@ -4,6 +4,17 @@ export { dedupeJobs } from "./dedupe"
 export { normalizeJob } from "./utils"
 export { registerBuiltInSourceAdapters } from "./adapters"
 export {
+  createRequirementDescriptor,
+  createRequirementIdentity,
+  normalizeRequirementText,
+  parseLegacyRequirement,
+  requirementCategoryForGapType,
+  type RequirementCategory,
+  type RequirementDescriptor,
+  type RequirementIdentity,
+  type RequirementImportance,
+} from "./requirements"
+export {
   createDefaultCandidateProfile,
   normalizeCandidateProfile,
   type CandidateProfile,
@@ -51,5 +62,4 @@ export {
   type LearningPlanResult,
   type LearningPlanOptions,
   type PrioritizedSkillGap,
-  type RequirementImportance,
 } from "./learning-plans"

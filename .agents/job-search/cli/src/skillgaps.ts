@@ -1,6 +1,10 @@
 import type { CandidateProfile } from "./profile"
 import type { NormalizedJob } from "./types"
 import type { MatchingResult } from "./matching"
+import {
+  createRequirementDescriptor,
+  type RequirementDescriptor,
+} from "./requirements"
 
 export type GapType = "missing_skill" | "insufficient_skill" | "missing_certification" | "missing_language" | "experience_gap" | "education_gap" | "other"
 export type GapSeverity = "critical" | "high" | "medium" | "low"
@@ -13,6 +17,7 @@ export interface SkillGap {
   candidateHas?: string // What the candidate has, if anything
   severity: GapSeverity
   evidence: string
+  requirement?: RequirementDescriptor
 }
 
 export interface SkillStrength {
@@ -33,6 +38,7 @@ export interface SkillGapRecommendation {
   targetGaps: string[] // titles of gaps this addresses
   priority: "high" | "medium" | "low"
   estimatedEffort?: string
+  targetRequirementKeys?: string[]
 }
 
 export interface SkillGapResult {
@@ -109,6 +115,7 @@ function analyzeTechnicalSkillGaps(candidate: CandidateProfile, job: NormalizedJ
       jobRequirement: `Required: ${skill}`,
       severity: determineSkillSeverity(skill, jobSkills.length),
       evidence: `Job explicitly lists: ${skill}`,
+      requirement: createRequirementDescriptor("skill", skill, "required"),
     })
   }
 
@@ -178,6 +185,7 @@ function analyzeSoftSkillGaps(candidate: CandidateProfile, job: NormalizedJob): 
           jobRequirement: `Job requires: ${skill}`,
           severity: "medium",
           evidence: `Job description emphasizes: ${keywords.filter((kw) => description.includes(kw)).join(", ")}`,
+          requirement: createRequirementDescriptor("skill", skill, "required"),
         })
       }
     }
@@ -224,6 +232,7 @@ function analyzeCertificationGaps(candidate: CandidateProfile, job: NormalizedJo
           jobRequirement: `Mentions: ${cert}`,
           severity: "medium",
           evidence: `Found in job description`,
+          requirement: createRequirementDescriptor("certification", cert),
         })
       }
     }
@@ -293,6 +302,7 @@ function analyzeLanguageGaps(candidate: CandidateProfile, job: NormalizedJob): {
           jobRequirement: `Required: ${language}`,
           severity: "high",
           evidence: `Job description mentions: ${keywords.filter((kw) => fullText.includes(kw)).join(", ")}`,
+          requirement: createRequirementDescriptor("language", language, "required"),
         })
       }
     }
@@ -345,6 +355,7 @@ function analyzeExperienceGaps(candidate: CandidateProfile, job: NormalizedJob):
           candidateHas: `${candidateYears} years`,
           severity: "high",
           evidence: `Job listing specifies: ${key}`,
+          requirement: createRequirementDescriptor("experience", `${key} (${range.min}+ years)`, "required"),
         })
       }
       break
@@ -395,6 +406,7 @@ function analyzeEducationGaps(candidate: CandidateProfile, job: NormalizedJob): 
           jobRequirement: `Requires: ${degree}`,
           severity: "medium",
           evidence: `Job mentions: ${keywords.filter((kw) => description.includes(kw)).join(", ")}`,
+          requirement: createRequirementDescriptor("education", degree, "required"),
         })
       }
     }
@@ -420,6 +432,7 @@ function generateRecommendations(gaps: SkillGap[]): SkillGapRecommendation[] {
       title: "Master critical technical skills",
       description: `The job requires infrastructure expertise in ${criticalSkillGaps.map((g) => g.jobRequirement).join(", ")}. These are essential for the role.`,
       targetGaps: criticalSkillGaps.map((g) => g.title),
+      targetRequirementKeys: criticalSkillGaps.flatMap((g) => g.requirement ? [g.requirement.identity.key] : []),
       priority: "high",
       estimatedEffort: "3-6 months of intensive study",
     })
@@ -430,6 +443,7 @@ function generateRecommendations(gaps: SkillGap[]): SkillGapRecommendation[] {
       title: "Develop required programming and framework skills",
       description: `Strengthen expertise in ${highSkillGaps.map((g) => g.jobRequirement).join(", ")} through hands-on projects.`,
       targetGaps: highSkillGaps.map((g) => g.title),
+      targetRequirementKeys: highSkillGaps.flatMap((g) => g.requirement ? [g.requirement.identity.key] : []),
       priority: "high",
       estimatedEffort: "2-4 months",
     })
@@ -440,6 +454,7 @@ function generateRecommendations(gaps: SkillGap[]): SkillGapRecommendation[] {
       title: "Achieve language proficiency",
       description: `The job requires ${languageGaps.map((g) => g.jobRequirement).join(", ")}. Consider language courses or immersion.`,
       targetGaps: languageGaps.map((g) => g.title),
+      targetRequirementKeys: languageGaps.flatMap((g) => g.requirement ? [g.requirement.identity.key] : []),
       priority: "high",
       estimatedEffort: "Varies by target proficiency (3-12 months)",
     })
@@ -450,6 +465,7 @@ function generateRecommendations(gaps: SkillGap[]): SkillGapRecommendation[] {
       title: "Obtain required certifications",
       description: `Pursue ${certGaps.map((g) => g.jobRequirement).join(", ")} to strengthen candidacy.`,
       targetGaps: certGaps.map((g) => g.title),
+      targetRequirementKeys: certGaps.flatMap((g) => g.requirement ? [g.requirement.identity.key] : []),
       priority: "medium",
       estimatedEffort: "1-3 months per certification",
     })
@@ -460,6 +476,7 @@ function generateRecommendations(gaps: SkillGap[]): SkillGapRecommendation[] {
       title: "Gain experience in the target seniority level",
       description: `Seek roles that develop mid-to-senior level capabilities through project ownership and mentorship.`,
       targetGaps: expGaps.map((g) => g.title),
+      targetRequirementKeys: expGaps.flatMap((g) => g.requirement ? [g.requirement.identity.key] : []),
       priority: "medium",
       estimatedEffort: "1-2 years",
     })

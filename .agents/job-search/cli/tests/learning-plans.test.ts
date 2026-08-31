@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test"
 import {
   analyzeSkillGaps,
+  createRequirementDescriptor,
   createDefaultCandidateProfile,
   generateLearningPlan,
   matchProfile,
@@ -64,17 +65,17 @@ describe("learning-plan engine", () => {
     expect(plan.prioritizedGaps.map((item) => item.skill)).toEqual(["Mentoring", "Documentation"])
   })
 
-  it("uses explicit required versus useful importance when upstream data provides it", () => {
+  it("uses explicit required versus structured preferred importance without changing weights", () => {
     const plan = generateLearningPlan([
       rankedJob("one", 1, 80, [
-        gap({ jobRequirement: "Preferred: Stakeholder management" }),
+        gap({ jobRequirement: "Preferred: Stakeholder management", requirement: createRequirementDescriptor("skill", "Stakeholder management", "preferred") }),
         gap({ jobRequirement: "Required: Compliance reporting" }),
       ]),
     ], candidate)
 
     expect(plan.prioritizedGaps.map((item) => item.skill)).toEqual(["Compliance reporting", "Stakeholder management"])
     expect(plan.prioritizedGaps[0].importance).toBe("required")
-    expect(plan.prioritizedGaps[1].importance).toBe("useful")
+    expect(plan.prioritizedGaps[1].importance).toBe("preferred")
   })
 
   it("raises the priority of a gap occurring across multiple target jobs", () => {
@@ -87,6 +88,24 @@ describe("learning-plan engine", () => {
     expect(plan.prioritizedGaps[0].skill).toBe("Supply planning")
     expect(plan.prioritizedGaps[0].frequencyScore).toBe(67)
     expect(plan.prioritizedGaps[0].relatedJobs).toHaveLength(2)
+  })
+
+  it("aggregates structured canonical identities across jobs and counts distinct jobs", () => {
+    const excel = (original: string) => gap({
+      jobRequirement: `Required: ${original}`,
+      requirement: createRequirementDescriptor("skill", original, "required"),
+    })
+    const plan = generateLearningPlan([
+      rankedJob("one", 1, 80, [excel("Excel"), excel(" excel ")]),
+      rankedJob("two", 2, 70, [excel("EXCEL")]),
+      rankedJob("three", 3, 60, [gap({ jobRequirement: "Required: Microsoft Excel", requirement: createRequirementDescriptor("skill", "Microsoft Excel", "required") })]),
+    ], candidate)
+
+    const excelPlan = plan.prioritizedGaps.find((item) => item.canonicalKey === "skill:excel")
+    expect(excelPlan?.frequencyScore).toBe(67)
+    expect(excelPlan?.relatedJobs).toHaveLength(2)
+    expect(excelPlan?.sourceRequirements).toEqual(expect.arrayContaining(["Excel", " excel ", "EXCEL"]))
+    expect(plan.prioritizedGaps.some((item) => item.canonicalKey === "skill:microsoft excel")).toBe(true)
   })
 
   it("uses ranked-job context while preserving multiple target-job relationships", () => {
