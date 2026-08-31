@@ -23,6 +23,7 @@ export {
   type ScoringResult,
   type ScoreBreakdown,
   type ScoreDimensionBreakdown,
+  type ConfidenceLabel,
 } from "./scoring"
 export {
   analyzeSkillGaps,

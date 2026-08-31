@@ -77,6 +77,8 @@ function generateRankingExplanation(rankedJob: RankedJob, allRankedJobs: RankedJ
     parts.push("Weak match - significant work needed")
   }
 
+  parts.push(`Evidence coverage ${Math.round(rankedJob.scoringBreakdown.confidence * 100)}% (${rankedJob.scoringBreakdown.confidenceLabel})`)
+
   // Score drivers
   const matched = rankedJob.matchingResult.matched.length
   if (matched > 0) {
@@ -116,12 +118,13 @@ function generateRankingExplanation(rankedJob: RankedJob, allRankedJobs: RankedJ
  * 
  * Primary ranking: by score (descending, 100 = best)
  * Tie-breaking (for equal scores):
- *   1. Fewer critical skill gaps
- *   2. Fewer high-severity gaps
- *   3. Fewer total gaps
- *   4. Fewer conflicting requirements
- *   5. More matched dimensions
- *   6. Original order (stable)
+ *   1. Higher evidence confidence
+ *   2. Fewer critical skill gaps
+ *   3. Fewer high-severity gaps
+ *   4. Fewer total gaps
+ *   5. Fewer conflicting requirements
+ *   6. More matched dimensions
+ *   7. Original order (stable)
  * 
  * @param inputs Array of RankingInput (job + analysis results)
  * @param candidate Candidate profile (for context)
@@ -155,6 +158,9 @@ export function rankJobs(
   const sorted = rankedWithTieBreaker.sort((a, b) => {
     if (a.score !== b.score) {
       return b.score - a.score // Higher score first
+    }
+    if (a.scoringBreakdown.confidence !== b.scoringBreakdown.confidence) {
+      return b.scoringBreakdown.confidence - a.scoringBreakdown.confidence
     }
     if (a.tieBreaker !== b.tieBreaker) {
       return a.tieBreaker - b.tieBreaker // Lower tie-breaker first

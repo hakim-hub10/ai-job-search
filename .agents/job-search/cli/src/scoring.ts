@@ -32,6 +32,8 @@ const DIMENSION_WEIGHTS: Record<MatchDimension, number> = {
   preferredIndustries: 0.5,
 }
 
+export type ConfidenceLabel = "high" | "medium" | "low"
+
 export interface ScoreDimensionBreakdown {
   dimension: MatchDimension
   weight: number
@@ -54,12 +56,21 @@ export interface ScoringResult {
   jobId: string
   jobTitle: string
   score: number // 0-100
+  /** Weighted coverage of dimensions with available job evidence (0-1). */
+  confidence: number
+  confidenceLabel: ConfidenceLabel
   summary: string
   breakdown: ScoreBreakdown
   matched: Array<{ dimension: MatchDimension; detail: string }>
   missing: Array<{ dimension: MatchDimension; detail: string }>
   conflicting: Array<{ dimension: MatchDimension; detail: string }>
   unknown: Array<{ dimension: MatchDimension; detail: string }>
+}
+
+function getConfidenceLabel(confidence: number): ConfidenceLabel {
+  if (confidence >= 0.8) return "high"
+  if (confidence >= 0.5) return "medium"
+  return "low"
 }
 
 /**
@@ -147,6 +158,10 @@ export function scoreMatch(matchingResult: MatchingResult): ScoringResult {
   // Clamp to 0-100
   score = Math.min(100, Math.max(0, score))
 
+  const totalWeight = Object.values(DIMENSION_WEIGHTS).reduce((total, weight) => total + weight, 0)
+  const confidence = totalWeight === 0 ? 0 : breakdown.totalPoints / totalWeight
+  const confidenceLabel = getConfidenceLabel(confidence)
+
   // Generate summary
   const summaryParts: string[] = []
   if (matchingResult.totalMatched > 0) {
@@ -162,12 +177,14 @@ export function scoreMatch(matchingResult: MatchingResult): ScoringResult {
     summaryParts.push(`${matchingResult.totalUnknown} unknown`)
   }
 
-  const summary = `Match Score: ${Math.round(score)}% (${summaryParts.join(", ")})`
+  const summary = `Match Score: ${Math.round(score)}% (${summaryParts.join(", ")}) • Evidence coverage: ${Math.round(confidence * 100)}% (${confidenceLabel})`
 
   return {
     jobId: matchingResult.jobId,
     jobTitle: matchingResult.jobTitle,
     score: Math.round(score),
+    confidence,
+    confidenceLabel,
     summary,
     breakdown,
     matched: matchingResult.matched.map((e) => ({ dimension: e.dimension, detail: e.detail })),
@@ -192,6 +209,8 @@ export function describeScoreBreakdown(result: ScoringResult): string {
 
   lines.push(`\n=== SCORING BREAKDOWN: ${result.jobTitle} ===`)
   lines.push(`Final Score: ${result.score}/100\n`)
+  lines.push(`Evidence Coverage: ${Math.round(result.confidence * 100)}% (${result.confidenceLabel})`)
+  lines.push()
 
   lines.push(`KNOWN DIMENSIONS (${result.breakdown.knownDimensions}/${result.breakdown.totalDimensions}):`)
   lines.push(`Total possible points: ${result.breakdown.totalPoints.toFixed(1)}`)
