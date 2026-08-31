@@ -13,10 +13,21 @@ export type MatchDimension =
   | "languages"
   | "preferredIndustries"
 
+/**
+ * Structured coverage of explicitly listed requirements. Values retain the
+ * source-provided requirement text until canonical requirement identity exists.
+ */
+export interface RequirementCoverage {
+  matchedRequirements: string[]
+  missingRequirements: string[]
+  coverageRatio: number
+}
+
 export interface MatchEvidence {
   dimension: MatchDimension
   status: "matched" | "missing" | "conflicting" | "unknown"
   detail: string
+  requirementCoverage?: RequirementCoverage
 }
 
 export interface MatchingResult {
@@ -47,12 +58,17 @@ function fuzzyMatch(str1: string | null, str2: string | null, threshold = 0.5): 
   return s1 === s2 || s1.includes(s2) || s2.includes(s1)
 }
 
-/**
- * Check if any of the candidate's skills overlap with job skills (case-insensitive)
- */
-function skillsOverlap(candidateSkills: string[], jobSkills: string[]): string[] {
-  if (jobSkills.length === 0) return []
-  return candidateSkills.filter((cSkill) => jobSkills.some((jSkill) => fuzzyMatch(cSkill, jSkill)))
+function getRequirementCoverage(candidateSkills: string[], requirements: string[]): RequirementCoverage {
+  const matchedRequirements = requirements.filter((requirement) =>
+    candidateSkills.some((candidateSkill) => fuzzyMatch(candidateSkill, requirement)),
+  )
+  const missingRequirements = requirements.filter((requirement) => !matchedRequirements.includes(requirement))
+
+  return {
+    matchedRequirements,
+    missingRequirements,
+    coverageRatio: requirements.length === 0 ? 0 : matchedRequirements.length / requirements.length,
+  }
 }
 
 /**
@@ -227,38 +243,33 @@ function checkTechnicalSkills(candidate: CandidateProfile, job: NormalizedJob): 
     }
   }
 
-  const overlap = skillsOverlap(candidate.skills.technical, job.skills)
+  const requirementCoverage = getRequirementCoverage(candidate.skills.technical, job.skills)
+  const matchedCount = requirementCoverage.matchedRequirements.length
+  const totalRequirements = job.skills.length
 
-  if (overlap.length === 0) {
+  if (matchedCount === 0) {
     return {
       dimension: "technicalSkills",
       status: "missing",
       detail: `Candidate has none of the required skills: ${job.skills.slice(0, 5).join(", ")}${job.skills.length > 5 ? `... (${job.skills.length} total)` : ""}`,
+      requirementCoverage,
     }
   }
 
-  const coverage = Math.round((overlap.length / job.skills.length) * 100)
-
-  if (coverage >= 80) {
+  if (matchedCount === totalRequirements) {
     return {
       dimension: "technicalSkills",
       status: "matched",
-      detail: `Candidate has ${overlap.length} of ${job.skills.length} required skills (${coverage}%): ${overlap.slice(0, 3).join(", ")}${overlap.length > 3 ? "..." : ""}`,
-    }
-  }
-
-  if (coverage >= 50) {
-    return {
-      dimension: "technicalSkills",
-      status: "matched",
-      detail: `Candidate has ${overlap.length} of ${job.skills.length} required skills (${coverage}%): ${overlap.join(", ")}`,
+      detail: `Candidate has all ${totalRequirements} listed skills: ${requirementCoverage.matchedRequirements.slice(0, 3).join(", ")}${matchedCount > 3 ? "..." : ""}`,
+      requirementCoverage,
     }
   }
 
   return {
     dimension: "technicalSkills",
     status: "missing",
-    detail: `Candidate has only ${overlap.length} of ${job.skills.length} required skills (${coverage}%)`,
+    detail: `Candidate has ${matchedCount} of ${totalRequirements} listed skills; ${requirementCoverage.missingRequirements.length} remain missing`,
+    requirementCoverage,
   }
 }
 

@@ -70,7 +70,7 @@ function skillsOverlap(candidateSkills: string[], jobSkills: string[]): string[]
 /**
  * Analyze technical skill gaps
  */
-function analyzeTechnicalSkillGaps(candidate: CandidateProfile, job: NormalizedJob): { gaps: SkillGap[]; strengths: SkillStrength[] } {
+function analyzeTechnicalSkillGaps(candidate: CandidateProfile, job: NormalizedJob, matchingResult: MatchingResult): { gaps: SkillGap[]; strengths: SkillStrength[] } {
   const gaps: SkillGap[] = []
   const strengths: SkillStrength[] = []
 
@@ -82,20 +82,24 @@ function analyzeTechnicalSkillGaps(candidate: CandidateProfile, job: NormalizedJ
   const candidateTechSkills = candidate.skills.technical
   const jobSkills = job.skills
 
+  const technicalEvidence = [...matchingResult.matched, ...matchingResult.missing]
+    .find((evidence) => evidence.dimension === "technicalSkills")
+  const requirementCoverage = technicalEvidence?.requirementCoverage
+  const matchedJobSkills = requirementCoverage?.matchedRequirements
+    ?? jobSkills.filter((jobSkill) => candidateTechSkills.some((candidateSkill) => fuzzyMatch(candidateSkill, jobSkill)))
+  const missingJobSkills = requirementCoverage?.missingRequirements
+    ?? jobSkills.filter((jobSkill) => !matchedJobSkills.includes(jobSkill))
+
   // Find matched skills (strengths)
-  const matched = skillsOverlap(candidateTechSkills, jobSkills)
-  for (const skill of matched) {
+  for (const jobSkill of matchedJobSkills) {
+    const candidateSkill = candidateTechSkills.find((skill) => fuzzyMatch(skill, jobSkill)) ?? jobSkill
     strengths.push({
-      title: skill,
-      description: `Candidate has experience with ${skill}`,
+      title: candidateSkill,
+      description: `Candidate has experience with ${candidateSkill}`,
       relevance: `Required by the job`,
-      evidence: `Found in job requirements: ${jobSkills.filter((js) => fuzzyMatch(js, skill)).join(", ")}`,
+      evidence: `Found in job requirements: ${jobSkill}`,
     })
   }
-
-  // Find missing skills
-  const matchedJobSkills = jobSkills.filter((js) => matched.some((m) => fuzzyMatch(js, m)))
-  const missingJobSkills = jobSkills.filter((js) => !matchedJobSkills.includes(js))
 
   for (const skill of missingJobSkills) {
     gaps.push({
@@ -473,7 +477,7 @@ export function analyzeSkillGaps(candidate: CandidateProfile, job: NormalizedJob
   const unknowns: SkillUnknown[] = []
 
   // Analyze each category
-  const { gaps: techGaps, strengths: techStrengths } = analyzeTechnicalSkillGaps(candidate, job)
+  const { gaps: techGaps, strengths: techStrengths } = analyzeTechnicalSkillGaps(candidate, job, matchingResult)
   gaps.push(...techGaps)
   strengths.push(...techStrengths)
 

@@ -15,6 +15,7 @@ export {
   type MatchingResult,
   type MatchEvidence,
   type MatchDimension,
+  type RequirementCoverage,
 } from "./matching"
 export {
   scoreMatch,

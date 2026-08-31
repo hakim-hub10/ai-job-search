@@ -1,4 +1,4 @@
-import type { MatchingResult, MatchDimension } from "./matching"
+import type { MatchingResult, MatchDimension, RequirementCoverage } from "./matching"
 
 /**
  * Weighting system for match dimensions.
@@ -41,6 +41,7 @@ export interface ScoreDimensionBreakdown {
   pointsAchieved: number
   pointsPossible: number
   evidence: string
+  requirementCoverage?: RequirementCoverage
 }
 
 export interface ScoreBreakdown {
@@ -121,7 +122,13 @@ export function scoreMatch(matchingResult: MatchingResult): ScoringResult {
     if (evidence.status === "matched") {
       pointsAchieved = weight
     } else if (evidence.status === "missing") {
-      pointsAchieved = -0.5 * weight // Partial penalty
+      const coverage = evidence.requirementCoverage?.coverageRatio
+      if (evidence.dimension === "technicalSkills" && coverage !== undefined && coverage > 0 && coverage < 1) {
+        // Preserve the existing missing/full-match endpoints while scaling known partial coverage.
+        pointsAchieved = weight * (1.5 * coverage - 0.5)
+      } else {
+        pointsAchieved = -0.5 * weight // No known requirement match
+      }
     } else if (evidence.status === "conflicting") {
       pointsAchieved = -1.0 * weight // Full penalty
     } else if (evidence.status === "unknown") {
@@ -137,6 +144,7 @@ export function scoreMatch(matchingResult: MatchingResult): ScoringResult {
       pointsAchieved,
       pointsPossible,
       evidence: evidence.detail,
+      requirementCoverage: evidence.requirementCoverage,
     })
 
     // Only count towards totals if known
@@ -227,6 +235,10 @@ export function describeScoreBreakdown(result: ScoringResult): string {
 
     lines.push(`  ${icon} ${dim.dimension.padEnd(20)} [${status.padEnd(11)}] ${pointDisplay}`)
     lines.push(`      ${dim.evidence}`)
+    if (dim.requirementCoverage) {
+      const { matchedRequirements, missingRequirements } = dim.requirementCoverage
+      lines.push(`      Requirements: ${matchedRequirements.length}/${matchedRequirements.length + missingRequirements.length} satisfied; ${missingRequirements.length} missing`)
+    }
   }
 
   lines.push()

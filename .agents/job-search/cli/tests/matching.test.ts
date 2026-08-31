@@ -117,14 +117,17 @@ describe("job matching engine", () => {
     expect(result.matchedDimensions).toContain("technicalSkills")
   })
 
-  it("partial match: some criteria met", () => {
+  it("partial technical coverage: incomplete known requirements remain missing", () => {
     setup()
     const result = matchProfile(defaultCandidate, partialJob)
 
     expect(result.totalMatched).toBeGreaterThan(0)
     expect(result.totalMissing).toBeGreaterThanOrEqual(0)
     expect(result.totalConflicting).toBeLessThanOrEqual(1)
-    expect(result.matchedDimensions).toContain("technicalSkills")
+    expect(result.missingDimensions).toContain("technicalSkills")
+    expect(result.matchedDimensions).not.toContain("technicalSkills")
+    const technicalSkills = result.missing.find((evidence) => evidence.dimension === "technicalSkills")
+    expect(technicalSkills?.requirementCoverage?.coverageRatio).toBe(0.5)
     expect(result.matchedDimensions).toContain("remotePreference")
   })
 
