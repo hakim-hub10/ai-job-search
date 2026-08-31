@@ -1,6 +1,7 @@
 # Dependencies
 node_modules/
 bun.lock
+!.agents/job-search/cli/bun.lock
 
 # Python
 __pycache__/

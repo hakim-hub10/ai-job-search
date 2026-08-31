@@ -1,0 +1,19 @@
+{
+  "name": "job-search-cli",
+  "version": "1.0.0",
+  "description": "Unified multi-source job search engine for the repo's existing source CLIs",
+  "type": "module",
+  "main": "src/index.ts",
+  "bin": {
+    "career-agent": "src/cli.ts"
+  },
+  "scripts": {
+    "start": "bun run src/cli.ts",
+    "test": "bun test --timeout 30000",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/bun": "1.3.14",
+    "typescript": "^5.4.0"
+  }
+}
