@@ -9,6 +9,25 @@ export {
   type CareerAnalysisResult,
 } from "./orchestrator"
 export {
+  createApplication,
+  updateApplicationStatus,
+  addApplicationNote,
+  findDuplicateApplications,
+  type ApplicationStatus,
+  type ApplicationStatusEvent,
+  type ApplicationNote,
+  type ApplicationAnalysisSnapshot,
+  type ApplicationRecord,
+  type CreateApplicationInput,
+  type UpdateApplicationStatusInput,
+  type AddApplicationNoteInput,
+  type ApplicationDomainErrorCode,
+  type ApplicationDomainError,
+  type ApplicationResult,
+  type ApplicationDuplicateReason,
+  type ApplicationDuplicateMatch,
+} from "./applications"
+export {
   createRequirementDescriptor,
   createRequirementIdentity,
   normalizeRequirementText,
