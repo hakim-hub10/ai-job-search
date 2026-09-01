@@ -290,6 +290,11 @@ export {
   type InterviewAIGenerationResult,
 } from "./interview-ai"
 export {
+  createOpenAIInterviewGenerator,
+  type OpenAIInterviewTransport,
+  type OpenAIInterviewGeneratorConfig,
+} from "./providers/openai-interview-generator"
+export {
   matchProfile,
   type MatchingResult,
   type MatchEvidence,
