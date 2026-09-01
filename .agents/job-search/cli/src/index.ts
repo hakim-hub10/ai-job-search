@@ -216,6 +216,22 @@ export {
   type InterviewPreparationResult,
 } from "./interview-preparation"
 export {
+  prepareInterviewAnswer,
+  type InterviewStarAnswer,
+  type InterviewAnswerInput,
+  type AnswerEvidenceReferenceStatus,
+  type AnswerEvidenceReference,
+  type AnswerStructuralChecks,
+  type InterviewAnswerWarningCode,
+  type InterviewAnswerWarning,
+  type AnswerImprovementPromptCode,
+  type AnswerImprovementPrompt,
+  type InterviewAnswerPreparation,
+  type InterviewAnswerPreparationErrorCode,
+  type InterviewAnswerPreparationError,
+  type InterviewAnswerPreparationResult,
+} from "./interview-answer-preparation"
+export {
   matchProfile,
   type MatchingResult,
   type MatchEvidence,
