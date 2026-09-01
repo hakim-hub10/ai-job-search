@@ -252,6 +252,20 @@ export {
   type InterviewSessionSummaryResult,
 } from "./interview-session"
 export {
+  createInterviewSessionFeedback,
+  type InterviewFeedbackCategory,
+  type InterviewFeedbackCode,
+  type InterviewFeedbackItem,
+  type InterviewFeedbackObservation,
+  type InterviewQuestionFeedback,
+  type InterviewCategoryCoverage,
+  type RequirementPracticeCoverage,
+  type InterviewSessionFeedback,
+  type InterviewFeedbackErrorCode,
+  type InterviewFeedbackError,
+  type InterviewSessionFeedbackResult,
+} from "./interview-feedback"
+export {
   matchProfile,
   type MatchingResult,
   type MatchEvidence,
