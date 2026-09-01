@@ -191,6 +191,16 @@ export {
   type CandidateDocumentEvidenceInputErrorCode,
 } from "./document-evidence-input"
 export {
+  runMvpWorkflow,
+  type MvpDocumentRequest,
+  type MvpWorkflowInput,
+  type MvpWorkflowDependencies,
+  type MvpRenderedDocument,
+  type MvpWorkflowSuccess,
+  type MvpWorkflowError,
+  type MvpWorkflowResult,
+} from "./mvp-workflow"
+export {
   matchProfile,
   type MatchingResult,
   type MatchEvidence,
