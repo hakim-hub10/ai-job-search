@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { registerBuiltInSourceAdapters } from "./adapters"
+import { SourceSelectionError, resolveBuiltInSourceAdapters } from "./adapters"
 import { searchJobs } from "./engine"
 
 function parseArgs(argv: string[]): Record<string, string | boolean> {
@@ -18,6 +18,18 @@ function parseArgs(argv: string[]): Record<string, string | boolean> {
   return args
 }
 
+function parseSourceArguments(argv: string[]): string[] {
+  const sources: string[] = []
+  for (let index = 0; index < argv.length; index += 1) {
+    if (argv[index] !== "--source") continue
+    const source = argv[index + 1]
+    if (!source || source.startsWith("--")) throw new SourceSelectionError(["(missing source ID)"])
+    sources.push(source)
+    index += 1
+  }
+  return sources
+}
+
 async function main() {
   const args = parseArgs(Bun.argv.slice(2))
   const query = typeof args.query === "string" ? args.query : undefined
@@ -26,8 +38,7 @@ async function main() {
   const limit = typeof args.limit === "string" ? Number(args.limit) : undefined
   const format = typeof args.format === "string" ? args.format : "json"
   const includeSourceStatus = true
-
-  const adapters = Object.values(registerBuiltInSourceAdapters())
+  const adapters = resolveBuiltInSourceAdapters(parseSourceArguments(Bun.argv.slice(2)))
   const result = await searchJobs({
     query,
     location,
@@ -63,6 +74,6 @@ async function main() {
 main().then((code) => {
   process.exit(code)
 }).catch((error) => {
-  console.error(JSON.stringify({ error: error instanceof Error ? error.message : String(error), code: "UNIFIED_SEARCH_ERROR" }))
+  console.error(JSON.stringify({ error: error instanceof Error ? error.message : String(error), code: error instanceof SourceSelectionError ? error.code : "UNIFIED_SEARCH_ERROR" }))
   process.exit(1)
 })

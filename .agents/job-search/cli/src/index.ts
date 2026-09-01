@@ -2,7 +2,13 @@ export type { NormalizedJob, JobSourceAdapter, UnifiedSearchOptions, SourceSearc
 export { searchJobs } from "./engine"
 export { dedupeJobs } from "./dedupe"
 export { normalizeJob } from "./utils"
-export { registerBuiltInSourceAdapters } from "./adapters"
+export {
+  registerBuiltInSourceAdapters,
+  getBuiltInSourceDefinitions,
+  resolveBuiltInSourceAdapters,
+  SourceSelectionError,
+  type BuiltInSourceDefinition,
+} from "./adapters"
 export {
   analyzeJobs,
   type CareerAnalysisOptions,

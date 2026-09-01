@@ -1,11 +1,46 @@
+import { resolve } from "node:path"
 import type { JobSourceAdapter, NormalizedJob, SourceName, UnifiedSearchOptions } from "./types"
 import { asOptionalString, normalizeJob } from "./utils"
 
 export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue }
 
+export interface BuiltInSourceDefinition {
+  readonly id: SourceName
+  readonly relativeScriptPath: string
+  readonly scriptPath: string
+  readonly defaultEnabled: boolean
+}
+
+export class SourceSelectionError extends Error {
+  readonly code = "UNKNOWN_SOURCE"
+  readonly unknownSourceIds: readonly string[]
+
+  constructor(unknownSourceIds: readonly string[]) {
+    const available = BUILT_IN_SOURCE_REGISTRY.map((source) => source.id).join(", ")
+    super(`Unknown source: ${unknownSourceIds.join(", ")}. Available sources: ${available}.`)
+    this.name = "SourceSelectionError"
+    this.unknownSourceIds = Object.freeze([...unknownSourceIds])
+  }
+}
+
+const repositoryRoot = resolve(import.meta.dir, "../../../..")
+const sourceDefinitions = [
+  { id: "linkedin", relativeScriptPath: ".agents/skills/linkedin-search/cli/src/cli.ts", defaultEnabled: true },
+  { id: "jobindex", relativeScriptPath: ".agents/skills/jobindex-search/cli/src/cli.ts", defaultEnabled: false },
+  { id: "jobnet", relativeScriptPath: ".agents/skills/jobnet-search/cli/src/cli.ts", defaultEnabled: false },
+  { id: "jobbank", relativeScriptPath: ".agents/skills/jobbank-search/cli/src/cli.ts", defaultEnabled: false },
+  { id: "jobdanmark", relativeScriptPath: ".agents/skills/jobdanmark-search/cli/src/cli.ts", defaultEnabled: false },
+  { id: "freehire", relativeScriptPath: ".agents/skills/freehire-search/cli/src/cli.ts", defaultEnabled: true },
+] as const satisfies ReadonlyArray<Pick<BuiltInSourceDefinition, "id" | "relativeScriptPath" | "defaultEnabled">>
+
+const BUILT_IN_SOURCE_REGISTRY: readonly BuiltInSourceDefinition[] = Object.freeze(sourceDefinitions.map((source) => Object.freeze({
+  ...source,
+  scriptPath: resolve(repositoryRoot, source.relativeScriptPath),
+})))
+
 export async function runBunJsonCommand(command: string[], cwd?: string): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   const proc = Bun.spawn({
-    cmd: ["bun", ...command],
+    cmd: [process.execPath, ...command],
     cwd,
     stdout: "pipe",
     stderr: "pipe",
@@ -151,18 +186,26 @@ export function createSourceAdapter(name: SourceName | string, command: string[]
   }
 }
 
-export function registerBuiltInSourceAdapters(): Record<string, JobSourceAdapter> {
-  const repoRoot = "/home/user/ai-job-search"
-  const sourceDirs = {
-    linkedin: [".agents/skills/linkedin-search/cli/src/cli.ts"],
-    jobindex: [".agents/skills/jobindex-search/cli/src/cli.ts"],
-    jobnet: [".agents/skills/jobnet-search/cli/src/cli.ts"],
-    jobbank: [".agents/skills/jobbank-search/cli/src/cli.ts"],
-    jobdanmark: [".agents/skills/jobdanmark-search/cli/src/cli.ts"],
-    freehire: [".agents/skills/freehire-search/cli/src/cli.ts"],
-  }
+/** Returns an immutable, deterministically ordered view of the built-in source registry. */
+export function getBuiltInSourceDefinitions(): readonly BuiltInSourceDefinition[] {
+  return BUILT_IN_SOURCE_REGISTRY
+}
 
+/** Resolves default sources or exactly the requested valid source IDs in registry order. */
+export function resolveBuiltInSourceAdapters(requestedSources?: readonly string[]): JobSourceAdapter[] {
+  const requested = requestedSources?.length ? new Set(requestedSources) : undefined
+  if (requested) {
+    const known = new Set<string>(BUILT_IN_SOURCE_REGISTRY.map((source) => source.id))
+    const unknown = [...requested].filter((source) => !known.has(source))
+    if (unknown.length > 0) throw new SourceSelectionError(unknown)
+  }
+  return BUILT_IN_SOURCE_REGISTRY
+    .filter((source) => requested ? requested.has(source.id) : source.defaultEnabled)
+    .map((source) => createSourceAdapter(source.id, [source.scriptPath], repositoryRoot))
+}
+
+export function registerBuiltInSourceAdapters(): Record<string, JobSourceAdapter> {
   return Object.fromEntries(
-    Object.entries(sourceDirs).map(([key, command]) => [key, createSourceAdapter(key, command, repoRoot)]),
+    BUILT_IN_SOURCE_REGISTRY.map((source) => [source.id, createSourceAdapter(source.id, [source.scriptPath], repositoryRoot)]),
   )
 }
