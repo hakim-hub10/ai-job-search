@@ -185,6 +185,12 @@ export {
   loadCandidateProfile,
 } from "./profile-input"
 export {
+  CandidateDocumentEvidenceInputError,
+  loadCandidateDocumentEvidence,
+  type CandidateDocumentEvidenceInput,
+  type CandidateDocumentEvidenceInputErrorCode,
+} from "./document-evidence-input"
+export {
   matchProfile,
   type MatchingResult,
   type MatchEvidence,

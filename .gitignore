@@ -25,6 +25,7 @@ salary_data.json
 /candidate-profile.json
 /.agents/job-search/cli/profile.json
 /.agents/job-search/cli/candidate-profile.json
+/.agents/job-search/cli/candidate-document-evidence.local.json
 # Match at any depth: the job-scraper skill resolves `job_scraper/` relative to
 # its own directory, so these land at .claude/skills/job-scraper/job_scraper/*.
 # A rooted `job_scraper/...` pattern silently fails to match them.

@@ -1,0 +1,42 @@
+{
+  "identity": {
+    "fullName": "Alex Example",
+    "email": "alex.example@example.test",
+    "location": "Example City",
+    "links": ["https://example.test/alex-example"]
+  },
+  "evidence": [
+    {
+      "id": "summary:operations",
+      "kind": "summary",
+      "content": "Fictional operations professional experienced in coordinating reliable services."
+    },
+    {
+      "id": "skill:scheduling",
+      "kind": "skill",
+      "content": "Scheduling and service coordination",
+      "relatedRequirements": [{ "category": "skill", "value": "Scheduling" }]
+    },
+    {
+      "id": "experience:clinic-coordination",
+      "kind": "experience",
+      "content": "Coordinated fictional appointment schedules and records for a community clinic.",
+      "context": { "employer": "Example Community Clinic", "role": "Coordinator", "startDate": "2023-01", "endDate": "2025-01" }
+    },
+    {
+      "id": "education:administration",
+      "kind": "education",
+      "content": "Fictional diploma in administration."
+    },
+    {
+      "id": "certification:safety",
+      "kind": "certification",
+      "content": "Fictional workplace safety certificate."
+    },
+    {
+      "id": "language:swedish",
+      "kind": "language",
+      "content": "Swedish — professional working proficiency."
+    }
+  ]
+}
