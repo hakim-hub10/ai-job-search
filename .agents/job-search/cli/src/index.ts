@@ -232,6 +232,26 @@ export {
   type InterviewAnswerPreparationResult,
 } from "./interview-answer-preparation"
 export {
+  startInterviewSession,
+  getCurrentInterviewQuestion,
+  submitInterviewAnswer,
+  skipCurrentInterviewQuestion,
+  getInterviewSessionSummary,
+  type InterviewSessionStatus,
+  type InterviewTurn,
+  type InterviewSession,
+  type StartInterviewSessionOptions,
+  type InterviewSessionErrorCode,
+  type InterviewSessionError,
+  type InterviewAnswerPreparationStageError,
+  type StartInterviewSessionResult,
+  type CurrentInterviewQuestionResult,
+  type InterviewSessionTransitionResult,
+  type InterviewSessionWarningCount,
+  type InterviewSessionSummary,
+  type InterviewSessionSummaryResult,
+} from "./interview-session"
+export {
   matchProfile,
   type MatchingResult,
   type MatchEvidence,
