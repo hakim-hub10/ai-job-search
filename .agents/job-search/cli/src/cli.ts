@@ -5,6 +5,7 @@ import { CandidateDocumentEvidenceInputError, loadCandidateDocumentEvidence } fr
 import { searchJobs } from "./engine"
 import { runMvpWorkflow } from "./mvp-workflow"
 import { CandidateProfileInputError, loadCandidateProfile } from "./profile-input"
+import { createOpenAIDocumentGenerator } from "./providers/openai-document-generator"
 
 function parseArgs(argv: string[]): Record<string, string | boolean> {
   const args: Record<string, string | boolean> = {}
@@ -89,6 +90,14 @@ async function runCommand(argv: string[]) {
   const query = requiredArgument(args, "query")
   const selectedRank = Number(requiredArgument(args, "select"))
   if (!Number.isInteger(selectedRank) || selectedRank < 0) throw new Error("--select must be a non-negative ranked-job index.")
+  const generatorName = typeof args.generator === "string" ? args.generator : undefined
+  if (args["allow-remote-generation"] === true && !generatorName) throw new Error("--allow-remote-generation requires --generator openai.")
+  if (generatorName && generatorName !== "openai") throw new Error("Unsupported generator. Supported generator: openai.")
+  if (generatorName === "openai" && args["allow-remote-generation"] !== true) throw new Error("OpenAI generation requires --allow-remote-generation.")
+  if (generatorName === "openai" && !process.env.OPENAI_API_KEY?.trim()) throw new Error("OpenAI generation was requested but OPENAI_API_KEY is not configured.")
+  const generation = generatorName === "openai"
+    ? { generator: createOpenAIDocumentGenerator({ enabled: true, remoteGenerationConsent: true, apiKey: process.env.OPENAI_API_KEY!, model: "gpt-4.1-mini", maxOutputTokens: 1200, timeoutMs: 30_000 }) }
+    : undefined
   const profile = await loadCandidateProfile(profilePath)
   const documentEvidence = await loadCandidateDocumentEvidence(evidencePath)
   const result = await runMvpWorkflow({
@@ -109,6 +118,7 @@ async function runCommand(argv: string[]) {
       ...(args["allow-duplicate"] === true ? { allowDuplicate: true } : {}),
     },
     documents: [{ type: args.document === "coverLetter" ? "coverLetter" : "cv", language: args.language === "sv" ? "sv" : "en" }],
+    ...(generation ? { generation } : {}),
   }, { searchJobs, applicationRepository: createFileApplicationRepository(repositoryPath) })
 
   if (!result.ok) {
@@ -121,8 +131,12 @@ async function runCommand(argv: string[]) {
     selectedJob: { rank: result.selectedJob.rank, title: result.selectedJob.job.title, company: result.selectedJob.job.company, source: result.selectedJob.job.source, url: result.selectedJob.job.url, score: result.selectedJob.score, confidence: result.selectedJob.scoringBreakdown.confidence },
     application: { id: result.application.id, status: result.application.status },
     documents: result.documents.map((document) => ({ type: document.type, warnings: document.rendered.warnings })),
+    generatedDocuments: result.generatedDocuments.map((document) => document.result.ok
+      ? { generator: generatorName, type: document.type, requiresHumanReview: document.result.value.document.requiresHumanReview, warnings: document.result.value.renderedDocument.warnings }
+      : { generator: generatorName, type: document.type, error: document.result.error }),
   }, null, 2))
   for (const document of result.documents) console.log(`\n--- ${document.type} markdown ---\n${document.rendered.content}`)
+  for (const document of result.generatedDocuments) if (document.result.ok) console.log(`\n--- AI-generated ${document.type} proposal — review required ---\n${document.result.value.renderedDocument.content}`)
   return 0
 }
 

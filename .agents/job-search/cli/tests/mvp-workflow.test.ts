@@ -86,4 +86,12 @@ describe("MVP CLI orchestration core", () => {
     const result = await run()
     expect(result).toMatchObject({ ok: true })
   })
+
+  it("keeps deterministic output when an optional provider refuses", async () => {
+    const result = await run({ generation: { generator: { generate: async () => ({ ok: false as const, error: { code: "REFUSED" as const, message: "synthetic refusal" } }) } } })
+    expect(result).toMatchObject({ ok: true })
+    if (!result.ok) throw new Error("expected success")
+    expect(result.documents).toHaveLength(1)
+    expect(result.generatedDocuments).toMatchObject([{ result: { ok: false, error: { stage: "generation", error: { code: "REFUSED" } } } }])
+  })
 })

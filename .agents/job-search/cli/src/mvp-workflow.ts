@@ -10,6 +10,8 @@ import type { ApplicationDocumentRepository } from "./application-document-repos
 import type { ApplicationRepository } from "./application-repository"
 import { createTailoringPlan, type TailoringError, type TailoringOptions } from "./document-tailoring"
 import { renderApplicationDocument, type RenderError, type RenderedDocument } from "./document-rendering"
+import { generateApplicationDocument, type GeneratedApplicationDocumentWorkflowResult } from "./document-workflow"
+import type { ApplicationDocumentGenerator } from "./document-generation"
 import { analyzeJobs, type CareerAnalysisResult } from "./orchestrator"
 import type { CandidateProfile } from "./profile"
 import type { RankedJob } from "./ranking"
@@ -29,6 +31,7 @@ export interface MvpWorkflowInput {
   selectedRank: number
   application: { id: string; createdAt: string; allowDuplicate?: boolean }
   documents: MvpDocumentRequest[]
+  generation?: { generator: ApplicationDocumentGenerator }
   saveDocuments?: boolean
   documentStorage?: { repository: ApplicationDocumentRepository; ids: string[]; createdAt: string }
 }
@@ -51,6 +54,7 @@ export interface MvpWorkflowSuccess {
   selectedJob: RankedJob
   application: import("./applications").ApplicationRecord
   documents: MvpRenderedDocument[]
+  generatedDocuments: Array<{ type: DocumentType; result: GeneratedApplicationDocumentWorkflowResult }>
 }
 
 export type MvpWorkflowError =
@@ -105,6 +109,7 @@ export async function runMvpWorkflow(input: MvpWorkflowInput, dependencies: MvpW
   }
 
   const renderedDocuments: MvpRenderedDocument[] = []
+  const generatedDocuments: MvpWorkflowSuccess["generatedDocuments"] = []
   for (const [index, document] of input.documents.entries()) {
     const plan = createTailoringPlan(foundation.value, {
       type: document.type,
@@ -117,6 +122,16 @@ export async function runMvpWorkflow(input: MvpWorkflowInput, dependencies: MvpW
 
     if (!input.saveDocuments) {
       renderedDocuments.push({ type: document.type, rendered: rendered.value })
+      if (input.generation) {
+        const generated = await generateApplicationDocument({
+          application: applicationResult.value,
+          candidateDocumentInput: input.documentEvidence,
+          tailoringOptions: { type: document.type, language: document.language, ...(document.maxEvidenceItems === undefined ? {} : { maxEvidenceItems: document.maxEvidenceItems }) },
+          generator: input.generation.generator,
+          generationOptions: { untrustedJobDescription: selectedJob.job.description ?? undefined },
+        })
+        generatedDocuments.push({ type: document.type, result: generated })
+      }
       continue
     }
     const storage = createApplicationDocumentStorageWorkflow(dependencies.applicationRepository, input.documentStorage!.repository)
@@ -126,5 +141,5 @@ export async function runMvpWorkflow(input: MvpWorkflowInput, dependencies: MvpW
     return { ok: false, search, analysis, error: { stage: "persistence", code: "INVALID_DOCUMENT_STORAGE", message: "Deterministic Phase 4.3 drafts are rendered for review but are not Phase 4.5 generated-document records." } }
   }
 
-  return { ok: true, search, analysis, selectedJob, application: applicationResult.value, documents: renderedDocuments }
+  return { ok: true, search, analysis, selectedJob, application: applicationResult.value, documents: renderedDocuments, generatedDocuments }
 }
