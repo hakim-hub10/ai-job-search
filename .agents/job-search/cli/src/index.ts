@@ -295,6 +295,15 @@ export {
   type OpenAIInterviewGeneratorConfig,
 } from "./providers/openai-interview-generator"
 export {
+  runInterviewCliWorkflow,
+  type InterviewCliWorkflowInput,
+  type InterviewCliPreparationSuccess,
+  type InterviewCliEvaluationSuccess,
+  type InterviewCliWorkflowErrorStage,
+  type InterviewCliWorkflowError,
+  type InterviewCliWorkflowResult,
+} from "./interview-cli-workflow"
+export {
   matchProfile,
   type MatchingResult,
   type MatchEvidence,
