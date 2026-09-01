@@ -201,6 +201,21 @@ export {
   type MvpWorkflowResult,
 } from "./mvp-workflow"
 export {
+  createInterviewPreparationPlan,
+  type InterviewType,
+  type InterviewQuestionCategory,
+  type InterviewPreparationOptions,
+  type InterviewJobContext,
+  type InterviewQuestion,
+  type StarPreparationPrompt,
+  type InterviewPreparationWarningCode,
+  type InterviewPreparationWarning,
+  type InterviewPreparationPlan,
+  type InterviewPreparationErrorCode,
+  type InterviewPreparationError,
+  type InterviewPreparationResult,
+} from "./interview-preparation"
+export {
   matchProfile,
   type MatchingResult,
   type MatchEvidence,
