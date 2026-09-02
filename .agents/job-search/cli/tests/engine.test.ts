@@ -40,38 +40,52 @@ describe("normalizeJob", () => {
 })
 
 describe("dedupeJobs", () => {
-  it("keeps distinct source IDs from different sources but strips true duplicates", () => {
-    const jobs = [
-      normalizeJob({
-        id: "a",
-        title: "DevOps Engineer",
-        company: "Acme",
-        location: "Stockholm, Sweden",
-        source: "linkedin",
-        sourceId: "job-42",
-        url: "https://example.com/a",
-      }),
-      normalizeJob({
-        id: "b",
-        title: "DevOps Engineer",
-        company: "Acme",
-        location: "Stockholm, Sweden",
-        source: "jobindex",
-        sourceId: "job-42",
-        url: "https://example.com/a",
-      }),
-      normalizeJob({
-        id: "c",
-        title: "DevOps Engineer",
-        company: "Acme",
-        location: "Stockholm, Sweden",
-        source: "linkedin",
-        sourceId: "job-42",
-        url: "https://example.com/a",
-      }),
-    ]
+  const job = (id: string, overrides: Partial<NormalizedJob> = {}) => normalizeJob({
+    id, title: "Operations Coordinator", company: "Example AB", location: "Malmö", source: "linkedin", sourceId: id,
+    url: `https://example.test/jobs/${id}`, ...overrides,
+  })
 
-    expect(dedupeJobs(jobs)).toHaveLength(2)
+  it("deduplicates every existing exact identity while retaining the first record", () => {
+    const first = job("first")
+    const sameSourceId = job("other-id", { sourceId: "first", url: "https://other.test/source-id", title: "Different", company: "Other", location: "Lund" })
+    const sameUrl = job("url-copy", { source: "jobindex", sourceId: "different", url: first.url, title: "Different", company: "Other", location: "Lund" })
+    const sameTuple = job("tuple-copy", { source: "jobnet", sourceId: "another", url: "https://other.test/tuple", title: " operations   coordinator ", company: "EXAMPLE AB", location: " malmö " })
+    expect(dedupeJobs([first, sameSourceId, sameUrl, sameTuple])).toEqual([first])
+  })
+
+  it("keeps unrelated and partial-identity vacancies distinct", () => {
+    const first = job("first")
+    const differentCompany = job("company", { source: "jobindex", title: first.title, company: "Other AB", location: first.location })
+    const differentLocation = job("location", { source: "jobnet", title: first.title, company: first.company, location: "Lund" })
+    const partialA = job("partial-a", { source: "jobbank", url: null, company: null, location: null })
+    const partialB = job("partial-b", { source: "freehire", url: null, company: null, location: null })
+    expect(dedupeJobs([first, differentCompany, differentLocation, partialA, partialB])).toEqual([first, differentCompany, differentLocation, partialA, partialB])
+  })
+
+  it("deduplicates without a URL through the exact tuple but scopes source IDs by source", () => {
+    const first = job("first", { url: null })
+    const tupleCopy = job("copy", { source: "jobindex", sourceId: "copy", url: null })
+    const sameIdDifferentSource = job("same-id-other-source", { source: "jobnet", sourceId: "shared", url: null, title: "Nurse", company: "Clinic", location: "Lund" })
+    const otherSource = job("other-source", { source: "jobbank", sourceId: "shared", url: null, title: "Planner", company: "Warehouse", location: "Aarhus" })
+    expect(dedupeJobs([first, tupleCopy, sameIdDifferentSource, otherSource])).toEqual([first, sameIdDifferentSource, otherSource])
+  })
+
+  it("registers all keys and propagates exact transitive identity", () => {
+    const a = job("a", { title: "Role A", company: "Company A", location: "Malmö", url: "https://example.test/shared" })
+    const b = job("b", { source: "jobindex", title: "Bridge Role", company: "Bridge AB", location: "Lund", url: a.url })
+    const c = job("c", { source: "jobnet", title: b.title, company: b.company, location: b.location, url: "https://example.test/third" })
+    expect(dedupeJobs([a, b, c])).toEqual([a])
+  })
+
+  it("is deterministic, preserves first-seen ordering, and does not mutate inputs", () => {
+    const first = job("first")
+    const unique = job("unique", { title: "Warehouse Planner", company: "Other", location: "Lund" })
+    const duplicate = job("duplicate", { source: "jobindex", sourceId: "different", url: first.url })
+    const jobs = [first, unique, duplicate]
+    const before = structuredClone(jobs)
+    expect(dedupeJobs(jobs)).toEqual([first, unique])
+    expect(dedupeJobs(jobs)).toEqual([first, unique])
+    expect(jobs).toEqual(before)
   })
 })
 

@@ -13,19 +13,22 @@ export function dedupeJobs(jobs: NormalizedJob[]): NormalizedJob[] {
 
   for (const job of jobs) {
     const sourceKey = job.source ? canonicalKey(String(job.source)) : null
-    const sourceIdKey = sourceKey && job.sourceId ? `source:${sourceKey}:${canonicalKey(job.sourceId)}` : null
+    const sourceId = canonicalKey(job.sourceId)
+    const sourceIdKey = sourceKey && sourceId ? `source:${sourceKey}:${sourceId}` : null
     const urlKey = canonicalUrl(job.url) ? `url:${canonicalUrl(job.url)}` : null
-    const titleCompanyLocationKey =
-      job.title && job.company && job.location
-        ? `combo:${canonicalKey(job.title)}|${canonicalKey(job.company)}|${canonicalKey(job.location)}`
-        : null
+    const title = canonicalKey(job.title)
+    const company = canonicalKey(job.company)
+    const location = canonicalKey(job.location)
+    const titleCompanyLocationKey = title && company && location ? `combo:${title}|${company}|${location}` : null
 
     const dedupeKeys = [sourceIdKey, urlKey, titleCompanyLocationKey].filter((key): key is string => Boolean(key))
     const alreadySeen = dedupeKeys.some((key) => seen.has(key))
+    // Register every exact identity from every observed record. Duplicate
+    // records can bridge another exact identity without changing first-seen
+    // retained-record ordering or introducing fuzzy matching.
+    for (const key of dedupeKeys) seen.add(key)
     if (alreadySeen) continue
 
-    const primaryKey = sourceIdKey ?? urlKey ?? titleCompanyLocationKey
-    if (primaryKey) seen.add(primaryKey)
     deduped.push(job)
   }
 
