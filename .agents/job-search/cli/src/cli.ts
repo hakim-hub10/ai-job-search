@@ -3,6 +3,12 @@ import { readFile } from "node:fs/promises"
 import { SourceSelectionError, resolveBuiltInSourceAdapters } from "./adapters"
 import { createFileApplicationRepository } from "./application-file-repository"
 import {
+  appendManagedApplicationNote,
+  formatNoteAppendConfirmation,
+  formatStatusUpdateConfirmation,
+  updateManagedApplicationStatus,
+} from "./cli-application-management"
+import {
   discoverAnalysis,
   discoverApplication,
   discoverApplicationList,
@@ -20,6 +26,8 @@ import { runMvpWorkflow } from "./mvp-workflow"
 import { CandidateProfileInputError, loadCandidateProfile } from "./profile-input"
 import { createOpenAIDocumentGenerator } from "./providers/openai-document-generator"
 import { createOpenAIInterviewGenerator } from "./providers/openai-interview-generator"
+import type { ApplicationWorkflowError } from "./application-workflow"
+import type { ApplicationStatus } from "./applications"
 
 class InterviewCliInputError extends Error {
   readonly code = "INTERVIEW_INPUT_ERROR"
@@ -145,7 +153,9 @@ async function analyzeCommand(argv: string[]) {
 
 async function applicationsCommand(argv: string[]) {
   const action = argv[0]
-  if (action !== "list" && action !== "show") throw new DiscoveryCliInputError("Expected career-agent applications list or career-agent applications show.")
+  if (action !== "list" && action !== "show" && action !== "status" && action !== "note") {
+    throw new DiscoveryCliInputError("Expected career-agent applications list, show, status, or note.")
+  }
   const args = parseArgs(argv.slice(1))
   const repository = createFileApplicationRepository(requiredDiscoveryArgument(args, "repository", `applications ${action}`))
   if (action === "list") {
@@ -154,11 +164,48 @@ async function applicationsCommand(argv: string[]) {
     console.log(formatApplicationList(result.value))
     return 0
   }
-  const applicationId = requiredDiscoveryArgument(args, "application-id", "applications show")
-  const result = await discoverApplication(repository, applicationId)
-  if (!result.ok) throw new DiscoveryCliInputError(result.error.message, result.error.code)
-  console.log(formatApplication(result.value))
+  const applicationId = requiredDiscoveryArgument(args, "application-id", `applications ${action}`)
+  if (action === "show") {
+    const result = await discoverApplication(repository, applicationId)
+    if (!result.ok) throw new DiscoveryCliInputError(result.error.message, result.error.code)
+    console.log(formatApplication(result.value))
+    return 0
+  }
+
+  if (args.timestamp !== undefined && typeof args.timestamp !== "string") throw new DiscoveryCliInputError("--timestamp requires a value.")
+  const timestamp = typeof args.timestamp === "string" ? args.timestamp : new Date().toISOString()
+  if (action === "status") {
+    const status = requiredDiscoveryArgument(args, "status", "applications status") as ApplicationStatus
+    const input = { applicationId, status, timestamp }
+    const result = await updateManagedApplicationStatus(repository, input)
+    if (!result.ok) throwApplicationWorkflowError(result.error)
+    console.log(formatStatusUpdateConfirmation(input))
+    return 0
+  }
+
+  if (args.note !== undefined) throw new DiscoveryCliInputError("Inline application notes are not accepted; use --note-file or --note-stdin.")
+  if (args["note-file"] !== undefined && typeof args["note-file"] !== "string") throw new DiscoveryCliInputError("--note-file requires a path.")
+  if (args["note-stdin"] !== undefined && args["note-stdin"] !== true) throw new DiscoveryCliInputError("--note-stdin does not accept a value.")
+  const noteFile = typeof args["note-file"] === "string" ? args["note-file"] : undefined
+  const noteStdin = args["note-stdin"] === true
+  if (noteFile && noteStdin) throw new DiscoveryCliInputError("Use exactly one of --note-file or --note-stdin.")
+  if (!noteFile && !noteStdin) throw new DiscoveryCliInputError("Use exactly one of --note-file or --note-stdin.")
+  let text: string
+  if (noteFile) {
+    try { text = await readFile(noteFile, "utf8") } catch { throw new DiscoveryCliInputError("Application note file could not be read.", "NOTE_FILE_READ_ERROR") }
+  } else {
+    try { text = await new Response(Bun.stdin.stream()).text() } catch { throw new DiscoveryCliInputError("Application note could not be read from stdin.", "NOTE_STDIN_READ_ERROR") }
+  }
+  const input = { applicationId, text, timestamp }
+  const result = await appendManagedApplicationNote(repository, input)
+  if (!result.ok) throwApplicationWorkflowError(result.error)
+  console.log(formatNoteAppendConfirmation(input))
   return 0
+}
+
+function throwApplicationWorkflowError(error: ApplicationWorkflowError): never {
+  if (error.kind === "duplicate_advisory") throw new DiscoveryCliInputError("Unexpected duplicate advisory during application update.")
+  throw new DiscoveryCliInputError(error.error.message, error.error.code)
 }
 
 async function interviewQuestionsCommand(argv: string[]) {
@@ -188,6 +235,8 @@ function helpCommand() {
     "career-agent run --profile <path> --evidence <path> --repository <path> --query <query> --select <zero-based-index>",
     "career-agent applications list --repository <path>",
     "career-agent applications show --repository <path> --application-id <id>",
+    "career-agent applications status --repository <path> --application-id <id> --status <status> [--timestamp <UTC-ISO>]",
+    "career-agent applications note --repository <path> --application-id <id> (--note-file <path> | --note-stdin) [--timestamp <UTC-ISO>]",
     "career-agent interview --repository <path> --application-id <id> --evidence <path> [answer options]",
     "career-agent interview questions --repository <path> --application-id <id> --evidence <path>",
   ].join("\n"))
