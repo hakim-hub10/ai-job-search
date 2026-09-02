@@ -23,6 +23,7 @@ export interface PrioritizedSkillGap {
   canonicalKey: string
   sourceRequirements: string[]
   relatedJobs: Array<{ title: string; rank: number; score: number }>
+  evidence: string[]
   reason: string
   candidateHas?: string
 }
@@ -207,6 +208,7 @@ export function generateLearningPlan(
     canonicalKey: group.key,
     sourceRequirements: group.sourceRequirements,
     relatedJobs: group.occurrences.map((occurrence) => ({ title: occurrence.jobTitle, rank: occurrence.jobRank, score: occurrence.jobScore })),
+    evidence: [...new Set(group.occurrences.map((occurrence) => occurrence.gap.evidence).filter(Boolean))].sort(),
     reason: includeReasons ? describePriority(group, group.frequencyScore, group.impactScore) : "",
     candidateHas: group.occurrences.find((occurrence) => occurrence.gap.candidateHas)?.gap.candidateHas,
   }))

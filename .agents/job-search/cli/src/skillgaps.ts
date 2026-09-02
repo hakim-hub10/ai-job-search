@@ -6,6 +6,7 @@ import {
   type RequirementDescriptor,
 } from "./requirements"
 import { explicitRequirementSegments } from "./requirement-context"
+import type { ExtractedTechnicalRequirement } from "./job-requirement-extraction"
 
 export type GapType = "missing_skill" | "insufficient_skill" | "missing_certification" | "missing_language" | "experience_gap" | "education_gap" | "other"
 export type GapSeverity = "critical" | "high" | "medium" | "low"
@@ -56,6 +57,10 @@ export interface SkillGapResult {
   summary: string
 }
 
+export interface SkillGapAnalysisOptions {
+  technicalRequirements?: readonly ExtractedTechnicalRequirement[]
+}
+
 /**
  * Fuzzy match helper - reused from matching
  */
@@ -77,7 +82,12 @@ function skillsOverlap(candidateSkills: string[], jobSkills: string[]): string[]
 /**
  * Analyze technical skill gaps
  */
-function analyzeTechnicalSkillGaps(candidate: CandidateProfile, job: NormalizedJob, matchingResult: MatchingResult): { gaps: SkillGap[]; strengths: SkillStrength[] } {
+function analyzeTechnicalSkillGaps(
+  candidate: CandidateProfile,
+  job: NormalizedJob,
+  matchingResult: MatchingResult,
+  requirements: readonly ExtractedTechnicalRequirement[] = [],
+): { gaps: SkillGap[]; strengths: SkillStrength[] } {
   const gaps: SkillGap[] = []
   const strengths: SkillStrength[] = []
 
@@ -109,18 +119,28 @@ function analyzeTechnicalSkillGaps(candidate: CandidateProfile, job: NormalizedJ
   }
 
   for (const skill of missingJobSkills) {
+    const extracted = requirements.find((requirement) => requirement.canonical === skill)
+    const requirementLabel = extracted?.importance === "preferred" ? "Preferred" : "Required"
     gaps.push({
       type: "missing_skill",
       title: `Missing: ${skill}`,
-      description: `Candidate does not have the required skill: ${skill}`,
-      jobRequirement: `Required: ${skill}`,
-      severity: determineSkillSeverity(skill, jobSkills.length),
-      evidence: `Job explicitly lists: ${skill}`,
-      requirement: createRequirementDescriptor("skill", skill, "required"),
+      description: extracted?.importance === "preferred"
+        ? `Candidate profile does not list the preferred skill: ${skill}`
+        : `Candidate does not have the required skill: ${skill}`,
+      jobRequirement: `${requirementLabel}: ${skill}`,
+      severity: extracted ? determineExtractedRequirementSeverity(extracted) : determineSkillSeverity(skill, jobSkills.length),
+      evidence: extracted?.evidence ?? `Job explicitly lists: ${skill}`,
+      requirement: createRequirementDescriptor("skill", skill, extracted?.importance ?? "required"),
     })
   }
 
   return { gaps, strengths }
+}
+
+function determineExtractedRequirementSeverity(requirement: ExtractedTechnicalRequirement): GapSeverity {
+  if (requirement.importance === "preferred") return "low"
+  if (/\b(?:mandatory|essential|critical|non-negotiable|obligatorisk|avgörande|nödvändig)\b/i.test(requirement.evidence)) return "high"
+  return "medium"
 }
 
 /**
@@ -481,13 +501,18 @@ function generateRecommendations(gaps: SkillGap[]): SkillGapRecommendation[] {
 /**
  * Analyze skill gaps for a candidate against a job posting
  */
-export function analyzeSkillGaps(candidate: CandidateProfile, job: NormalizedJob, matchingResult: MatchingResult): SkillGapResult {
+export function analyzeSkillGaps(
+  candidate: CandidateProfile,
+  job: NormalizedJob,
+  matchingResult: MatchingResult,
+  options: SkillGapAnalysisOptions = {},
+): SkillGapResult {
   const gaps: SkillGap[] = []
   const strengths: SkillStrength[] = []
   const unknowns: SkillUnknown[] = []
 
   // Analyze each category
-  const { gaps: techGaps, strengths: techStrengths } = analyzeTechnicalSkillGaps(candidate, job, matchingResult)
+  const { gaps: techGaps, strengths: techStrengths } = analyzeTechnicalSkillGaps(candidate, job, matchingResult, options.technicalRequirements)
   gaps.push(...techGaps)
   strengths.push(...techStrengths)
 

@@ -18,6 +18,18 @@ describe("H8.2 deterministic requirement quality", () => {
     expect(explicitRequirementSegments(description, ["AWS certification"])).toHaveLength(1)
   })
 
+  it("keeps HTML list items isolated so a later marker cannot promote an earlier mention", () => {
+    const description = "<ul><li>PowerShell and Python scripting</li><li>Swedish citizenship is required</li></ul>"
+    expect(explicitRequirementSegments(description, ["PowerShell"])).toEqual([])
+    expect(explicitRequirementSegments(description, ["Python"])).toEqual([])
+  })
+
+  it("does not let a later citizenship requirement promote preceding tool names", () => {
+    const description = "PowerShell, Python or JavaScript) Due to the sensitivity of our work, we require Swedish citizenship."
+    expect(explicitRequirementSegments(description, ["PowerShell"])).toEqual([])
+    expect(explicitRequirementSegments(description, ["Python"])).toEqual([])
+  })
+
   it("does not turn a platform mention into a certification gap", () => {
     const job = normalizeJob({
       id: "platform-mention",

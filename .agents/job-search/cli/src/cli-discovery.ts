@@ -77,6 +77,8 @@ export function formatAnalysisDiscovery(result: AnalyzeDiscoverySuccess): string
       "",
       `Priority ${gap.priority} | ${gap.skill} | Severity: ${gap.severity} | Importance: ${gap.importance}`,
       `Reason: ${gap.reason}`,
+      `Evidence: ${gap.evidence[0] ?? "-"}`,
+      `Jobs: ${gap.relatedJobs.map((job) => `#${job.rank} ${job.title}`).join("; ")}`,
     )
   }
   return lines.join("\n")

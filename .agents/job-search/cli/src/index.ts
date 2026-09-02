@@ -10,6 +10,7 @@ export type {
   UnifiedSearchResponse,
 } from "./types"
 export {
+  classifiedRequirementSegments,
   descriptionSegments,
   explicitRequirementSegments,
   requirementImportanceForSegment,
@@ -17,6 +18,8 @@ export {
 export {
   DEFAULT_TECHNICAL_REQUIREMENT_TERMS,
   extractTechnicalRequirements,
+  MAX_REQUIREMENT_EVIDENCE_LENGTH,
+  type ExtractedTechnicalRequirement,
   type JobRequirementExtraction,
   type TechnicalRequirementTerm,
 } from "./job-requirement-extraction"
@@ -391,6 +394,7 @@ export {
 } from "./scoring"
 export {
   analyzeSkillGaps,
+  type SkillGapAnalysisOptions,
   type SkillGapResult,
   type SkillGap,
   type SkillStrength,

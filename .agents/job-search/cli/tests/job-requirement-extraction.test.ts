@@ -3,6 +3,7 @@ import {
   analyzeJobs,
   createDefaultCandidateProfile,
   extractTechnicalRequirements,
+  MAX_REQUIREMENT_EVIDENCE_LENGTH,
   normalizeCandidateProfile,
   normalizeJob,
 } from "../src/index"
@@ -47,6 +48,21 @@ describe("H8.2 technical requirement extraction", () => {
     expect(result.job.skills).toEqual(["O365", "Microsoft Entra ID"])
   })
 
+  it("preserves bounded provenance and required versus preferred importance", () => {
+    const result = extractTechnicalRequirements(normalizeJob({
+      id: "provenance",
+      source: "linkedin",
+      title: "Support",
+      description: `Azure is mandatory for this role ${"x".repeat(400)}. Jira is preferred.`,
+    }))
+    expect(result.requirements).toEqual([
+      expect.objectContaining({ canonical: "Azure", matchedAlias: "Azure", importance: "required", jobId: "provenance", source: "linkedin" }),
+      expect.objectContaining({ canonical: "Jira", matchedAlias: "Jira", importance: "preferred", jobId: "provenance", source: "linkedin" }),
+    ])
+    expect(result.requirements[0]?.evidence.length).toBeLessThanOrEqual(MAX_REQUIREMENT_EVIDENCE_LENGTH)
+    expect(result.requirements[0]?.evidence).toContain("Azure")
+  })
+
   it("feeds confirmed technical requirements into gaps and the learning plan", () => {
     const base = createDefaultCandidateProfile()
     const candidate = normalizeCandidateProfile({
@@ -66,5 +82,31 @@ describe("H8.2 technical requirement extraction", () => {
       requirement: expect.objectContaining({ identity: expect.objectContaining({ key: "skill:intune" }) }),
     }))
     expect(result.learningPlan.prioritizedGaps.map((gap) => gap.skill)).toEqual(["Intune"])
+    expect(result.learningPlan.prioritizedGaps[0]).toMatchObject({
+      severity: "medium",
+      importance: "required",
+      evidence: ["You must have experience with Windows, Microsoft 365 and Intune"],
+    })
+  })
+
+  it("derives severity from requirement context instead of the product name", () => {
+    const candidate = normalizeCandidateProfile({
+      ...createDefaultCandidateProfile(),
+      skills: { technical: ["Windows"], soft: ["Communication"] },
+    })
+    const result = analyzeJobs(candidate, [normalizeJob({
+      id: "severity",
+      source: "test",
+      title: "Cloud Support",
+      description: "Azure is required. Python is essential and required. Jira is preferred.",
+    })])
+    const bySkill = new Map(result.learningPlan.prioritizedGaps.map((gap) => [gap.skill, gap]))
+    expect(bySkill.get("Azure")).toMatchObject({ severity: "medium", importance: "required" })
+    expect(bySkill.get("Python")).toMatchObject({ severity: "high", importance: "required" })
+    expect(bySkill.get("Jira")).toMatchObject({ severity: "low", importance: "preferred" })
+    expect(result.rankedJobs[0]?.skillGapResult.gaps.find((gap) => gap.requirement?.identity.original === "Jira")).toMatchObject({
+      jobRequirement: "Preferred: Jira",
+      description: "Candidate profile does not list the preferred skill: Jira",
+    })
   })
 })

@@ -1,4 +1,5 @@
-import { explicitRequirementSegments } from "./requirement-context"
+import { classifiedRequirementSegments } from "./requirement-context"
+import type { RequirementImportance } from "./requirements"
 import type { NormalizedJob } from "./types"
 
 export interface TechnicalRequirementTerm {
@@ -9,7 +10,19 @@ export interface TechnicalRequirementTerm {
 export interface JobRequirementExtraction {
   job: NormalizedJob
   extractedSkills: string[]
+  requirements: ExtractedTechnicalRequirement[]
 }
+
+export interface ExtractedTechnicalRequirement {
+  canonical: string
+  matchedAlias: string
+  importance: Extract<RequirementImportance, "required" | "preferred">
+  evidence: string
+  jobId: string
+  source: string
+}
+
+export const MAX_REQUIREMENT_EVIDENCE_LENGTH = 240
 
 /**
  * Deliberately bounded vocabulary for deterministic MVP extraction. Terms are
@@ -76,18 +89,49 @@ function containsIndependentTerm(
   return containsTerm(remaining, alias)
 }
 
+function boundedEvidence(segment: string, matchedAlias: string): string {
+  const safe = segment.replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim()
+  if (safe.length <= MAX_REQUIREMENT_EVIDENCE_LENGTH) return safe
+  const aliasIndex = safe.toLocaleLowerCase("en").indexOf(matchedAlias.toLocaleLowerCase("en"))
+  const bodyLength = MAX_REQUIREMENT_EVIDENCE_LENGTH - 2
+  let start = Math.max(0, aliasIndex - 100)
+  let end = Math.min(safe.length, start + bodyLength)
+  if (end === safe.length) start = Math.max(0, end - bodyLength)
+  const body = safe.slice(start, end).trim()
+  return `${start > 0 ? "…" : ""}${body}${end < safe.length ? "…" : ""}`
+}
+
+function importanceWeight(importance: ExtractedTechnicalRequirement["importance"]): number {
+  return importance === "required" ? 2 : 1
+}
+
 export function extractTechnicalRequirements(
   job: Readonly<NormalizedJob>,
   terms: readonly TechnicalRequirementTerm[] = DEFAULT_TECHNICAL_REQUIREMENT_TERMS,
 ): JobRequirementExtraction {
   const existing = [...job.skills]
   const extractedSkills: string[] = []
+  const requirements: ExtractedTechnicalRequirement[] = []
 
   if (job.description) {
     for (const term of terms) {
       const aliases = [term.canonical, ...(term.aliases ?? [])]
-      const segments = explicitRequirementSegments(job.description, aliases)
-      if (!segments.some(({ segment }) => aliases.some((alias) => containsIndependentTerm(segment, alias, terms)))) continue
+      const candidates = classifiedRequirementSegments(job.description, aliases).flatMap(({ segment, importance }) => {
+        const matchedAlias = aliases.find((alias) => containsIndependentTerm(segment, alias, terms))
+        return matchedAlias ? [{ segment, importance, matchedAlias }] : []
+      })
+      const strongest = candidates.sort((left, right) =>
+        importanceWeight(right.importance) - importanceWeight(left.importance),
+      )[0]
+      if (!strongest) continue
+      requirements.push({
+        canonical: term.canonical,
+        matchedAlias: strongest.matchedAlias,
+        importance: strongest.importance,
+        evidence: boundedEvidence(strongest.segment, strongest.matchedAlias),
+        jobId: job.id,
+        source: job.source,
+      })
       const alreadyKnown = [...existing, ...extractedSkills].some((skill) =>
         aliases.some((alias) => skill.localeCompare(alias, "en", { sensitivity: "accent" }) === 0),
       )
@@ -99,5 +143,6 @@ export function extractTechnicalRequirements(
   return {
     job: { ...job, skills: [...existing, ...extractedSkills] },
     extractedSkills,
+    requirements,
   }
 }

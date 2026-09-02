@@ -35,13 +35,14 @@ export function analyzeJobs(
   options: CareerAnalysisOptions = {},
 ): CareerAnalysisResult {
   const inputs: RankingInput[] = jobs.map((inputJob) => {
-    const { job } = extractTechnicalRequirements(inputJob)
+    const extraction = extractTechnicalRequirements(inputJob)
+    const { job } = extraction
     const matchingResult = matchProfile(candidate, job)
     return {
       job,
       matchingResult,
       scoringResult: scoreMatch(matchingResult),
-      skillGapResult: analyzeSkillGaps(candidate, job, matchingResult),
+      skillGapResult: analyzeSkillGaps(candidate, job, matchingResult, { technicalRequirements: extraction.requirements }),
     }
   })
   const rankedJobs = rankJobs(inputs, candidate, options.ranking)

@@ -81,6 +81,8 @@ describe("H2 CLI discovery presentation and orchestration", () => {
     for (const gap of result.analysis.learningPlan.prioritizedGaps) {
       expect(output).toContain(`Priority ${gap.priority} | ${gap.skill} | Severity: ${gap.severity} | Importance: ${gap.importance}`)
       expect(output).toContain(`Reason: ${gap.reason}`)
+      expect(output).toContain(`Evidence: ${gap.evidence[0] ?? "-"}`)
+      expect(output).toContain(`Jobs: ${gap.relatedJobs.map((job) => `#${job.rank} ${job.title}`).join("; ")}`)
     }
     expect(formatAnalysisDiscovery(result)).toBe(output)
     expect(output).not.toContain("PRIVATE PROFILE")
