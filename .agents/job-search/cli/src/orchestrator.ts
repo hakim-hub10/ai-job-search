@@ -6,6 +6,7 @@ import { scoreMatch } from "./scoring"
 import { analyzeSkillGaps } from "./skillgaps"
 import type { NormalizedJob } from "./types"
 import { selectSearchRelevantJobs, type SearchRelevanceSelection } from "./search-relevance"
+import { extractTechnicalRequirements } from "./job-requirement-extraction"
 
 export interface CareerAnalysisOptions {
   ranking?: RankingOptions
@@ -33,7 +34,8 @@ export function analyzeJobs(
   jobs: NormalizedJob[],
   options: CareerAnalysisOptions = {},
 ): CareerAnalysisResult {
-  const inputs: RankingInput[] = jobs.map((job) => {
+  const inputs: RankingInput[] = jobs.map((inputJob) => {
+    const { job } = extractTechnicalRequirements(inputJob)
     const matchingResult = matchProfile(candidate, job)
     return {
       job,

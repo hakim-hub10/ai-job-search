@@ -10,6 +10,18 @@ export type {
   UnifiedSearchResponse,
 } from "./types"
 export {
+  descriptionSegments,
+  explicitRequirementSegments,
+  requirementImportanceForSegment,
+} from "./requirement-context"
+export {
+  DEFAULT_TECHNICAL_REQUIREMENT_TERMS,
+  extractTechnicalRequirements,
+  type JobRequirementExtraction,
+  type TechnicalRequirementTerm,
+} from "./job-requirement-extraction"
+
+export {
   enrichJobDetails,
   MAX_DETAIL_REQUESTS,
   MAX_DETAIL_CONCURRENCY,

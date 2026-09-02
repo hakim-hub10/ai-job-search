@@ -212,7 +212,7 @@ describe("skill-gap analysis engine", () => {
     expect(result.gaps.length).toBeGreaterThan(0)
   })
 
-  it("soft skill gap: identifies soft skill requirements from description", () => {
+  it("does not treat an unlisted soft skill as a confirmed candidate gap", () => {
     const job = normalizeJob({
       id: "soft-1",
       source: "test",
@@ -236,7 +236,8 @@ describe("skill-gap analysis engine", () => {
     const result = analyzeSkillGaps(candidateWithoutLeadership, job, matching)
 
     const softGap = result.gaps.find((g) => g.title.includes("leadership"))
-    expect(softGap).toBeDefined()
+    expect(softGap).toBeUndefined()
+    expect(matching.unknownDimensions).toContain("softSkills")
   })
 
   it("strengths are identified: candidate has required skills", () => {

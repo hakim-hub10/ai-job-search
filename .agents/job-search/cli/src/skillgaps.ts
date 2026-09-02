@@ -5,6 +5,7 @@ import {
   createRequirementDescriptor,
   type RequirementDescriptor,
 } from "./requirements"
+import { explicitRequirementSegments } from "./requirement-context"
 
 export type GapType = "missing_skill" | "insufficient_skill" | "missing_certification" | "missing_language" | "experience_gap" | "education_gap" | "other"
 export type GapSeverity = "critical" | "high" | "medium" | "low"
@@ -154,7 +155,6 @@ function analyzeSoftSkillGaps(candidate: CandidateProfile, job: NormalizedJob): 
     return { gaps, strengths }
   }
 
-  const description = job.description.toLowerCase()
   const candidateSoftSkills = candidate.skills.soft
 
   const softSkillKeywords: Record<string, string[]> = {
@@ -167,7 +167,8 @@ function analyzeSoftSkillGaps(candidate: CandidateProfile, job: NormalizedJob): 
 
   for (const [skill, keywords] of Object.entries(softSkillKeywords)) {
     const hasSoftSkill = candidateSoftSkills.some((s) => s.toLowerCase().includes(skill.toLowerCase()))
-    const jobRequiresSoftSkill = keywords.some((kw) => description.includes(kw.toLowerCase()))
+    const requirementSegments = explicitRequirementSegments(job.description, keywords)
+    const jobRequiresSoftSkill = requirementSegments.length > 0
 
     if (jobRequiresSoftSkill) {
       if (hasSoftSkill) {
@@ -175,17 +176,7 @@ function analyzeSoftSkillGaps(candidate: CandidateProfile, job: NormalizedJob): 
           title: skill,
           description: `Candidate demonstrates ${skill}`,
           relevance: `Job explicitly values ${skill}`,
-          evidence: `Job description mentions: ${keywords.filter((kw) => description.includes(kw)).join(", ")}`,
-        })
-      } else {
-        gaps.push({
-          type: "missing_skill",
-          title: `Soft skill gap: ${skill}`,
-          description: `Job emphasizes ${skill}, which is not listed in candidate's profile`,
-          jobRequirement: `Job requires: ${skill}`,
-          severity: "medium",
-          evidence: `Job description emphasizes: ${keywords.filter((kw) => description.includes(kw)).join(", ")}`,
-          requirement: createRequirementDescriptor("skill", skill, "required"),
+          evidence: `Job explicitly requires: ${skill}`,
         })
       }
     }
@@ -208,33 +199,35 @@ function analyzeCertificationGaps(candidate: CandidateProfile, job: NormalizedJo
 
   const description = job.description.toLowerCase()
 
-  // Look for common certification names in job description
-  const commonCertifications = ["AWS", "Azure", "GCP", "Kubernetes", "Docker", "CISPA", "Security+", "PMP", "CAPM", "CPA", "CFA"]
+  // A product or platform mention is not a certification requirement. Require
+  // both certification wording and explicit requirement language in context.
+  const commonCertifications = ["AWS", "Azure", "GCP", "Kubernetes", "CISSP", "Security+", "PMP", "CAPM", "CPA", "CFA"]
 
   for (const cert of commonCertifications) {
-    if (description.includes(cert.toLowerCase())) {
-      // Job mentions this certification - check if candidate has it
-      const candidateHasCert = candidate.certifications.some((c) => c.toLowerCase().includes(cert.toLowerCase()))
+    const certificationTerms = [`${cert} certification`, `${cert} certificate`, `certified ${cert}`, `${cert}-certifier`]
+    const requirementSegments = explicitRequirementSegments(job.description, certificationTerms)
+    const certificationMentioned = description.includes(cert.toLowerCase())
+      && /certif|certificate|certifier/.test(description)
+    const candidateHasCert = candidate.certifications.some((c) => c.toLowerCase().includes(cert.toLowerCase()))
 
-      if (candidateHasCert) {
-        const actualCert = candidate.certifications.find((c) => c.toLowerCase().includes(cert.toLowerCase()))
-        strengths.push({
-          title: actualCert || cert,
-          description: `Candidate holds: ${actualCert || cert}`,
-          relevance: `Required or valued by the job`,
-          evidence: `Job mentions: ${cert}`,
-        })
-      } else {
-        gaps.push({
-          type: "missing_certification",
-          title: `Missing: ${cert} certification`,
-          description: `Job mentions ${cert} certification, which candidate does not have`,
-          jobRequirement: `Mentions: ${cert}`,
-          severity: "medium",
-          evidence: `Found in job description`,
-          requirement: createRequirementDescriptor("certification", cert),
-        })
-      }
+    if (certificationMentioned && candidateHasCert) {
+      const actualCert = candidate.certifications.find((c) => c.toLowerCase().includes(cert.toLowerCase()))
+      strengths.push({
+        title: actualCert || cert,
+        description: `Candidate holds: ${actualCert || cert}`,
+        relevance: `Required or valued by the job`,
+        evidence: `Job mentions: ${cert}`,
+      })
+    } else if (requirementSegments.length > 0) {
+      gaps.push({
+        type: "missing_certification",
+        title: `Missing: ${cert} certification`,
+        description: `Job mentions ${cert} certification, which candidate does not have`,
+        jobRequirement: `Mentions: ${cert}`,
+        severity: "medium",
+        evidence: `Job explicitly requires ${cert} certification`,
+        requirement: createRequirementDescriptor("certification", cert, "required"),
+      })
     }
   }
 
@@ -376,40 +369,40 @@ function analyzeEducationGaps(candidate: CandidateProfile, job: NormalizedJob): 
     return { gaps, strengths }
   }
 
-  const description = job.description.toLowerCase()
+  const degreeTests = [
+    { degree: "PhD", level: 3, keywords: ["phd", "doctorate", "ph.d", "doktorsexamen"] },
+    { degree: "Master", level: 2, keywords: ["master", "msc", "m.s.", "graduate degree", "masterexamen"] },
+    { degree: "Bachelor", level: 1, keywords: ["bachelor", "bsc", "b.s.", "kandidatexamen"] },
+  ] as const
+  const explicitDegrees = degreeTests.filter(({ keywords }) => explicitRequirementSegments(job.description!, keywords).length > 0)
+  if (explicitDegrees.length === 0) return { gaps, strengths }
 
-  // Check for degree requirements
-  const degreeTests: Record<string, string[]> = {
-    Bachelor: ["bachelor", "ba ", "bsc", "b.s."],
-    Master: ["master", "ma ", "msc", "m.s.", "graduate degree"],
-    PhD: ["phd", "doctorate", "ph.d"],
-  }
+  // "Bachelor's or Master's" expresses one minimum threshold, not two gaps.
+  const requiredDegree = explicitDegrees.reduce((lowest, current) => current.level < lowest.level ? current : lowest)
+  const candidateLevel = candidate.education.reduce((highest, education) => {
+    const text = education.degree.toLowerCase()
+    const level = degreeTests.find(({ keywords }) => keywords.some((keyword) => text.includes(keyword)))?.level ?? 0
+    return Math.max(highest, level)
+  }, 0)
+  const candidateHasDegree = candidateLevel >= requiredDegree.level
 
-  for (const [degree, keywords] of Object.entries(degreeTests)) {
-    const jobRequiresDegree = keywords.some((kw) => description.includes(kw))
-
-    if (jobRequiresDegree) {
-      const candidateHasDegree = candidate.education.some((e) => e.degree.toLowerCase().includes(degree.toLowerCase()))
-
-      if (candidateHasDegree) {
-        strengths.push({
-          title: `${degree} degree`,
-          description: `Candidate holds ${degree} degree in ${candidate.education.find((e) => e.degree.toLowerCase().includes(degree.toLowerCase()))?.field}`,
-          relevance: `Satisfies job education requirement`,
-          evidence: `Job requires: ${degree}`,
-        })
-      } else {
-        gaps.push({
-          type: "education_gap",
-          title: `Missing: ${degree} degree`,
-          description: `Job requires ${degree} degree, candidate does not list one`,
-          jobRequirement: `Requires: ${degree}`,
-          severity: "medium",
-          evidence: `Job mentions: ${keywords.filter((kw) => description.includes(kw)).join(", ")}`,
-          requirement: createRequirementDescriptor("education", degree, "required"),
-        })
-      }
-    }
+  if (candidateHasDegree) {
+    strengths.push({
+      title: `${requiredDegree.degree} degree`,
+      description: `Candidate meets the ${requiredDegree.degree} degree threshold`,
+      relevance: `Satisfies job education requirement`,
+      evidence: `Job requires: ${requiredDegree.degree}`,
+    })
+  } else {
+    gaps.push({
+      type: "education_gap",
+      title: `Missing: ${requiredDegree.degree} degree`,
+      description: `Job requires ${requiredDegree.degree} degree, candidate does not list an equivalent level`,
+      jobRequirement: `Requires: ${requiredDegree.degree}`,
+      severity: "medium",
+      evidence: `Job explicitly requires: ${requiredDegree.degree}`,
+      requirement: createRequirementDescriptor("education", requiredDegree.degree, "required"),
+    })
   }
 
   return { gaps, strengths }
