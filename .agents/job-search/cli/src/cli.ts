@@ -2,6 +2,16 @@
 import { readFile } from "node:fs/promises"
 import { SourceSelectionError, resolveBuiltInSourceAdapters } from "./adapters"
 import { createFileApplicationRepository } from "./application-file-repository"
+import {
+  discoverAnalysis,
+  discoverApplication,
+  discoverApplicationList,
+  discoverInterviewQuestions,
+  formatAnalysisDiscovery,
+  formatApplication,
+  formatApplicationList,
+  formatInterviewQuestions,
+} from "./cli-discovery"
 import { CandidateDocumentEvidenceInputError, loadCandidateDocumentEvidence } from "./document-evidence-input"
 import { searchJobs } from "./engine"
 import { runInterviewCliWorkflow } from "./interview-cli-workflow"
@@ -13,6 +23,12 @@ import { createOpenAIInterviewGenerator } from "./providers/openai-interview-gen
 
 class InterviewCliInputError extends Error {
   readonly code = "INTERVIEW_INPUT_ERROR"
+}
+
+class DiscoveryCliInputError extends Error {
+  constructor(message: string, readonly code = "DISCOVERY_INPUT_ERROR") {
+    super(message)
+  }
 }
 
 function parseArgs(argv: string[]): Record<string, string | boolean> {
@@ -100,6 +116,82 @@ function requiredArgument(args: Record<string, string | boolean>, name: string):
   const value = args[name]
   if (typeof value !== "string" || value.trim().length === 0) throw new Error(`--${name} is required for career-agent run.`)
   return value
+}
+
+function requiredDiscoveryArgument(args: Record<string, string | boolean>, name: string, command: string): string {
+  const value = args[name]
+  if (typeof value !== "string" || value.trim().length === 0) throw new DiscoveryCliInputError(`--${name} is required for career-agent ${command}.`)
+  return value
+}
+
+async function analyzeCommand(argv: string[]) {
+  const args = parseArgs(argv)
+  const profile = await loadCandidateProfile(requiredDiscoveryArgument(args, "profile", "analyze"))
+  const query = requiredDiscoveryArgument(args, "query", "analyze")
+  const result = await discoverAnalysis({
+    profile,
+    search: {
+      query,
+      ...(typeof args.location === "string" ? { location: args.location } : {}),
+      ...(typeof args.jobage === "string" ? { jobage: Number(args.jobage) } : {}),
+      ...(typeof args.limit === "string" ? { limit: Number(args.limit) } : {}),
+      includeSourceStatus: true,
+      adapters: resolveBuiltInSourceAdapters(parseSourceArguments(argv)),
+    },
+  }, { searchJobs })
+  console.log(formatAnalysisDiscovery(result))
+  return 0
+}
+
+async function applicationsCommand(argv: string[]) {
+  const action = argv[0]
+  if (action !== "list" && action !== "show") throw new DiscoveryCliInputError("Expected career-agent applications list or career-agent applications show.")
+  const args = parseArgs(argv.slice(1))
+  const repository = createFileApplicationRepository(requiredDiscoveryArgument(args, "repository", `applications ${action}`))
+  if (action === "list") {
+    const result = await discoverApplicationList(repository)
+    if (!result.ok) throw new DiscoveryCliInputError(result.error.message, result.error.code)
+    console.log(formatApplicationList(result.value))
+    return 0
+  }
+  const applicationId = requiredDiscoveryArgument(args, "application-id", "applications show")
+  const result = await discoverApplication(repository, applicationId)
+  if (!result.ok) throw new DiscoveryCliInputError(result.error.message, result.error.code)
+  console.log(formatApplication(result.value))
+  return 0
+}
+
+async function interviewQuestionsCommand(argv: string[]) {
+  const args = parseArgs(argv)
+  const repositoryPath = requiredDiscoveryArgument(args, "repository", "interview questions")
+  const applicationId = requiredDiscoveryArgument(args, "application-id", "interview questions")
+  const evidencePath = requiredDiscoveryArgument(args, "evidence", "interview questions")
+  const language = typeof args.language === "string" ? args.language : "en"
+  if (language !== "en" && language !== "sv") throw new DiscoveryCliInputError("--language must be either en or sv.")
+  const interviewType = typeof args["interview-type"] === "string" ? args["interview-type"] : "hiringManager"
+  const supportedTypes: InterviewType[] = ["recruiterScreening", "hiringManager", "behavioral", "roleSpecific", "situational"]
+  if (!supportedTypes.includes(interviewType as InterviewType)) throw new DiscoveryCliInputError("Unsupported interview type.")
+  const application = await discoverApplication(createFileApplicationRepository(repositoryPath), applicationId)
+  if (!application.ok) throw new DiscoveryCliInputError(application.error.message, application.error.code)
+  const documentEvidence = await loadCandidateDocumentEvidence(evidencePath)
+  const prepared = discoverInterviewQuestions({ application: application.value, documentEvidence, language, interviewType: interviewType as InterviewType })
+  if (!prepared.ok) throw new DiscoveryCliInputError(prepared.error.message, prepared.error.code)
+  console.log(formatInterviewQuestions(prepared.value))
+  return 0
+}
+
+function helpCommand() {
+  console.log([
+    "career-agent --query <query> [search options]",
+    "career-agent search --query <query> [search options]",
+    "career-agent analyze --profile <path> --query <query> [search options]",
+    "career-agent run --profile <path> --evidence <path> --repository <path> --query <query> --select <zero-based-index>",
+    "career-agent applications list --repository <path>",
+    "career-agent applications show --repository <path> --application-id <id>",
+    "career-agent interview --repository <path> --application-id <id> --evidence <path> [answer options]",
+    "career-agent interview questions --repository <path> --application-id <id> --evidence <path>",
+  ].join("\n"))
+  return 0
 }
 
 async function runCommand(argv: string[]) {
@@ -262,7 +354,11 @@ async function interviewCommand(argv: string[]) {
 }
 
 export async function main(argv = Bun.argv.slice(2)) {
+  if (argv[0] === "--help") return helpCommand()
+  if (argv[0] === "analyze") return analyzeCommand(argv.slice(1))
+  if (argv[0] === "applications") return applicationsCommand(argv.slice(1))
   if (argv[0] === "run") return runCommand(argv.slice(1))
+  if (argv[0] === "interview" && argv[1] === "questions") return interviewQuestionsCommand(argv.slice(2))
   if (argv[0] === "interview") return interviewCommand(argv.slice(1))
   if (argv[0] === "search") return searchCommand(argv.slice(1))
   return searchCommand(argv)
@@ -279,6 +375,8 @@ main().then((code) => {
         ? `EVIDENCE_${error.code}`
         : error instanceof InterviewCliInputError
           ? error.code
+          : error instanceof DiscoveryCliInputError
+            ? error.code
         : "UNIFIED_SEARCH_ERROR"
   console.error(JSON.stringify({ error: error instanceof Error ? error.message : String(error), code }))
   process.exit(1)

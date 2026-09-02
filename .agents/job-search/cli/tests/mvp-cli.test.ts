@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "bun:test"
-import { mkdtemp, rm, writeFile } from "node:fs/promises"
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import { analyzeJobs, createApplication, createFileApplicationRepository, normalizeCandidateProfile, normalizeJob } from "../src/index"
@@ -113,5 +113,51 @@ describe("MVP CLI command boundary", () => {
     await expect(invoke([...interviewArgs(fixture), "--answer", "PRIVATE CLI ANSWER"])).resolves.toMatchObject({ code: 1, stderr: expect.not.stringContaining("PRIVATE CLI ANSWER") })
     await expect(invoke(["search", "--source", "does-not-exist"])).resolves.toMatchObject({ code: 1, stderr: expect.stringContaining("UNKNOWN_SOURCE") })
     await expect(invoke(["run"])).resolves.toMatchObject({ code: 1, stderr: expect.stringContaining("--profile is required") })
+  })
+
+  it("shows the H2 command tree and routes analyze without changing legacy commands", async () => {
+    const help = await invoke(["--help"], { apiKey: "key-presence-alone-must-do-nothing" })
+    expect(help.code).toBe(0)
+    for (const route of ["search", "analyze", "run", "applications list", "applications show", "interview", "interview questions"]) {
+      expect(help.stdout).toContain(`career-agent ${route}`)
+    }
+    expect(help.stdout).not.toContain("key-presence-alone-must-do-nothing")
+    await expect(invoke(["analyze"])).resolves.toMatchObject({ code: 1, stderr: expect.stringContaining("--profile is required") })
+    await expect(invoke(["analyze", "--profile", "missing.json"])).resolves.toMatchObject({ code: 1, stderr: expect.stringContaining("PROFILE_READ_FAILURE") })
+    await expect(invoke(["search", "--source", "does-not-exist"])).resolves.toMatchObject({ code: 1, stderr: expect.stringContaining("UNKNOWN_SOURCE") })
+    await expect(invoke(["run"])).resolves.toMatchObject({ code: 1, stderr: expect.stringContaining("--profile is required") })
+  })
+
+  it("routes application list/show reads and fails safely for invalid nested commands and IDs", async () => {
+    const fixture = await interviewFixture()
+    const listed = await invoke(["applications", "list", "--repository", fixture.repositoryPath])
+    expect(listed).toMatchObject({ code: 0 })
+    expect(listed.stdout).toContain("application-1 | Clinic Coordinator | Example Clinic | saved")
+    expect(listed.stdout).not.toContain("PRIVATE")
+    const shown = await invoke(["applications", "show", "--repository", fixture.repositoryPath, "--application-id", "application-1"])
+    expect(shown).toMatchObject({ code: 0 })
+    expect(shown.stdout).toContain("Application ID: application-1")
+    expect(shown.stdout).toContain("Confirmed gaps:")
+    expect(shown.stdout).not.toContain("PRIVATE")
+    await expect(invoke(["applications", "show", "--repository", fixture.repositoryPath, "--application-id", "missing"])).resolves.toMatchObject({ code: 1, stderr: expect.stringContaining("NOT_FOUND") })
+    await expect(invoke(["applications", "remove"])).resolves.toMatchObject({ code: 1, stderr: expect.stringContaining("applications list") })
+    await expect(invoke(["applications", "list"])).resolves.toMatchObject({ code: 1, stderr: expect.stringContaining("--repository is required") })
+  })
+
+  it("routes complete interview question discovery without answers, persistence, or provider activation", async () => {
+    const fixture = await interviewFixture()
+    const before = await readFile(fixture.repositoryPath, "utf8")
+    const result = await invoke(["interview", "questions", "--repository", fixture.repositoryPath, "--application-id", "application-1", "--evidence", fixture.evidencePath, "--language", "sv"], { apiKey: "configured-but-inert" })
+    expect(result).toMatchObject({ code: 0 })
+    expect(result.stdout).toContain("Language: sv")
+    expect(result.stdout.match(/Question ID:/g)?.length).toBeGreaterThan(1)
+    expect(result.stdout).not.toContain("PRIVATE EVIDENCE")
+    expect(result.stdout).not.toContain("configured-but-inert")
+    expect(result.stdout).not.toContain("Remote interview generation enabled")
+    expect(await readFile(fixture.repositoryPath, "utf8")).toBe(before)
+    const bare = await invoke(interviewArgs(fixture), { apiKey: "configured-but-inert" })
+    expect(bare).toMatchObject({ code: 0 })
+    expect(bare.stdout.match(/Question ID:/g)).toHaveLength(1)
+    await expect(invoke(["interview", "questions"])).resolves.toMatchObject({ code: 1, stderr: expect.stringContaining("--repository is required") })
   })
 })

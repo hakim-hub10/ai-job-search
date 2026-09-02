@@ -1,0 +1,133 @@
+import type { DocumentLanguage } from "./application-documents"
+import type { ApplicationRepository, ApplicationRepositoryError } from "./application-repository"
+import type { ApplicationRecord } from "./applications"
+import type { CandidateDocumentEvidenceInput } from "./document-evidence-input"
+import { createInterviewPreparationPlan, type InterviewPreparationOptions, type InterviewPreparationPlan } from "./interview-preparation"
+import { analyzeJobs, type CareerAnalysisResult } from "./orchestrator"
+import type { CandidateProfile } from "./profile"
+import type { JobSourceAdapter, UnifiedSearchOptions, UnifiedSearchResponse } from "./types"
+
+export interface AnalyzeDiscoveryInput {
+  profile: CandidateProfile
+  search: UnifiedSearchOptions & { adapters: JobSourceAdapter[]; includeSourceStatus?: boolean }
+}
+
+export interface AnalyzeDiscoveryDependencies {
+  searchJobs: (options: AnalyzeDiscoveryInput["search"]) => Promise<UnifiedSearchResponse>
+  analyzeJobs?: typeof analyzeJobs
+}
+
+export interface AnalyzeDiscoveryResult {
+  search: UnifiedSearchResponse
+  analysis: CareerAnalysisResult
+}
+
+export async function discoverAnalysis(
+  input: AnalyzeDiscoveryInput,
+  dependencies: AnalyzeDiscoveryDependencies,
+): Promise<AnalyzeDiscoveryResult> {
+  const search = await dependencies.searchJobs(input.search)
+  const analysis = (dependencies.analyzeJobs ?? analyzeJobs)(input.profile, search.jobs)
+  return { search, analysis }
+}
+
+function display(value: string | null): string {
+  return value ?? "-"
+}
+
+export function formatAnalysisDiscovery(result: AnalyzeDiscoveryResult): string {
+  const lines = [`Ranked jobs (${result.analysis.rankedJobs.length})`]
+  if (result.analysis.rankedJobs.length === 0) lines.push("No ranked jobs found.")
+  for (const [selectionIndex, ranked] of result.analysis.rankedJobs.entries()) {
+    lines.push(
+      "",
+      `Rank ${ranked.rank} | Select ${selectionIndex} | ${ranked.job.title} | ${display(ranked.job.company)}`,
+      `Location: ${display(ranked.job.location)} | Score: ${ranked.score} | Confidence: ${ranked.scoringBreakdown.confidenceLabel}`,
+      `Source: ${ranked.job.source} | Gaps: ${ranked.skillGapResult.totalGaps}`,
+      `Reason: ${ranked.explanation}`,
+    )
+  }
+
+  const plan = result.analysis.learningPlan
+  lines.push("", `Learning plan (${plan.prioritizedGaps.length})`)
+  if (plan.prioritizedGaps.length === 0) lines.push("No confirmed learning-plan gaps.")
+  for (const gap of plan.prioritizedGaps) {
+    lines.push(
+      "",
+      `Priority ${gap.priority} | ${gap.skill} | Severity: ${gap.severity} | Importance: ${gap.importance}`,
+      `Reason: ${gap.reason}`,
+    )
+  }
+  return lines.join("\n")
+}
+
+export type ApplicationDiscoveryResult<T> =
+  | { ok: true; value: T }
+  | { ok: false; error: ApplicationRepositoryError }
+
+export async function discoverApplicationList(repository: ApplicationRepository): Promise<ApplicationDiscoveryResult<ApplicationRecord[]>> {
+  return repository.list()
+}
+
+export async function discoverApplication(repository: ApplicationRepository, applicationId: string): Promise<ApplicationDiscoveryResult<ApplicationRecord>> {
+  return repository.getById(applicationId)
+}
+
+export function formatApplicationList(applications: ApplicationRecord[]): string {
+  if (applications.length === 0) return "No applications found."
+  return applications.map((application) => [
+    application.id,
+    application.jobSnapshot.title,
+    display(application.jobSnapshot.company),
+    application.status,
+    application.updatedAt,
+  ].join(" | ")).join("\n")
+}
+
+export function formatApplication(application: ApplicationRecord): string {
+  return [
+    `Application ID: ${application.id}`,
+    `Title: ${application.jobSnapshot.title}`,
+    `Company: ${display(application.jobSnapshot.company)}`,
+    `Location: ${display(application.jobSnapshot.location)}`,
+    `Status: ${application.status}`,
+    `Created: ${application.createdAt}`,
+    `Updated: ${application.updatedAt}`,
+    `Source: ${application.jobSnapshot.source}`,
+    `URL: ${display(application.jobSnapshot.url)}`,
+    `Saved rank: ${application.analysisSnapshot.rank}`,
+    `Score: ${application.analysisSnapshot.scoringResult.score}`,
+    `Confidence: ${application.analysisSnapshot.scoringResult.confidenceLabel}`,
+    `Confirmed gaps: ${application.analysisSnapshot.skillGapResult.totalGaps}`,
+    `Reason: ${application.analysisSnapshot.explanation}`,
+  ].join("\n")
+}
+
+export interface InterviewQuestionDiscoveryInput {
+  application: ApplicationRecord
+  documentEvidence: CandidateDocumentEvidenceInput
+  language?: DocumentLanguage
+  interviewType?: InterviewPreparationOptions["interviewType"]
+}
+
+export function discoverInterviewQuestions(input: InterviewQuestionDiscoveryInput) {
+  return createInterviewPreparationPlan(input.application, input.documentEvidence, {
+    ...(input.language ? { language: input.language } : {}),
+    ...(input.interviewType ? { interviewType: input.interviewType } : {}),
+  })
+}
+
+export function formatInterviewQuestions(plan: InterviewPreparationPlan): string {
+  const lines = [
+    `Interview questions for ${plan.job.jobTitle}${plan.job.company ? ` at ${plan.job.company}` : ""}`,
+    `Application: ${plan.applicationId}`,
+    `Language: ${plan.language}`,
+    `Interview type: ${plan.interviewType}`,
+  ]
+  for (const question of plan.questions) {
+    lines.push("", `Question ID: ${question.id}`, `Category: ${question.category}`, `Question: ${question.prompt}`)
+    if (question.requirementKeys.length > 0) lines.push(`Requirement keys: ${question.requirementKeys.join(", ")}`)
+    if (question.gapKeys.length > 0) lines.push(`Gap keys: ${question.gapKeys.join(", ")}`)
+  }
+  return lines.join("\n")
+}
