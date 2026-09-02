@@ -2,8 +2,10 @@ import { describe, expect, it } from "bun:test"
 import {
   analyzeJobs,
   analyzeSkillGaps,
+  classifiedRequirementSegments,
   createDefaultCandidateProfile,
   explicitRequirementSegments,
+  extractTechnicalRequirements,
   matchProfile,
   normalizeCandidateProfile,
   normalizeJob,
@@ -86,5 +88,70 @@ describe("H8.2 deterministic requirement quality", () => {
     expect(result.learningPlan.prioritizedGaps.map((gap) => gap.skill)).not.toEqual(
       expect.arrayContaining(["ownership", "leadership", "collaboration"]),
     )
+  })
+
+  it.each([
+    "Vi ser gärna att du har erfarenhet av SCCM.",
+    "vi ser gärna att du har kunskap om Microsoft Intune",
+    "VI SER GÄRNA ATT DU HAR ERFARENHET AV SCCM!",
+    "Gärna att du har erfarenhet av Azure.",
+  ])("classifies Swedish contextual preference without letting nested 'du har' win: %s", (description) => {
+    const keyword = description.toLowerCase().includes("intune")
+      ? "Microsoft Intune"
+      : description.toLowerCase().includes("azure") ? "Azure" : "SCCM"
+    const [requirement] = classifiedRequirementSegments(description, [keyword])
+    expect(requirement).toEqual({ segment: description.replace(/[.!]+$/, ""), importance: "preferred" })
+  })
+
+  it.each([
+    "Du har erfarenhet av Active Directory.",
+    "Du måste ha erfarenhet av Active Directory.",
+    "Du har minst 3 års erfarenhet av Active Directory.",
+    "Active Directory krävs.",
+    "Kunskap om Active Directory är ett krav.",
+    "Active Directory är obligatoriskt.",
+  ])("preserves Swedish required semantics: %s", (description) => {
+    expect(classifiedRequirementSegments(description, ["Active Directory"])[0]?.importance).toBe("required")
+  })
+
+  it("lets an explicit strong requirement override contextual preferred wording in the same segment", () => {
+    const description = "Vi ser gärna att du har SCCM, men SCCM är ett krav"
+    expect(classifiedRequirementSegments(description, ["SCCM"])[0]?.importance).toBe("required")
+  })
+
+  it("preserves existing Swedish meritorious classification and exact SCCM provenance", () => {
+    const meritorious = classifiedRequirementSegments("Meriterande om du har Azure.", ["Azure"])
+    expect(meritorious[0]?.importance).toBe("preferred")
+
+    const source = "Vi ser gärna att du har erfarenhet av SCCM."
+    const extraction = extractTechnicalRequirements(normalizeJob({ id: "sv-preferred", source: "linkedin", title: "Support", description: source }))
+    expect(extraction.requirements).toEqual([expect.objectContaining({
+      canonical: "SCCM",
+      importance: "preferred",
+      evidence: "Vi ser gärna att du har erfarenhet av SCCM",
+    })])
+  })
+
+  it("keeps the preferred SCCM requirement non-mandatory through the learning plan", () => {
+    const withoutSccm = normalizeCandidateProfile({
+      ...candidate,
+      skills: { technical: ["Windows"], soft: candidate.skills.soft },
+    })
+    const job = normalizeJob({
+      id: "sv-plan",
+      source: "test",
+      title: "Supporttekniker",
+      description: "Vi ser gärna att du har erfarenhet av SCCM.",
+    })
+    const plan = analyzeJobs(withoutSccm, [job]).learningPlan.prioritizedGaps
+    expect(plan).toContainEqual(expect.objectContaining({ skill: "SCCM", importance: "preferred", severity: "low" }))
+  })
+
+  it("does not infer skills from a title or penalize unknown requirement evidence", () => {
+    const job = normalizeJob({ id: "unknown", source: "test", title: "SCCM-specialist", description: "Om rollen och teamet." })
+    const result = analyzeJobs(candidate, [job])
+    expect(result.rankedJobs[0]?.job.skills).toEqual([])
+    expect(result.rankedJobs[0]?.matchingResult.unknownDimensions).toContain("technicalSkills")
+    expect(result.rankedJobs[0]?.skillGapResult.gaps).toEqual([])
   })
 })

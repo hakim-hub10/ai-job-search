@@ -34,6 +34,23 @@ const PREFERRED_MARKERS = [
   /\bfördel\b/i,
 ]
 
+const SWEDISH_CONTEXTUAL_PREFERRED_MARKERS = [
+  /\bvi ser gärna(?: att du har)?\b/i,
+  /\bgärna att du har\b/i,
+]
+
+const STRONG_REQUIRED_MARKERS = [
+  /\b(?:mandatory|essential|critical|non-negotiable)\b/i,
+  /\bmust\b/i,
+  /\brequir(?:e|es|ed|ement|ements)\b/i,
+  /\bkrav\b/i,
+  /\bkräv(?:s|er|d|des)\b/i,
+  /\bmåste\b/i,
+  /\bska ha\b/i,
+  /\bobligatorisk(?:t)?\b/i,
+  /\b(?:avgörande|nödvändig)\b/i,
+]
+
 const NEGATED_MARKERS = [
   /\bnot required\b/i,
   /\bno requirement\b/i,
@@ -54,6 +71,8 @@ export function descriptionSegments(description: string): string[] {
 
 export function requirementImportanceForSegment(segment: string): RequirementImportance {
   if (NEGATED_MARKERS.some((marker) => marker.test(segment))) return "optional"
+  if (STRONG_REQUIRED_MARKERS.some((marker) => marker.test(segment))) return "required"
+  if (SWEDISH_CONTEXTUAL_PREFERRED_MARKERS.some((marker) => marker.test(segment))) return "preferred"
   if (PREFERRED_MARKERS.some((marker) => marker.test(segment))) return "preferred"
   if (REQUIRED_MARKERS.some((marker) => marker.test(segment))) return "required"
   return "unspecified"
