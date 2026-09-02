@@ -133,4 +133,45 @@ describe("MVP CLI orchestration core", () => {
     expect(result.documents).toHaveLength(1)
     expect(result.generatedDocuments).toMatchObject([{ result: { ok: false, error: { stage: "generation", error: { code: "REFUSED" } } } }])
   })
+
+  it("uses enriched selected jobs before ranking and application creation", async () => {
+    const repo = await repository()
+    const sparse = jobs()[0]
+    sparse.skills = []
+    sparse.description = null
+    const enrichedAdapter: JobSourceAdapter = {
+      name: "fixture",
+      search: async () => ({ jobs: [sparse], status: "ok", source: "fixture" }),
+      detail: async (item) => ({ status: "ok", detail: { source: "fixture", sourceId: item.sourceId, skills: ["Scheduling", "Intune"], description: "Scheduling and Intune are required.", availability: "active" } }),
+    }
+    const result = await runMvpWorkflow({
+      profile: profile(), documentEvidence: { evidence: [] }, search: { query: "Coordinator", adapters: [enrichedAdapter] }, selectedRank: 0,
+      application: { id: "enriched-application", createdAt }, documents: [],
+    }, {
+      searchJobs: async () => ({ query: "Coordinator", jobs: [sparse], total: 1, sourceStatus: [{ source: "fixture", status: "ok", count: 1 }] }),
+      applicationRepository: repo,
+    })
+    expect(result).toMatchObject({ ok: true, enrichment: { records: [{ status: "enriched" }] } })
+    if (!result.ok) throw new Error("expected success")
+    expect(result.selectedJob.job.skills).toEqual(["Scheduling", "Intune"])
+    expect(result.selectedJob.skillGapResult.gaps.some((gap) => gap.title.includes("Intune"))).toBe(true)
+    expect(result.application.jobSnapshot.skills).toEqual(["Scheduling", "Intune"])
+  })
+
+  it("stops safely without persistence when every selected posting is explicitly closed", async () => {
+    const repo = await repository()
+    const closedAdapter: JobSourceAdapter = {
+      ...adapter(),
+      detail: async (item) => ({ status: "ok", detail: { source: "fixture", sourceId: item.sourceId, availability: "closed" } }),
+    }
+    const result = await runMvpWorkflow({
+      profile: profile(), documentEvidence: { evidence: [] }, search: { query: "Coordinator", adapters: [closedAdapter] }, selectedRank: 0,
+      application: { id: "closed-application", createdAt }, documents: [],
+    }, {
+      searchJobs: async () => ({ query: "Coordinator", jobs: jobs(), total: 1, sourceStatus: [{ source: "fixture", status: "ok", count: 1 }] }),
+      applicationRepository: repo,
+    })
+    expect(result).toMatchObject({ ok: false, error: { stage: "selection", code: "NO_RELEVANT_JOBS" } })
+    expect(await repo.list()).toEqual({ ok: true, value: [] })
+  })
 })

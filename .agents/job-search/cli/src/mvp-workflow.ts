@@ -13,6 +13,7 @@ import { renderApplicationDocument, type RenderError, type RenderedDocument } fr
 import { generateApplicationDocument, type GeneratedApplicationDocumentWorkflowResult } from "./document-workflow"
 import type { ApplicationDocumentGenerator } from "./document-generation"
 import { analyzeJobs, type CareerAnalysisResult } from "./orchestrator"
+import { enrichJobDetails, type JobDetailEnrichmentResult } from "./job-detail-enrichment"
 import type { SearchRelevanceSelection } from "./search-relevance"
 import { retrieveSearchAwareJobs, type SearchRetrievalPlan } from "./search-retrieval"
 import type { CandidateProfile } from "./profile"
@@ -41,6 +42,7 @@ export interface MvpWorkflowInput {
 export interface MvpWorkflowDependencies {
   searchJobs: (options: UnifiedSearchOptions & { adapters: JobSourceAdapter[]; includeSourceStatus?: boolean }) => Promise<UnifiedSearchResponse>
   applicationRepository: ApplicationRepository
+  enrichJobDetails?: typeof enrichJobDetails
 }
 
 export interface MvpRenderedDocument {
@@ -55,6 +57,7 @@ export interface MvpWorkflowSuccess {
   analysis: CareerAnalysisResult
   relevance: SearchRelevanceSelection
   retrievalPlan: SearchRetrievalPlan
+  enrichment: JobDetailEnrichmentResult
   selectedJob: RankedJob
   application: import("./applications").ApplicationRecord
   documents: MvpRenderedDocument[]
@@ -93,9 +96,13 @@ export async function runMvpWorkflow(input: MvpWorkflowInput, dependencies: MvpW
     return { ok: false, search, error: { stage: "selection", code: "NO_JOBS", message: "No usable jobs were found." } }
   }
 
-  const analysis = analyzeJobs(input.profile, eligibleJobs)
+  const enrichment = await (dependencies.enrichJobDetails ?? enrichJobDetails)(eligibleJobs, input.search.adapters)
+  const analysis = analyzeJobs(input.profile, enrichment.jobs)
   if (eligibleJobs.length === 0) {
     return { ok: false, search, analysis, error: { stage: "selection", code: "NO_RELEVANT_JOBS", message: "No search-relevant jobs were found." } }
+  }
+  if (enrichment.jobs.length === 0) {
+    return { ok: false, search, analysis, error: { stage: "selection", code: "NO_RELEVANT_JOBS", message: "No analyzable open jobs were found." } }
   }
   if (!Number.isInteger(input.selectedRank) || input.selectedRank < 0 || input.selectedRank >= analysis.rankedJobs.length) {
     return { ok: false, search, analysis, error: { stage: "selection", code: "INVALID_SELECTION", message: "Selected job rank is outside the ranked result set." } }
@@ -153,5 +160,5 @@ export async function runMvpWorkflow(input: MvpWorkflowInput, dependencies: MvpW
     return { ok: false, search, analysis, error: { stage: "persistence", code: "INVALID_DOCUMENT_STORAGE", message: "Deterministic Phase 4.3 drafts are rendered for review but are not Phase 4.5 generated-document records." } }
   }
 
-  return { ok: true, search, relevance, retrievalPlan, analysis, selectedJob, application: applicationResult.value, documents: renderedDocuments, generatedDocuments }
+  return { ok: true, search, relevance, retrievalPlan, enrichment, analysis, selectedJob, application: applicationResult.value, documents: renderedDocuments, generatedDocuments }
 }

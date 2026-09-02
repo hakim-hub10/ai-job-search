@@ -1,4 +1,26 @@
-export type { NormalizedJob, JobSourceAdapter, UnifiedSearchOptions, SourceSearchResult, SourceStatusEntry, UnifiedSearchResponse } from "./types"
+export type {
+  NormalizedJob,
+  JobSourceAdapter,
+  JobAvailability,
+  JobDetailEvidence,
+  JobDetailOutcome,
+  UnifiedSearchOptions,
+  SourceSearchResult,
+  SourceStatusEntry,
+  UnifiedSearchResponse,
+} from "./types"
+export {
+  enrichJobDetails,
+  MAX_DETAIL_REQUESTS,
+  MAX_DETAIL_CONCURRENCY,
+  DEFAULT_DETAIL_TIMEOUT_MS,
+  type JobEnrichmentStatus,
+  type EnrichableJobField,
+  type JobEnrichmentConflict,
+  type JobEnrichmentRecord,
+  type JobDetailEnrichmentResult,
+  type JobDetailEnrichmentOptions,
+} from "./job-detail-enrichment"
 export { searchJobs } from "./engine"
 export {
   assessSearchRelevance,

@@ -98,6 +98,28 @@ describe("H2 CLI discovery presentation and orchestration", () => {
     expect(empty).toMatchObject({ ok: true, analysis: { inputJobCount: 0 } })
   })
 
+  it("enriches only H6/H7.1-selected jobs before analysis and reports the result", async () => {
+    const sparse = normalizeJob({ id: "selected", source: "fixture", sourceId: "selected", title: "Logistics Coordinator", company: "Example", location: "Malmö", description: null, skills: [] })
+    const excluded = normalizeJob({ id: "excluded", source: "fixture", sourceId: "excluded", title: "Sales Director", description: null, skills: [] })
+    const detailCalls: string[] = []
+    const adapter = {
+      name: "fixture",
+      search: async () => ({ status: "ok" as const, source: "fixture", jobs: [] }),
+      detail: async (item: Readonly<typeof sparse>) => {
+        detailCalls.push(item.id)
+        return { status: "ok" as const, detail: { source: "fixture", sourceId: item.sourceId, description: "Communication and scheduling.", skills: ["Scheduling"], availability: "active" as const } }
+      },
+    }
+    const result = await discoverAnalysis({ profile, search: { query: "Logistics Coordinator", adapters: [adapter] } }, {
+      searchJobs: async () => ({ jobs: [excluded, sparse], total: 2, sourceStatus: [{ source: "fixture", status: "ok", count: 2 }] }),
+    })
+    if (!result.ok) throw new Error(result.error.message)
+    expect(detailCalls).toEqual(["selected"])
+    expect(result.analysis.rankedJobs[0].job).toMatchObject({ description: "Communication and scheduling.", skills: ["Scheduling"] })
+    expect(result.enrichment.records).toMatchObject([{ jobId: "selected", status: "enriched" }])
+    expect(formatAnalysisDiscovery(result)).toContain("Detail enrichment: 1 enriched, 0 closed, 0 failed")
+  })
+
   it("lists applications in repository order, handles an empty repository, and shows only approved metadata", async () => {
     const directory = await mkdtemp(join(tmpdir(), "h2-applications-")); directories.push(directory)
     const repository = createFileApplicationRepository(join(directory, "applications.json"))

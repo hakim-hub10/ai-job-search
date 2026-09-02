@@ -10,7 +10,7 @@ import {
   searchJobs,
   type JobSourceAdapter,
 } from "../src/index"
-import { createSourceAdapter } from "../src/adapters"
+import { createSourceAdapter, sourceDetailToEvidence } from "../src/adapters"
 
 const expectedIds = ["linkedin", "jobindex", "jobnet", "jobbank", "jobdanmark", "freehire"] as const
 
@@ -81,6 +81,44 @@ describe("portable built-in source registration", () => {
     await expect(adapter.search({ query: "Coordinator", location: "Malmö", limit: 1 })).resolves.toMatchObject({ status: "ok" })
   })
 
+  it("wires detail through the existing source command without changing search", async () => {
+    const calls: string[][] = []
+    const adapter = createSourceAdapter("linkedin", ["source-cli.ts"], process.cwd(), async (command) => {
+      calls.push(command)
+      return { stdout: JSON.stringify({ id: "123", title: "Detail title", description: "Full description", isActive: true }), stderr: "", exitCode: 0 }
+    })
+    const result = await adapter.detail?.(normalizeJob({ id: "123", source: "linkedin", sourceId: "123", title: "Search title" }))
+    expect(calls).toEqual([["source-cli.ts", "detail", "123", "--format", "json"]])
+    expect(result).toMatchObject({ status: "ok", detail: { source: "linkedin", sourceId: "123", description: "Full description", availability: "active" } })
+  })
+
+  it("maps all six existing detail shapes without inferring requirements", () => {
+    const fixtures = [
+      ["linkedin", { id: "li", description: "LinkedIn", seniority: "Associate", employmentType: "Full-time", jobFunction: "IT", industries: "Technology", isActive: false }],
+      ["freehire", { id: "fh", description: "FreeHire", employment_type: "full-time", seniority: "mid", category: "IT", skills: ["Intune"] }],
+      ["jobindex", { id: "ji", description: "Jobindex", employmentType: "Fuldtid", applyUrl: "https://apply.test" }],
+      ["jobnet", { id: "jn", body: "Jobnet", employer: { name: "Employer" }, job: { type: "Permanent", address: { city: "Aarhus", countryName: "Denmark" } }, application: { url: "https://apply.test" } }],
+      ["jobbank", { id: "jb", description: "Jobbank", company: { name: "Company" }, location: { city: "Copenhagen", country: "DK" }, employmentType: ["FULL_TIME"] }],
+      ["jobdanmark", { slug: "jd", description: "Jobdanmark", hiringOrganization: { name: "Company" }, jobLocation: { addressLocality: "Odense", addressCountry: "DK" }, employmentType: ["fuldtid"] }],
+    ] as const
+    for (const [source, payload] of fixtures) {
+      const mapped = sourceDetailToEvidence(source, payload, normalizeJob({ id: String((payload as { id?: string; slug?: string }).id ?? (payload as { slug?: string }).slug), source, sourceId: String((payload as { id?: string; slug?: string }).id ?? (payload as { slug?: string }).slug), title: "Role" }))
+      expect(mapped?.source).toBe(source)
+      expect(mapped?.description).toBeTruthy()
+      expect("requirements" in (mapped ?? {})).toBe(false)
+    }
+  })
+
+  it("isolates detail command and payload failures with safe codes", async () => {
+    const input = normalizeJob({ id: "one", source: "linkedin", sourceId: "one", title: "Role" })
+    const commandFailure = createSourceAdapter("linkedin", ["source.ts"], process.cwd(), async () => ({ stdout: "", stderr: "private detail", exitCode: 1 }))
+    const malformed = createSourceAdapter("linkedin", ["source.ts"], process.cwd(), async () => ({ stdout: "not json", stderr: "", exitCode: 0 }))
+    const missingId = createSourceAdapter("linkedin", ["source.ts"], process.cwd(), async () => { throw new Error("must not run") })
+    expect(await commandFailure.detail?.(input)).toEqual({ status: "error", code: "DETAIL_COMMAND_FAILED" })
+    expect(await malformed.detail?.(input)).toEqual({ status: "error", code: "MALFORMED_DETAIL" })
+    expect(await missingId.detail?.(normalizeJob({ source: "linkedin", title: "Role", url: null, sourceId: null }))).toEqual({ status: "error", code: "MISSING_DETAIL_IDENTIFIER" })
+  })
+
   it("preserves per-source failure isolation and source metadata", async () => {
     const failing: JobSourceAdapter = { name: "linkedin", search: async () => ({ jobs: [], status: "error", source: "linkedin", error: "offline" }) }
     const working: JobSourceAdapter = {
@@ -91,5 +129,17 @@ describe("portable built-in source registration", () => {
     expect(result.jobs).toHaveLength(1)
     expect(result.jobs[0]).toMatchObject({ source: "freehire", sourceId: "safe" })
     expect(result.sourceStatus.map((status) => status.source)).toEqual(["linkedin", "freehire"])
+  })
+
+  it("keeps raw search card-only even when an adapter supports detail", async () => {
+    let detailCalls = 0
+    const capable: JobSourceAdapter = {
+      name: "fixture",
+      search: async () => ({ status: "ok", source: "fixture", jobs: [normalizeJob({ id: "one", source: "fixture", title: "Role", description: null })] }),
+      detail: async (item) => { detailCalls++; return { status: "ok", detail: { source: "fixture", sourceId: item.sourceId, description: "Must not be fetched" } } },
+    }
+    const result = await searchJobs({ adapters: [capable] })
+    expect(result.jobs[0].description).toBeNull()
+    expect(detailCalls).toBe(0)
   })
 })

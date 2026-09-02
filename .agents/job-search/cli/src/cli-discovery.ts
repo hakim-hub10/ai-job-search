@@ -4,6 +4,7 @@ import type { ApplicationRecord } from "./applications"
 import type { CandidateDocumentEvidenceInput } from "./document-evidence-input"
 import { createInterviewPreparationPlan, type InterviewPreparationOptions, type InterviewPreparationPlan } from "./interview-preparation"
 import { analyzeJobs, type CareerAnalysisResult } from "./orchestrator"
+import { enrichJobDetails, type JobDetailEnrichmentResult } from "./job-detail-enrichment"
 import type { SearchRelevanceSelection } from "./search-relevance"
 import { retrieveSearchAwareJobs, type SearchRetrievalPlan, type SearchAwareRetrievalErrorCode } from "./search-retrieval"
 import type { CandidateProfile } from "./profile"
@@ -17,6 +18,7 @@ export interface AnalyzeDiscoveryInput {
 export interface AnalyzeDiscoveryDependencies {
   searchJobs: (options: AnalyzeDiscoveryInput["search"]) => Promise<UnifiedSearchResponse>
   analyzeJobs?: typeof analyzeJobs
+  enrichJobDetails?: typeof enrichJobDetails
 }
 
 export interface AnalyzeDiscoverySuccess {
@@ -24,6 +26,7 @@ export interface AnalyzeDiscoverySuccess {
   search: UnifiedSearchResponse
   retrievalPlan: SearchRetrievalPlan
   relevance: SearchRelevanceSelection
+  enrichment: JobDetailEnrichmentResult
   analysis: CareerAnalysisResult
 }
 
@@ -36,8 +39,9 @@ export async function discoverAnalysis(
 ): Promise<AnalyzeDiscoveryResult> {
   const retrieval = await retrieveSearchAwareJobs({ search: input.search, targetRoles: input.profile.targetRoles }, { searchJobs: dependencies.searchJobs })
   if (!retrieval.ok) return retrieval
-  const analysis = (dependencies.analyzeJobs ?? analyzeJobs)(input.profile, retrieval.value.eligibleJobs)
-  return { ok: true, search: retrieval.value.search, retrievalPlan: retrieval.value.plan, relevance: retrieval.value.relevance, analysis }
+  const enrichment = await (dependencies.enrichJobDetails ?? enrichJobDetails)(retrieval.value.eligibleJobs, input.search.adapters)
+  const analysis = (dependencies.analyzeJobs ?? analyzeJobs)(input.profile, enrichment.jobs)
+  return { ok: true, search: retrieval.value.search, retrievalPlan: retrieval.value.plan, relevance: retrieval.value.relevance, enrichment, analysis }
 }
 
 function display(value: string | null): string {
@@ -50,6 +54,7 @@ export function formatAnalysisDiscovery(result: AnalyzeDiscoverySuccess): string
     `Eligible candidates: ${result.relevance.eligibleJobs.length}`,
     `Selected/analyzed candidates: ${result.analysis.inputJobCount}`,
     `Excluded or uncertain candidates: ${result.relevance.excludedJobs.length}`,
+    `Detail enrichment: ${result.enrichment.records.filter((record) => record.status === "enriched").length} enriched, ${result.enrichment.records.filter((record) => record.status === "closed").length} closed, ${result.enrichment.records.filter((record) => ["failed", "timeout", "malformed"].includes(record.status)).length} failed`,
     `Ranked jobs (${result.analysis.rankedJobs.length})`,
   ]
   if (result.retrievalPlan.oversamplingApplied) lines.splice(1, 0, `Retrieval limit per source: ${result.retrievalPlan.retrievalLimit}`)

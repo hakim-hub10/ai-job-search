@@ -1,5 +1,5 @@
 import { resolve } from "node:path"
-import type { JobSourceAdapter, NormalizedJob, SourceName, UnifiedSearchOptions } from "./types"
+import type { JobDetailEvidence, JobDetailOutcome, JobSourceAdapter, NormalizedJob, SourceName, UnifiedSearchOptions } from "./types"
 import { asOptionalString, normalizeJob } from "./utils"
 
 export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue }
@@ -38,7 +38,7 @@ const BUILT_IN_SOURCE_REGISTRY: readonly BuiltInSourceDefinition[] = Object.free
   scriptPath: resolve(repositoryRoot, source.relativeScriptPath),
 })))
 
-export async function runBunJsonCommand(command: string[], cwd?: string): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+export async function runBunJsonCommand(command: string[], cwd?: string, signal?: AbortSignal): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   const proc = Bun.spawn({
     cmd: [process.execPath, ...command],
     cwd,
@@ -46,10 +46,105 @@ export async function runBunJsonCommand(command: string[], cwd?: string): Promis
     stderr: "pipe",
   })
 
-  const [stdout, stderr] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()])
-  const exitCode = await proc.exited
+  const abort = () => proc.kill()
+  if (signal?.aborted) abort()
+  else signal?.addEventListener("abort", abort, { once: true })
+
+  const [stdout, stderr, exitCode] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited])
+  signal?.removeEventListener("abort", abort)
 
   return { stdout, stderr, exitCode }
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null
+}
+
+function stringList(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  const values = value.map(asOptionalString).filter((item): item is string => Boolean(item))
+  return values.length > 0 ? values : undefined
+}
+
+function firstString(value: unknown): string | null {
+  return Array.isArray(value) ? asOptionalString(value[0]) : asOptionalString(value)
+}
+
+/** Maps existing source detail JSON into the central evidence contract without requirement inference. */
+export function sourceDetailToEvidence(source: string, payload: unknown, fallback: Readonly<NormalizedJob>): JobDetailEvidence | null {
+  const record = asRecord(payload)
+  if (!record) return null
+  const base = { source, sourceId: asOptionalString(record.sourceId ?? record.id ?? record.slug ?? record.jobAdId) ?? fallback.sourceId }
+
+  if (source === "linkedin") {
+    const active = record.isActive
+    return {
+      ...base,
+      title: asOptionalString(record.title), company: asOptionalString(record.company), location: asOptionalString(record.location),
+      url: asOptionalString(record.url), date: asOptionalString(record.date), description: asOptionalString(record.description),
+      seniority: asOptionalString(record.seniority), employmentType: asOptionalString(record.employmentType),
+      jobFunction: asOptionalString(record.jobFunction), industries: stringList(record.industries) ?? (asOptionalString(record.industries) ? [String(record.industries)] : undefined),
+      availability: typeof active === "boolean" ? (active ? "active" : "closed") : "unknown",
+    }
+  }
+  if (source === "freehire") {
+    return {
+      ...base,
+      title: asOptionalString(record.title), company: asOptionalString(record.company), location: asOptionalString(record.location),
+      country: stringList(record.countries)?.[0] ?? null, url: asOptionalString(record.url), date: asOptionalString(record.date),
+      description: asOptionalString(record.description), remote: asOptionalString(record.work_mode), salary: asOptionalString(record.salary),
+      skills: stringList(record.skills), seniority: asOptionalString(record.seniority), category: asOptionalString(record.category),
+      employmentType: asOptionalString(record.employment_type), availability: "unknown",
+    }
+  }
+  if (source === "jobindex") {
+    return {
+      ...base,
+      title: asOptionalString(record.title), company: asOptionalString(record.company), location: asOptionalString(record.location),
+      url: asOptionalString(record.url), applyUrl: asOptionalString(record.applyUrl), date: asOptionalString(record.date),
+      employmentType: asOptionalString(record.employmentType), description: asOptionalString(record.description), availability: "unknown",
+    }
+  }
+  if (source === "jobnet") {
+    const employer = asRecord(record.employer)
+    const job = asRecord(record.job)
+    const address = asRecord(job?.address)
+    const application = asRecord(record.application)
+    return {
+      ...base,
+      title: asOptionalString(record.title), company: asOptionalString(employer?.name),
+      location: asOptionalString(address?.city ?? address?.municipality), country: asOptionalString(address?.countryName ?? address?.countryCode),
+      url: fallback.url, applyUrl: asOptionalString(application?.url), date: asOptionalString(record.publicationDateTime),
+      employmentType: asOptionalString(job?.type), description: asOptionalString(record.body), category: asOptionalString(job?.preferredLabelDa),
+      availability: "unknown",
+    }
+  }
+  if (source === "jobbank") {
+    const company = asRecord(record.company)
+    const location = asRecord(record.location)
+    return {
+      ...base,
+      title: asOptionalString(record.title), company: asOptionalString(company?.name), location: asOptionalString(location?.city),
+      country: asOptionalString(location?.country), url: asOptionalString(record.url), date: asOptionalString(record.datePosted),
+      employmentType: firstString(record.employmentType), description: asOptionalString(record.description), availability: "unknown",
+    }
+  }
+  if (source === "jobdanmark") {
+    const company = asRecord(record.hiringOrganization)
+    const location = asRecord(record.jobLocation)
+    return {
+      ...base,
+      title: asOptionalString(record.title), company: asOptionalString(company?.name), location: asOptionalString(location?.addressLocality ?? location?.streetAddress),
+      country: asOptionalString(location?.addressCountry), url: asOptionalString(record.url), applyUrl: asOptionalString(record.applyUrl),
+      date: asOptionalString(record.datePosted), employmentType: firstString(record.employmentType),
+      description: asOptionalString(record.description), availability: "unknown",
+    }
+  }
+  return null
+}
+
+function detailIdentifier(job: Readonly<NormalizedJob>): string | null {
+  return asOptionalString(job.sourceId ?? job.url)
 }
 
 function buildSourceArgs(source: string, options: UnifiedSearchOptions): string[] {
@@ -152,12 +247,17 @@ function sourceResultToJobs(source: string, payload: unknown): NormalizedJob[] {
     .filter((item): item is NormalizedJob => Boolean(item))
 }
 
-export function createSourceAdapter(name: SourceName | string, command: string[], cwd: string): JobSourceAdapter {
+export function createSourceAdapter(
+  name: SourceName | string,
+  command: string[],
+  cwd: string,
+  runCommand: typeof runBunJsonCommand = runBunJsonCommand,
+): JobSourceAdapter {
   return {
     name,
     search: async (options: UnifiedSearchOptions) => {
       const finalArgs = [...command, ...buildSourceArgs(name, options)]
-      const result = await runBunJsonCommand(finalArgs, cwd)
+      const result = await runCommand(finalArgs, cwd)
       if (result.exitCode !== 0) {
         return {
           jobs: [],
@@ -181,6 +281,18 @@ export function createSourceAdapter(name: SourceName | string, command: string[]
           source: name,
           error: error instanceof Error ? error.message : String(error),
         }
+      }
+    },
+    detail: async (job, context): Promise<JobDetailOutcome> => {
+      const identifier = detailIdentifier(job)
+      if (!identifier) return { status: "error", code: "MISSING_DETAIL_IDENTIFIER" }
+      const result = await runCommand([...command, "detail", identifier, "--format", "json"], cwd, context?.signal)
+      if (result.exitCode !== 0) return { status: "error", code: "DETAIL_COMMAND_FAILED" }
+      try {
+        const detail = sourceDetailToEvidence(String(name), JSON.parse(result.stdout), job)
+        return detail ? { status: "ok", detail } : { status: "error", code: "MALFORMED_DETAIL" }
+      } catch {
+        return { status: "error", code: "MALFORMED_DETAIL" }
       }
     },
   }

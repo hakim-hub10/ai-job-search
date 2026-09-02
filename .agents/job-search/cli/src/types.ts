@@ -23,7 +23,37 @@ export interface NormalizedJob {
 export interface JobSourceAdapter {
   name: SourceName | string
   search: (options: UnifiedSearchOptions) => Promise<SourceSearchResult>
+  /** Optional source-neutral capability for retrieving richer public job evidence. */
+  detail?: (job: Readonly<NormalizedJob>, context?: Readonly<{ signal: AbortSignal }>) => Promise<JobDetailOutcome>
 }
+
+export type JobAvailability = "active" | "closed" | "unknown"
+
+export interface JobDetailEvidence {
+  source: SourceName | string
+  sourceId: string | null
+  title?: string | null
+  company?: string | null
+  location?: string | null
+  country?: string | null
+  url?: string | null
+  applyUrl?: string | null
+  date?: string | null
+  employmentType?: string | null
+  remote?: string | null
+  description?: string | null
+  salary?: string | null
+  skills?: string[]
+  seniority?: string | null
+  category?: string | null
+  jobFunction?: string | null
+  industries?: string[]
+  availability?: JobAvailability
+}
+
+export type JobDetailOutcome =
+  | { status: "ok"; detail: JobDetailEvidence }
+  | { status: "error"; code?: string }
 
 export interface UnifiedSearchOptions {
   query?: string
