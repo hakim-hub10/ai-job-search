@@ -8,6 +8,7 @@ import {
   formatStatusUpdateConfirmation,
   updateManagedApplicationStatus,
 } from "./cli-application-management"
+import { generateExistingApplicationDocument } from "./cli-application-documents"
 import {
   discoverAnalysis,
   discoverApplication,
@@ -153,8 +154,8 @@ async function analyzeCommand(argv: string[]) {
 
 async function applicationsCommand(argv: string[]) {
   const action = argv[0]
-  if (action !== "list" && action !== "show" && action !== "status" && action !== "note") {
-    throw new DiscoveryCliInputError("Expected career-agent applications list, show, status, or note.")
+  if (action !== "list" && action !== "show" && action !== "status" && action !== "note" && action !== "document") {
+    throw new DiscoveryCliInputError("Expected career-agent applications list, show, status, note, or document.")
   }
   const args = parseArgs(argv.slice(1))
   const repository = createFileApplicationRepository(requiredDiscoveryArgument(args, "repository", `applications ${action}`))
@@ -165,6 +166,7 @@ async function applicationsCommand(argv: string[]) {
     return 0
   }
   const applicationId = requiredDiscoveryArgument(args, "application-id", `applications ${action}`)
+  if (action === "document") return applicationDocumentCommand(args, repository, applicationId)
   if (action === "show") {
     const result = await discoverApplication(repository, applicationId)
     if (!result.ok) throw new DiscoveryCliInputError(result.error.message, result.error.code)
@@ -203,6 +205,56 @@ async function applicationsCommand(argv: string[]) {
   return 0
 }
 
+async function applicationDocumentCommand(
+  args: Record<string, string | boolean>,
+  repository: ReturnType<typeof createFileApplicationRepository>,
+  applicationId: string,
+) {
+  const evidencePath = requiredDiscoveryArgument(args, "evidence", "applications document")
+  const cliType = requiredDiscoveryArgument(args, "type", "applications document")
+  if (cliType !== "cv" && cliType !== "cover-letter") throw new DiscoveryCliInputError("--type must be either cv or cover-letter.")
+  if (args.language !== undefined && typeof args.language !== "string") throw new DiscoveryCliInputError("--language requires a value.")
+  const language = typeof args.language === "string" ? args.language : "en"
+  if (language !== "en" && language !== "sv") throw new DiscoveryCliInputError("--language must be either en or sv.")
+  if (args.output !== undefined && typeof args.output !== "string") throw new DiscoveryCliInputError("--output requires a path.")
+  const outputPath = typeof args.output === "string" ? args.output : undefined
+
+  const generatorName = typeof args.generator === "string" ? args.generator : undefined
+  if (args["allow-remote-generation"] === true && !generatorName) throw new DiscoveryCliInputError("--allow-remote-generation requires --generator openai.")
+  if (generatorName && generatorName !== "openai") throw new DiscoveryCliInputError("Unsupported generator. Supported generator: openai.")
+  if (generatorName === "openai" && args["allow-remote-generation"] !== true) throw new DiscoveryCliInputError("OpenAI generation requires --allow-remote-generation.")
+  if (generatorName === "openai" && !process.env.OPENAI_API_KEY?.trim()) throw new DiscoveryCliInputError("OpenAI generation was requested but OPENAI_API_KEY is not configured.")
+
+  const application = await discoverApplication(repository, applicationId)
+  if (!application.ok) throw new DiscoveryCliInputError(application.error.message, application.error.code)
+  const documentEvidence = await loadCandidateDocumentEvidence(evidencePath)
+  const generator = generatorName === "openai"
+    ? createOpenAIDocumentGenerator({ enabled: true, remoteGenerationConsent: true, apiKey: process.env.OPENAI_API_KEY!, model: "gpt-4.1-mini", maxOutputTokens: 1200, timeoutMs: 30_000 })
+    : undefined
+  const type = cliType === "cover-letter" ? "coverLetter" : "cv"
+  const result = await generateExistingApplicationDocument({
+    application: application.value,
+    candidateDocumentInput: documentEvidence,
+    type,
+    language,
+    ...(outputPath ? { outputPath } : {}),
+    ...(generator ? { generator } : {}),
+  })
+  if (!result.ok) throw new DiscoveryCliInputError(result.error.error.message, result.error.error.code)
+
+  console.log(`Document: ${cliType} | Language: ${language} | Application: ${applicationId}`)
+  for (const warning of result.deterministic.warnings) console.log(`Warning [${warning.code}]: ${warning.message}`)
+  if (result.outputPath) console.log(`Deterministic document written to ${result.outputPath}.`)
+  else console.log(`\n--- ${cliType} markdown ---\n${result.deterministic.content}`)
+  if (result.ai && !result.ai.ok) console.log(`AI document proposal warning [${result.ai.error.error.code}]: ${result.ai.error.error.message}`)
+  if (result.ai?.ok) {
+    console.log(`\n--- AI-generated ${cliType} proposal — review required ---`)
+    console.log("Requires human review: true")
+    console.log(result.ai.value.renderedDocument.content)
+  }
+  return 0
+}
+
 function throwApplicationWorkflowError(error: ApplicationWorkflowError): never {
   if (error.kind === "duplicate_advisory") throw new DiscoveryCliInputError("Unexpected duplicate advisory during application update.")
   throw new DiscoveryCliInputError(error.error.message, error.error.code)
@@ -237,6 +289,7 @@ function helpCommand() {
     "career-agent applications show --repository <path> --application-id <id>",
     "career-agent applications status --repository <path> --application-id <id> --status <status> [--timestamp <UTC-ISO>]",
     "career-agent applications note --repository <path> --application-id <id> (--note-file <path> | --note-stdin) [--timestamp <UTC-ISO>]",
+    "career-agent applications document --repository <path> --application-id <id> --evidence <path> --type <cv|cover-letter> [--language <en|sv>] [--output <path>] [--generator openai --allow-remote-generation]",
     "career-agent interview --repository <path> --application-id <id> --evidence <path> [answer options]",
     "career-agent interview questions --repository <path> --application-id <id> --evidence <path>",
   ].join("\n"))

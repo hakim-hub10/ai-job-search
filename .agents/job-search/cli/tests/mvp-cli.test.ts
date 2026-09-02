@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "bun:test"
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
+import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import { analyzeJobs, createApplication, createFileApplicationRepository, normalizeCandidateProfile, normalizeJob } from "../src/index"
@@ -208,6 +208,54 @@ describe("MVP CLI command boundary", () => {
     const help = await invoke(["--help"])
     expect(help.stdout).toContain("career-agent applications status")
     expect(help.stdout).toContain("career-agent applications note")
-    await expect(invoke(["applications", "remove"])).resolves.toMatchObject({ code: 1, stderr: expect.stringContaining("status, or note") })
+    await expect(invoke(["applications", "remove"])).resolves.toMatchObject({ code: 1, stderr: expect.stringContaining("note, or document") })
+  })
+
+  it("renders an existing-application CV without search, mutation, or API-key activation", async () => {
+    const fixture = await interviewFixture()
+    const before = await readFile(fixture.repositoryPath, "utf8")
+    const result = await invoke(["applications", "document", "--repository", fixture.repositoryPath, "--application-id", "application-1", "--evidence", fixture.evidencePath, "--type", "cv"], { apiKey: "configured-but-inert" })
+    expect(result).toMatchObject({ code: 0, stderr: "" })
+    expect(result.stdout).toContain("Document: cv | Language: en | Application: application-1")
+    expect(result.stdout).toContain("--- cv markdown ---")
+    expect(result.stdout).toContain("PRIVATE EVIDENCE coordinated schedules by 35%.")
+    expect(result.stdout).not.toContain("AI-generated")
+    expect(result.stdout).not.toContain("configured-but-inert")
+    expect(await readFile(fixture.repositoryPath, "utf8")).toBe(before)
+  })
+
+  it("writes only a deterministic Swedish cover-letter outline to a new mode-0600 output file", async () => {
+    const fixture = await interviewFixture()
+    const outputPath = join(fixture.directory, "letter.md")
+    const result = await invoke(["applications", "document", "--repository", fixture.repositoryPath, "--application-id", "application-1", "--evidence", fixture.evidencePath, "--type", "cover-letter", "--language", "sv", "--output", outputPath])
+    expect(result).toMatchObject({ code: 0, stderr: "" })
+    expect(result.stdout).toContain(`Deterministic document written to ${outputPath}.`)
+    expect(result.stdout).not.toContain("PRIVATE EVIDENCE")
+    expect(await readFile(outputPath, "utf8")).toContain("Personligt brev")
+    expect((await stat(outputPath)).mode & 0o777).toBe(0o600)
+    await expect(invoke(["applications", "document", "--repository", fixture.repositoryPath, "--application-id", "application-1", "--evidence", fixture.evidencePath, "--type", "cover-letter", "--output", outputPath])).resolves.toMatchObject({ code: 1, stderr: expect.stringContaining("OUTPUT_EXISTS") })
+    await expect(invoke(["applications", "document", "--repository", fixture.repositoryPath, "--application-id", "application-1", "--evidence", fixture.evidencePath, "--type", "cv", "--output", join(fixture.directory, "missing", "cv.md")])).resolves.toMatchObject({ code: 1, stderr: expect.stringContaining("OUTPUT_WRITE_FAILURE") })
+  })
+
+  it("validates existing-document inputs and controlled provider gates before network access", async () => {
+    const fixture = await interviewFixture()
+    await expect(invoke(["applications", "document"])).resolves.toMatchObject({ code: 1, stderr: expect.stringContaining("--repository is required") })
+    await expect(invoke(["applications", "document", "--repository", fixture.repositoryPath])).resolves.toMatchObject({ code: 1, stderr: expect.stringContaining("--application-id is required") })
+    await expect(invoke(["applications", "document", "--repository", fixture.repositoryPath, "--application-id", "application-1"])).resolves.toMatchObject({ code: 1, stderr: expect.stringContaining("--evidence is required") })
+    const base = ["applications", "document", "--repository", fixture.repositoryPath, "--application-id", "application-1", "--evidence", fixture.evidencePath, "--type", "cv"]
+    await expect(invoke([...base.slice(0, -1), "report"])).resolves.toMatchObject({ code: 1, stderr: expect.stringContaining("cv or cover-letter") })
+    await expect(invoke([...base, "--language", "da"])).resolves.toMatchObject({ code: 1, stderr: expect.stringContaining("either en or sv") })
+    const missingApplication = [...base]; missingApplication[missingApplication.indexOf("application-1")] = "missing"
+    await expect(invoke(missingApplication)).resolves.toMatchObject({ code: 1, stderr: expect.stringContaining("NOT_FOUND") })
+    const malformedPath = join(fixture.directory, "malformed-evidence.json")
+    await writeFile(malformedPath, "{", "utf8")
+    const malformed = [...base]; malformed[malformed.indexOf(fixture.evidencePath)] = malformedPath
+    await expect(invoke(malformed)).resolves.toMatchObject({ code: 1, stderr: expect.stringContaining("EVIDENCE_MALFORMED_JSON") })
+    await expect(invoke([...base, "--generator", "openai"])).resolves.toMatchObject({ code: 1, stderr: expect.stringContaining("requires --allow-remote-generation") })
+    await expect(invoke([...base, "--allow-remote-generation"])).resolves.toMatchObject({ code: 1, stderr: expect.stringContaining("requires --generator openai") })
+    await expect(invoke([...base, "--generator", "other"])).resolves.toMatchObject({ code: 1, stderr: expect.stringContaining("Unsupported generator") })
+    await expect(invoke([...base, "--generator", "openai", "--allow-remote-generation"])).resolves.toMatchObject({ code: 1, stderr: expect.stringContaining("OPENAI_API_KEY is not configured") })
+    const help = await invoke(["--help"])
+    expect(help.stdout).toContain("career-agent applications document")
   })
 })
