@@ -368,6 +368,8 @@ async function runCommand(argv: string[]) {
   }
   console.log(JSON.stringify({
     jobsDiscovered: result.search.total,
+    jobsEligible: result.relevance.eligibleJobs.length,
+    jobsExcludedOrUncertain: result.relevance.excludedJobs.length,
     sourceStatus: result.search.sourceStatus,
     selectedJob: { rank: result.selectedJob.rank, title: result.selectedJob.job.title, company: result.selectedJob.job.company, source: result.selectedJob.job.source, url: result.selectedJob.job.url, score: result.selectedJob.score, confidence: result.selectedJob.scoringBreakdown.confidence },
     application: { id: result.application.id, status: result.application.status },

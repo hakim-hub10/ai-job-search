@@ -12,7 +12,8 @@ import { createTailoringPlan, type TailoringError, type TailoringOptions } from 
 import { renderApplicationDocument, type RenderError, type RenderedDocument } from "./document-rendering"
 import { generateApplicationDocument, type GeneratedApplicationDocumentWorkflowResult } from "./document-workflow"
 import type { ApplicationDocumentGenerator } from "./document-generation"
-import { analyzeJobs, type CareerAnalysisResult } from "./orchestrator"
+import { analyzeSearchResults, type CareerAnalysisResult } from "./orchestrator"
+import type { SearchRelevanceSelection } from "./search-relevance"
 import type { CandidateProfile } from "./profile"
 import type { RankedJob } from "./ranking"
 import type { JobSourceAdapter, UnifiedSearchOptions, UnifiedSearchResponse } from "./types"
@@ -51,6 +52,7 @@ export interface MvpWorkflowSuccess {
   ok: true
   search: UnifiedSearchResponse
   analysis: CareerAnalysisResult
+  relevance: SearchRelevanceSelection
   selectedJob: RankedJob
   application: import("./applications").ApplicationRecord
   documents: MvpRenderedDocument[]
@@ -59,7 +61,7 @@ export interface MvpWorkflowSuccess {
 
 export type MvpWorkflowError =
   | { stage: "search"; code: "SEARCH_FAILURE"; message: string }
-  | { stage: "selection"; code: "NO_JOBS" | "INVALID_SELECTION"; message: string }
+  | { stage: "selection"; code: "NO_JOBS" | "NO_RELEVANT_JOBS" | "INVALID_SELECTION"; message: string }
   | { stage: "application"; error: ApplicationWorkflowError }
   | { stage: "foundation"; error: import("./application-documents").DocumentFoundationError }
   | { stage: "tailoring"; error: TailoringError }
@@ -84,7 +86,11 @@ export async function runMvpWorkflow(input: MvpWorkflowInput, dependencies: MvpW
     return { ok: false, search, error: { stage: "selection", code: "NO_JOBS", message: "No usable jobs were found." } }
   }
 
-  const analysis = analyzeJobs(input.profile, search.jobs)
+  const searchAware = analyzeSearchResults(input.profile, search.jobs, input.search.query ?? "")
+  const { analysis, relevance } = searchAware
+  if (relevance.eligibleJobs.length === 0) {
+    return { ok: false, search, analysis, error: { stage: "selection", code: "NO_RELEVANT_JOBS", message: "No search-relevant jobs were found." } }
+  }
   if (!Number.isInteger(input.selectedRank) || input.selectedRank < 0 || input.selectedRank >= analysis.rankedJobs.length) {
     return { ok: false, search, analysis, error: { stage: "selection", code: "INVALID_SELECTION", message: "Selected job rank is outside the ranked result set." } }
   }
@@ -141,5 +147,5 @@ export async function runMvpWorkflow(input: MvpWorkflowInput, dependencies: MvpW
     return { ok: false, search, analysis, error: { stage: "persistence", code: "INVALID_DOCUMENT_STORAGE", message: "Deterministic Phase 4.3 drafts are rendered for review but are not Phase 4.5 generated-document records." } }
   }
 
-  return { ok: true, search, analysis, selectedJob, application: applicationResult.value, documents: renderedDocuments, generatedDocuments }
+  return { ok: true, search, relevance, analysis, selectedJob, application: applicationResult.value, documents: renderedDocuments, generatedDocuments }
 }

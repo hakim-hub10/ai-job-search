@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test"
 import {
   analyzeJobs,
+  analyzeSearchResults,
   createDefaultCandidateProfile,
   normalizeCandidateProfile,
   normalizeJob,
@@ -41,6 +42,34 @@ function job(overrides: Partial<NormalizedJob> & Pick<NormalizedJob, "id" | "tit
 }
 
 describe("production career-analysis orchestrator", () => {
+  it("keeps irrelevant jobs and their requirements out of search-aware ranking and learning plans", () => {
+    const candidate = operationsCandidate()
+    const relevant = job({ id: "relevant", title: "Operations Coordinator", skills: ["Scheduling", "SAP"] })
+    const irrelevant = job({ id: "irrelevant", title: "Head of Cybersecurity", skills: ["Threat modeling", "Cryptography"] })
+    const direct = analyzeJobs(candidate, [relevant, irrelevant])
+    const aware = analyzeSearchResults(candidate, [relevant, irrelevant], "Operations Coordinator")
+    expect(direct.rankedJobs).toHaveLength(2)
+    expect(aware.relevance.eligibleJobs.map((item) => item.id)).toEqual(["relevant"])
+    expect(aware.analysis.rankedJobs.map((item) => item.job.id)).toEqual(["relevant"])
+    expect(aware.analysis.learningPlan.prioritizedGaps.map((gap) => gap.skill)).not.toEqual(expect.arrayContaining(["Threat modeling", "Cryptography"]))
+  })
+
+  it("keeps relevant low-match scores and confidence unchanged", () => {
+    const candidate = operationsCandidate()
+    const aspirational = job({ id: "aspirational", title: "Operations Coordinator", seniority: "senior", skills: ["SAP", "Forecasting"] })
+    const direct = analyzeJobs(candidate, [aspirational]).rankedJobs[0]
+    const aware = analyzeSearchResults(candidate, [aspirational], "Operations Coordinator").analysis.rankedJobs[0]
+    expect(aware.score).toBe(direct.score)
+    expect(aware.scoringBreakdown.confidence).toBe(direct.scoringBreakdown.confidence)
+  })
+
+  it("keeps search-aware composition deterministic without changing direct analyzeJobs", () => {
+    const candidate = operationsCandidate()
+    const inputs = [job({ id: "one", title: "Operations Coordinator" }), job({ id: "two", title: "Sales Director" })]
+    expect(analyzeSearchResults(candidate, inputs, "operations coordinator")).toEqual(analyzeSearchResults(candidate, inputs, "operations coordinator"))
+    expect(analyzeJobs(candidate, inputs).inputJobCount).toBe(2)
+  })
+
   it("analyzes multi-domain jobs end-to-end while preserving provenance and concrete gaps", () => {
     const candidate = operationsCandidate()
     const strong = job({ id: "strong", title: "Operations Coordinator" })

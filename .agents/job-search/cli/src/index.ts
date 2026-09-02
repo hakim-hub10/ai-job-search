@@ -1,6 +1,15 @@
 export type { NormalizedJob, JobSourceAdapter, UnifiedSearchOptions, SourceSearchResult, SourceStatusEntry, UnifiedSearchResponse } from "./types"
 export { searchJobs } from "./engine"
 export {
+  assessSearchRelevance,
+  selectSearchRelevantJobs,
+  type SearchRelevanceTier,
+  type SearchRelevanceReasonCode,
+  type SearchRelevanceResult,
+  type SearchRelevanceSelection,
+  type SearchRelevanceInput,
+} from "./search-relevance"
+export {
   createCoachCandidate,
   type CoachCandidate,
   type CreateCoachCandidateInput,
@@ -26,8 +35,10 @@ export {
 } from "./adapters"
 export {
   analyzeJobs,
+  analyzeSearchResults,
   type CareerAnalysisOptions,
   type CareerAnalysisResult,
+  type SearchAwareCareerAnalysisResult,
 } from "./orchestrator"
 export {
   createApplication,

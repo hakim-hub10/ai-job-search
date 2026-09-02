@@ -68,14 +68,19 @@ describe("Phase 1–5 technical MVP acceptance", () => {
     expect(mvp).toMatchObject({ ok: true, search: { total: 3 }, application: { id: "acceptance-application" } })
     if (!mvp.ok) throw new Error("Expected successful MVP workflow")
     expect(mvp.search.jobs.map((job) => job.id)).toEqual(["source-a-strong", "source-c-weaker", "source-c-unknown"])
+    expect(mvp.relevance.eligibleJobs.map((job) => job.id)).toEqual(["source-a-strong"])
+    expect(mvp.relevance.excludedJobs.map(({ job, relevance }) => ({ id: job.id, tier: relevance.tier }))).toEqual([
+      { id: "source-c-weaker", tier: "irrelevant" },
+      { id: "source-c-unknown", tier: "irrelevant" },
+    ])
     expect(mvp.search.sourceStatus).toContainEqual({ source: "source-failure", status: "error", count: 0, error: "Synthetic offline source failure." })
     expect(mvp.selectedJob.job).toMatchObject({ id: "source-a-strong", source: "source-a", sourceId: "a-101", url: strongUrl })
+    expect(mvp.analysis.rankedJobs.map((item) => item.job.id)).toEqual(["source-a-strong"])
     const technical = [...mvp.selectedJob.matchingResult.matched, ...mvp.selectedJob.matchingResult.missing].find((item) => item.dimension === "technicalSkills")
     expect(technical?.requirementCoverage?.matchedRequirements).toContain("Forklift")
     expect(mvp.selectedJob.skillGapResult.gaps.map((gap) => gap.jobRequirement)).toContain("Required: SAP")
     expect(mvp.analysis.learningPlan.prioritizedGaps.map((gap) => gap.skill)).toContain("SAP")
-    const unknownTechnical = mvp.analysis.rankedJobs.find((item) => item.job.id === "source-c-unknown")?.matchingResult.unknownDimensions
-    expect(unknownTechnical).toContain("technicalSkills")
+    expect(mvp.analysis.learningPlan.prioritizedGaps.map((gap) => gap.skill)).not.toContain("Inventory auditing")
     expect(mvp.documents[0].rendered.content).toContain("Coordinated warehouse schedules.")
     expect(mvp.documents[0].rendered.content).not.toContain("Forklift")
     expect(mvp.documents[0].rendered.content).not.toContain("SAP")

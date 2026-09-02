@@ -5,6 +5,7 @@ import { rankJobs, type RankedJob, type RankingInput, type RankingOptions } from
 import { scoreMatch } from "./scoring"
 import { analyzeSkillGaps } from "./skillgaps"
 import type { NormalizedJob } from "./types"
+import { selectSearchRelevantJobs, type SearchRelevanceSelection } from "./search-relevance"
 
 export interface CareerAnalysisOptions {
   ranking?: RankingOptions
@@ -15,6 +16,11 @@ export interface CareerAnalysisResult {
   inputJobCount: number
   rankedJobs: RankedJob[]
   learningPlan: LearningPlanResult
+}
+
+export interface SearchAwareCareerAnalysisResult {
+  relevance: SearchRelevanceSelection
+  analysis: CareerAnalysisResult
 }
 
 /**
@@ -40,4 +46,15 @@ export function analyzeJobs(
   const learningPlan = generateLearningPlan(rankedJobs, candidate, options.learningPlan)
 
   return { inputJobCount: jobs.length, rankedJobs, learningPlan }
+}
+
+/** Applies role relevance before delegating eligible jobs to the unchanged analysis pipeline. */
+export function analyzeSearchResults(
+  candidate: CandidateProfile,
+  jobs: readonly NormalizedJob[],
+  query: string,
+  options: CareerAnalysisOptions = {},
+): SearchAwareCareerAnalysisResult {
+  const relevance = selectSearchRelevantJobs(jobs, { query, targetRoles: candidate.targetRoles })
+  return { relevance, analysis: analyzeJobs(candidate, relevance.eligibleJobs, options) }
 }

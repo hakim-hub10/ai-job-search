@@ -3,7 +3,8 @@ import type { ApplicationRepository, ApplicationRepositoryError } from "./applic
 import type { ApplicationRecord } from "./applications"
 import type { CandidateDocumentEvidenceInput } from "./document-evidence-input"
 import { createInterviewPreparationPlan, type InterviewPreparationOptions, type InterviewPreparationPlan } from "./interview-preparation"
-import { analyzeJobs, type CareerAnalysisResult } from "./orchestrator"
+import { analyzeJobs, analyzeSearchResults, type CareerAnalysisResult } from "./orchestrator"
+import type { SearchRelevanceSelection } from "./search-relevance"
 import type { CandidateProfile } from "./profile"
 import type { JobSourceAdapter, UnifiedSearchOptions, UnifiedSearchResponse } from "./types"
 
@@ -15,10 +16,12 @@ export interface AnalyzeDiscoveryInput {
 export interface AnalyzeDiscoveryDependencies {
   searchJobs: (options: AnalyzeDiscoveryInput["search"]) => Promise<UnifiedSearchResponse>
   analyzeJobs?: typeof analyzeJobs
+  analyzeSearchResults?: typeof analyzeSearchResults
 }
 
 export interface AnalyzeDiscoveryResult {
   search: UnifiedSearchResponse
+  relevance: SearchRelevanceSelection
   analysis: CareerAnalysisResult
 }
 
@@ -27,8 +30,15 @@ export async function discoverAnalysis(
   dependencies: AnalyzeDiscoveryDependencies,
 ): Promise<AnalyzeDiscoveryResult> {
   const search = await dependencies.searchJobs(input.search)
-  const analysis = (dependencies.analyzeJobs ?? analyzeJobs)(input.profile, search.jobs)
-  return { search, analysis }
+  const searchAware = dependencies.analyzeSearchResults
+    ? dependencies.analyzeSearchResults(input.profile, search.jobs, input.search.query ?? "")
+    : dependencies.analyzeJobs
+      ? (() => {
+          const relevance = analyzeSearchResults(input.profile, search.jobs, input.search.query ?? "").relevance
+          return { relevance, analysis: dependencies.analyzeJobs!(input.profile, relevance.eligibleJobs) }
+        })()
+      : analyzeSearchResults(input.profile, search.jobs, input.search.query ?? "")
+  return { search, ...searchAware }
 }
 
 function display(value: string | null): string {
@@ -36,7 +46,12 @@ function display(value: string | null): string {
 }
 
 export function formatAnalysisDiscovery(result: AnalyzeDiscoveryResult): string {
-  const lines = [`Ranked jobs (${result.analysis.rankedJobs.length})`]
+  const lines = [
+    `Retrieved jobs: ${result.search.jobs.length}`,
+    `Eligible jobs: ${result.relevance.eligibleJobs.length}`,
+    `Excluded or uncertain jobs: ${result.relevance.excludedJobs.length}`,
+    `Ranked jobs (${result.analysis.rankedJobs.length})`,
+  ]
   if (result.analysis.rankedJobs.length === 0) lines.push("No ranked jobs found.")
   for (const [selectionIndex, ranked] of result.analysis.rankedJobs.entries()) {
     lines.push(

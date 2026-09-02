@@ -66,6 +66,27 @@ describe("MVP CLI orchestration core", () => {
     await expect(run({ selectedRank: 1 })).resolves.toMatchObject({ ok: false, error: { code: "INVALID_SELECTION" } })
   })
 
+  it("selects only relevant ranked jobs and excludes unrelated gaps", async () => {
+    const unrelated = normalizeJob({ id: "noise", source: "fixture", title: "Head of Cybersecurity", skills: ["Threat modeling"], description: null })
+    const result = await run({ search: { query: "Coordinator", adapters: [adapter([unrelated, ...jobs()])] } })
+    expect(result).toMatchObject({ ok: true })
+    if (!result.ok) throw new Error("expected success")
+    expect(result.relevance.eligibleJobs.map((item) => item.id)).toEqual(["job-1"])
+    expect(result.selectedJob.job.id).toBe("job-1")
+    expect(result.analysis.learningPlan.prioritizedGaps.map((gap) => gap.skill)).not.toContain("Threat modeling")
+  })
+
+  it("returns NO_RELEVANT_JOBS without creating an application", async () => {
+    const appRepository = await repository()
+    const unrelated = normalizeJob({ id: "noise", source: "fixture", title: "Sales Director", skills: ["Sales strategy"], description: null })
+    const result = await runMvpWorkflow({
+      profile: profile(), documentEvidence: { evidence: [] }, search: { query: "Coordinator", adapters: [adapter([unrelated])] }, selectedRank: 0,
+      application: { id: "must-not-exist", createdAt }, documents: [],
+    }, { searchJobs: async () => ({ query: "Coordinator", jobs: [unrelated], total: 1, sourceStatus: [] }), applicationRepository: appRepository })
+    expect(result).toMatchObject({ ok: false, error: { code: "NO_RELEVANT_JOBS" } })
+    expect(await appRepository.list()).toEqual({ ok: true, value: [] })
+  })
+
   it("preserves duplicate advisory and partial source results without selecting another job", async () => {
     const repo = await repository()
     const input = {
