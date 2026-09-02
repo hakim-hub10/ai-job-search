@@ -165,6 +165,7 @@ async function analyzeCommand(argv: string[]) {
       adapters: resolveBuiltInSourceAdapters(parseSourceArguments(argv)),
     },
   }, { searchJobs })
+  if (!result.ok) throw new DiscoveryCliInputError(result.error.message, result.error.code)
   console.log(formatAnalysisDiscovery(result))
   return 0
 }
@@ -368,7 +369,9 @@ async function runCommand(argv: string[]) {
   }
   console.log(JSON.stringify({
     jobsDiscovered: result.search.total,
+    retrievalLimitPerSource: result.retrievalPlan.retrievalLimit,
     jobsEligible: result.relevance.eligibleJobs.length,
+    jobsSelectedForAnalysis: result.analysis.inputJobCount,
     jobsExcludedOrUncertain: result.relevance.excludedJobs.length,
     sourceStatus: result.search.sourceStatus,
     selectedJob: { rank: result.selectedJob.rank, title: result.selectedJob.job.title, company: result.selectedJob.job.company, source: result.selectedJob.job.source, url: result.selectedJob.job.url, score: result.selectedJob.score, confidence: result.selectedJob.scoringBreakdown.confidence },

@@ -58,18 +58,21 @@ describe("H2 CLI discovery presentation and orchestration", () => {
   it("shows every ranked job with one-based ranks, zero-based selection indexes, and the existing aggregate learning plan deterministically", async () => {
     let searchCalls = 0
     let analysisCalls = 0
-    const result = await discoverAnalysis({ profile, search: { query: "logistics", adapters: [{ name: "must-not-run", search: async () => { throw new Error("network-like adapter activated") } }] } }, {
-      searchJobs: async () => { searchCalls += 1; return { jobs, total: jobs.length, sourceStatus: [] } },
+    const result = await discoverAnalysis({ profile, search: { query: "logistics", limit: 2, adapters: [{ name: "must-not-run", search: async () => { throw new Error("network-like adapter activated") } }] } }, {
+      searchJobs: async (options) => { searchCalls += 1; expect(options.limit).toBe(6); return { jobs, total: jobs.length, sourceStatus: [] } },
       analyzeJobs: (candidate, found) => { analysisCalls += 1; return analyzeJobs(candidate, found) },
     })
+    if (!result.ok) throw new Error(result.error.message)
     const output = formatAnalysisDiscovery(result)
     expect(searchCalls).toBe(1)
     expect(analysisCalls).toBe(1)
     expect(output).toContain("Rank 1 | Select 0")
     expect(output).not.toContain("Rank 2 | Select 1")
-    expect(output).toContain("Retrieved jobs: 2")
-    expect(output).toContain("Eligible jobs: 1")
-    expect(output).toContain("Excluded or uncertain jobs: 1")
+    expect(output).toContain("Retrieved candidates: 2")
+    expect(output).toContain("Retrieval limit per source: 6")
+    expect(output).toContain("Eligible candidates: 1")
+    expect(output).toContain("Selected/analyzed candidates: 1")
+    expect(output).toContain("Excluded or uncertain candidates: 1")
     expect(output).toContain("Confidence:")
     expect(output).toContain("Source: fixture-a")
     expect(output).toContain("Gaps:")
@@ -82,6 +85,17 @@ describe("H2 CLI discovery presentation and orchestration", () => {
     expect(formatAnalysisDiscovery(result)).toBe(output)
     expect(output).not.toContain("PRIVATE PROFILE")
     expect(output).not.toContain("OPENAI_API_KEY")
+  })
+
+  it("distinguishes all-source failure from an empty successful search", async () => {
+    const failed = await discoverAnalysis({ profile, search: { query: "logistics", adapters: [{ name: "failed", search: async () => ({ jobs: [], status: "error" }) }] } }, {
+      searchJobs: async () => ({ jobs: [], total: 0, sourceStatus: [{ source: "failed", status: "error", error: "offline" }] }),
+    })
+    expect(failed).toMatchObject({ ok: false, error: { code: "ALL_SOURCES_FAILED" } })
+    const empty = await discoverAnalysis({ profile, search: { query: "logistics", adapters: [{ name: "empty", search: async () => ({ jobs: [], status: "ok" }) }] } }, {
+      searchJobs: async () => ({ jobs: [], total: 0, sourceStatus: [{ source: "empty", status: "ok", count: 0 }] }),
+    })
+    expect(empty).toMatchObject({ ok: true, analysis: { inputJobCount: 0 } })
   })
 
   it("lists applications in repository order, handles an empty repository, and shows only approved metadata", async () => {

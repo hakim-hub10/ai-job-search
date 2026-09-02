@@ -10,6 +10,16 @@ export {
   type SearchRelevanceInput,
 } from "./search-relevance"
 export {
+  createSearchRetrievalPlan,
+  retrieveSearchAwareJobs,
+  type SearchRetrievalPlan,
+  type SearchAwareRetrievalInput,
+  type SearchAwareRetrievalResult,
+  type SearchAwareRetrievalErrorCode,
+  type SearchAwareRetrievalOutcome,
+  type SearchAwareRetrievalDependencies,
+} from "./search-retrieval"
+export {
   createCoachCandidate,
   type CoachCandidate,
   type CreateCoachCandidateInput,

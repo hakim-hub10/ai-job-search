@@ -87,6 +87,24 @@ describe("MVP CLI orchestration core", () => {
     expect(await appRepository.list()).toEqual({ ok: true, value: [] })
   })
 
+  it("oversamples before analysis and returns ALL_SOURCES_FAILED without persistence", async () => {
+    const appRepository = await repository()
+    let receivedLimit: number | undefined
+    const failed = await runMvpWorkflow({
+      profile: profile(), documentEvidence: { evidence: [] }, search: { query: "Coordinator", limit: 10, adapters: [adapter([])] }, selectedRank: 0,
+      application: { id: "must-not-exist", createdAt }, documents: [],
+    }, {
+      searchJobs: async (options) => {
+        receivedLimit = options.limit
+        return { query: options.query, jobs: [], total: 0, sourceStatus: [{ source: "fixture", status: "error", error: "offline" }] }
+      },
+      applicationRepository: appRepository,
+    })
+    expect(receivedLimit).toBe(30)
+    expect(failed).toMatchObject({ ok: false, error: { stage: "search", code: "ALL_SOURCES_FAILED" } })
+    expect(await appRepository.list()).toEqual({ ok: true, value: [] })
+  })
+
   it("preserves duplicate advisory and partial source results without selecting another job", async () => {
     const repo = await repository()
     const input = {

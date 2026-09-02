@@ -12,8 +12,9 @@ import { createTailoringPlan, type TailoringError, type TailoringOptions } from 
 import { renderApplicationDocument, type RenderError, type RenderedDocument } from "./document-rendering"
 import { generateApplicationDocument, type GeneratedApplicationDocumentWorkflowResult } from "./document-workflow"
 import type { ApplicationDocumentGenerator } from "./document-generation"
-import { analyzeSearchResults, type CareerAnalysisResult } from "./orchestrator"
+import { analyzeJobs, type CareerAnalysisResult } from "./orchestrator"
 import type { SearchRelevanceSelection } from "./search-relevance"
+import { retrieveSearchAwareJobs, type SearchRetrievalPlan } from "./search-retrieval"
 import type { CandidateProfile } from "./profile"
 import type { RankedJob } from "./ranking"
 import type { JobSourceAdapter, UnifiedSearchOptions, UnifiedSearchResponse } from "./types"
@@ -53,6 +54,7 @@ export interface MvpWorkflowSuccess {
   search: UnifiedSearchResponse
   analysis: CareerAnalysisResult
   relevance: SearchRelevanceSelection
+  retrievalPlan: SearchRetrievalPlan
   selectedJob: RankedJob
   application: import("./applications").ApplicationRecord
   documents: MvpRenderedDocument[]
@@ -60,7 +62,7 @@ export interface MvpWorkflowSuccess {
 }
 
 export type MvpWorkflowError =
-  | { stage: "search"; code: "SEARCH_FAILURE"; message: string }
+  | { stage: "search"; code: "SEARCH_FAILURE" | "ALL_SOURCES_FAILED"; message: string }
   | { stage: "selection"; code: "NO_JOBS" | "NO_RELEVANT_JOBS" | "INVALID_SELECTION"; message: string }
   | { stage: "application"; error: ApplicationWorkflowError }
   | { stage: "foundation"; error: import("./application-documents").DocumentFoundationError }
@@ -76,19 +78,23 @@ export type MvpWorkflowResult = MvpWorkflowSuccess | { ok: false; error: MvpWork
  * adapters, and search implementation are all supplied by the caller.
  */
 export async function runMvpWorkflow(input: MvpWorkflowInput, dependencies: MvpWorkflowDependencies): Promise<MvpWorkflowResult> {
-  let search: UnifiedSearchResponse
+  let retrieval: Awaited<ReturnType<typeof retrieveSearchAwareJobs>>
   try {
-    search = await dependencies.searchJobs(input.search)
+    retrieval = await retrieveSearchAwareJobs(
+      { search: input.search, targetRoles: input.profile.targetRoles },
+      { searchJobs: dependencies.searchJobs },
+    )
   } catch (error) {
     return { ok: false, error: { stage: "search", code: "SEARCH_FAILURE", message: error instanceof Error ? error.message : "Job search failed." } }
   }
+  if (!retrieval.ok) return { ok: false, search: retrieval.search, error: { stage: "search", code: retrieval.error.code, message: retrieval.error.message } }
+  const { search, relevance, eligibleJobs, plan: retrievalPlan } = retrieval.value
   if (search.jobs.length === 0) {
     return { ok: false, search, error: { stage: "selection", code: "NO_JOBS", message: "No usable jobs were found." } }
   }
 
-  const searchAware = analyzeSearchResults(input.profile, search.jobs, input.search.query ?? "")
-  const { analysis, relevance } = searchAware
-  if (relevance.eligibleJobs.length === 0) {
+  const analysis = analyzeJobs(input.profile, eligibleJobs)
+  if (eligibleJobs.length === 0) {
     return { ok: false, search, analysis, error: { stage: "selection", code: "NO_RELEVANT_JOBS", message: "No search-relevant jobs were found." } }
   }
   if (!Number.isInteger(input.selectedRank) || input.selectedRank < 0 || input.selectedRank >= analysis.rankedJobs.length) {
@@ -147,5 +153,5 @@ export async function runMvpWorkflow(input: MvpWorkflowInput, dependencies: MvpW
     return { ok: false, search, analysis, error: { stage: "persistence", code: "INVALID_DOCUMENT_STORAGE", message: "Deterministic Phase 4.3 drafts are rendered for review but are not Phase 4.5 generated-document records." } }
   }
 
-  return { ok: true, search, relevance, analysis, selectedJob, application: applicationResult.value, documents: renderedDocuments, generatedDocuments }
+  return { ok: true, search, relevance, retrievalPlan, analysis, selectedJob, application: applicationResult.value, documents: renderedDocuments, generatedDocuments }
 }
