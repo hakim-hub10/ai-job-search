@@ -2,6 +2,7 @@
 import { readFile } from "node:fs/promises"
 import { SourceSelectionError, resolveBuiltInSourceAdapters } from "./adapters"
 import { createFileApplicationRepository } from "./application-file-repository"
+import { CliInputError, CliUsageError, formatCliError, parseSafeInteger, safeCliError, validateCommandArguments } from "./cli-errors"
 import {
   appendManagedApplicationNote,
   formatNoteAppendConfirmation,
@@ -30,14 +31,27 @@ import { createOpenAIInterviewGenerator } from "./providers/openai-interview-gen
 import type { ApplicationWorkflowError } from "./application-workflow"
 import type { ApplicationStatus } from "./applications"
 
-class InterviewCliInputError extends Error {
-  readonly code = "INTERVIEW_INPUT_ERROR"
-}
+class InterviewCliInputError extends CliInputError {}
+class DiscoveryCliInputError extends CliInputError {}
 
-class DiscoveryCliInputError extends Error {
-  constructor(message: string, readonly code = "DISCOVERY_INPUT_ERROR") {
-    super(message)
-  }
+const USAGE = {
+  search: "career-agent search [--query <query>] [--location <location>] [--jobage <days>] [--limit <count>] [--source <id>] [--format <json|table>]",
+  analyze: "career-agent analyze --profile <path> --query <query> [search options]",
+  run: "career-agent run --profile <path> --evidence <path> --repository <path> --query <query> --select <zero-based-index>",
+  applications: "career-agent applications <list|show|status|note|document> [options]",
+  applicationList: "career-agent applications list --repository <path>",
+  applicationShow: "career-agent applications show --repository <path> --application-id <id>",
+  applicationStatus: "career-agent applications status --repository <path> --application-id <id> --status <status> [--timestamp <UTC-ISO>]",
+  applicationNote: "career-agent applications note --repository <path> --application-id <id> (--note-file <path> | --note-stdin) [--timestamp <UTC-ISO>]",
+  applicationDocument: "career-agent applications document --repository <path> --application-id <id> --evidence <path> --type <cv|cover-letter> [options]",
+  interview: "career-agent interview --repository <path> --application-id <id> --evidence <path> [answer options]",
+  interviewQuestions: "career-agent interview questions --repository <path> --application-id <id> --evidence <path>",
+} as const
+
+const SEARCH_OPTIONS = ["query", "location", "jobage", "limit", "format", "source"] as const
+
+function validateArgs(argv: string[], allowed: readonly string[], usage: string, options: { boolean?: readonly string[]; repeatable?: readonly string[] } = {}) {
+  validateCommandArguments(argv, { allowed, usage, ...options })
 }
 
 function parseArgs(argv: string[]): Record<string, string | boolean> {
@@ -81,12 +95,14 @@ function parseRepeatedArguments(argv: string[], name: string): string[] {
 }
 
 async function searchCommand(argv: string[]) {
+  validateArgs(argv, SEARCH_OPTIONS, USAGE.search, { repeatable: ["source"] })
   const args = parseArgs(argv)
   const query = typeof args.query === "string" ? args.query : undefined
   const location = typeof args.location === "string" ? args.location : undefined
-  const jobage = typeof args.jobage === "string" ? Number(args.jobage) : undefined
-  const limit = typeof args.limit === "string" ? Number(args.limit) : undefined
+  const jobage = typeof args.jobage === "string" ? parseSafeInteger(args.jobage, "jobage", 1, USAGE.search) : undefined
+  const limit = typeof args.limit === "string" ? parseSafeInteger(args.limit, "limit", 1, USAGE.search) : undefined
   const format = typeof args.format === "string" ? args.format : "json"
+  if (format !== "json" && format !== "table") throw new CliUsageError("--format must be either json or table.", USAGE.search)
   const includeSourceStatus = true
   const adapters = resolveBuiltInSourceAdapters(parseSourceArguments(argv))
   const result = await searchJobs({
@@ -123,17 +139,18 @@ async function searchCommand(argv: string[]) {
 
 function requiredArgument(args: Record<string, string | boolean>, name: string): string {
   const value = args[name]
-  if (typeof value !== "string" || value.trim().length === 0) throw new Error(`--${name} is required for career-agent run.`)
+  if (typeof value !== "string" || value.trim().length === 0) throw new CliUsageError(`--${name} is required for career-agent run.`, USAGE.run)
   return value
 }
 
 function requiredDiscoveryArgument(args: Record<string, string | boolean>, name: string, command: string): string {
   const value = args[name]
-  if (typeof value !== "string" || value.trim().length === 0) throw new DiscoveryCliInputError(`--${name} is required for career-agent ${command}.`)
+  if (typeof value !== "string" || value.trim().length === 0) throw new CliUsageError(`--${name} is required for career-agent ${command}.`, `career-agent ${command} [options]`)
   return value
 }
 
 async function analyzeCommand(argv: string[]) {
+  validateArgs(argv, ["profile", "query", "location", "jobage", "limit", "source"], USAGE.analyze, { repeatable: ["source"] })
   const args = parseArgs(argv)
   const profile = await loadCandidateProfile(requiredDiscoveryArgument(args, "profile", "analyze"))
   const query = requiredDiscoveryArgument(args, "query", "analyze")
@@ -142,8 +159,8 @@ async function analyzeCommand(argv: string[]) {
     search: {
       query,
       ...(typeof args.location === "string" ? { location: args.location } : {}),
-      ...(typeof args.jobage === "string" ? { jobage: Number(args.jobage) } : {}),
-      ...(typeof args.limit === "string" ? { limit: Number(args.limit) } : {}),
+      ...(typeof args.jobage === "string" ? { jobage: parseSafeInteger(args.jobage, "jobage", 1, USAGE.analyze) } : {}),
+      ...(typeof args.limit === "string" ? { limit: parseSafeInteger(args.limit, "limit", 1, USAGE.analyze) } : {}),
       includeSourceStatus: true,
       adapters: resolveBuiltInSourceAdapters(parseSourceArguments(argv)),
     },
@@ -155,8 +172,17 @@ async function analyzeCommand(argv: string[]) {
 async function applicationsCommand(argv: string[]) {
   const action = argv[0]
   if (action !== "list" && action !== "show" && action !== "status" && action !== "note" && action !== "document") {
-    throw new DiscoveryCliInputError("Expected career-agent applications list, show, status, note, or document.")
+    throw new CliUsageError("Expected career-agent applications list, show, status, note, or document.", USAGE.applications)
   }
+  const applicationSpecs = {
+    list: { allowed: ["repository"], usage: USAGE.applicationList },
+    show: { allowed: ["repository", "application-id"], usage: USAGE.applicationShow },
+    status: { allowed: ["repository", "application-id", "status", "timestamp"], usage: USAGE.applicationStatus },
+    note: { allowed: ["repository", "application-id", "note", "note-file", "note-stdin", "timestamp"], boolean: ["note-stdin"], usage: USAGE.applicationNote },
+    document: { allowed: ["repository", "application-id", "evidence", "type", "language", "output", "generator", "allow-remote-generation"], boolean: ["allow-remote-generation"], usage: USAGE.applicationDocument },
+  } as const
+  const spec = applicationSpecs[action]
+  validateArgs(argv.slice(1), spec.allowed, spec.usage, { boolean: "boolean" in spec ? spec.boolean : [] })
   const args = parseArgs(argv.slice(1))
   const repository = createFileApplicationRepository(requiredDiscoveryArgument(args, "repository", `applications ${action}`))
   if (action === "list") {
@@ -261,6 +287,7 @@ function throwApplicationWorkflowError(error: ApplicationWorkflowError): never {
 }
 
 async function interviewQuestionsCommand(argv: string[]) {
+  validateArgs(argv, ["repository", "application-id", "evidence", "language", "interview-type"], USAGE.interviewQuestions)
   const args = parseArgs(argv)
   const repositoryPath = requiredDiscoveryArgument(args, "repository", "interview questions")
   const applicationId = requiredDiscoveryArgument(args, "application-id", "interview questions")
@@ -297,18 +324,18 @@ function helpCommand() {
 }
 
 async function runCommand(argv: string[]) {
+  validateArgs(argv, ["profile", "evidence", "repository", "query", "select", "generator", "allow-remote-generation", "location", "jobage", "limit", "source", "application-id", "created-at", "allow-duplicate", "document", "language"], USAGE.run, { boolean: ["allow-remote-generation", "allow-duplicate"], repeatable: ["source"] })
   const args = parseArgs(argv)
   const profilePath = requiredArgument(args, "profile")
   const evidencePath = requiredArgument(args, "evidence")
   const repositoryPath = requiredArgument(args, "repository")
   const query = requiredArgument(args, "query")
-  const selectedRank = Number(requiredArgument(args, "select"))
-  if (!Number.isInteger(selectedRank) || selectedRank < 0) throw new Error("--select must be a non-negative ranked-job index.")
+  const selectedRank = parseSafeInteger(requiredArgument(args, "select"), "select", 0, USAGE.run)
   const generatorName = typeof args.generator === "string" ? args.generator : undefined
-  if (args["allow-remote-generation"] === true && !generatorName) throw new Error("--allow-remote-generation requires --generator openai.")
-  if (generatorName && generatorName !== "openai") throw new Error("Unsupported generator. Supported generator: openai.")
-  if (generatorName === "openai" && args["allow-remote-generation"] !== true) throw new Error("OpenAI generation requires --allow-remote-generation.")
-  if (generatorName === "openai" && !process.env.OPENAI_API_KEY?.trim()) throw new Error("OpenAI generation was requested but OPENAI_API_KEY is not configured.")
+  if (args["allow-remote-generation"] === true && !generatorName) throw new CliUsageError("--allow-remote-generation requires --generator openai.", USAGE.run)
+  if (generatorName && generatorName !== "openai") throw new CliUsageError("Unsupported generator. Supported generator: openai.", USAGE.run)
+  if (generatorName === "openai" && args["allow-remote-generation"] !== true) throw new CliUsageError("OpenAI generation requires --allow-remote-generation.", USAGE.run)
+  if (generatorName === "openai" && !process.env.OPENAI_API_KEY?.trim()) throw new CliUsageError("OpenAI generation was requested but OPENAI_API_KEY is not configured.", USAGE.run)
   const generation = generatorName === "openai"
     ? { generator: createOpenAIDocumentGenerator({ enabled: true, remoteGenerationConsent: true, apiKey: process.env.OPENAI_API_KEY!, model: "gpt-4.1-mini", maxOutputTokens: 1200, timeoutMs: 30_000 }) }
     : undefined
@@ -320,8 +347,8 @@ async function runCommand(argv: string[]) {
     search: {
       query,
       ...(typeof args.location === "string" ? { location: args.location } : {}),
-      ...(typeof args.jobage === "string" ? { jobage: Number(args.jobage) } : {}),
-      ...(typeof args.limit === "string" ? { limit: Number(args.limit) } : {}),
+      ...(typeof args.jobage === "string" ? { jobage: parseSafeInteger(args.jobage, "jobage", 1, USAGE.run) } : {}),
+      ...(typeof args.limit === "string" ? { limit: parseSafeInteger(args.limit, "limit", 1, USAGE.run) } : {}),
       includeSourceStatus: true,
       adapters: resolveBuiltInSourceAdapters(parseSourceArguments(argv)),
     },
@@ -356,11 +383,12 @@ async function runCommand(argv: string[]) {
 
 function requiredInterviewArgument(args: Record<string, string | boolean>, name: string): string {
   const value = args[name]
-  if (typeof value !== "string" || value.trim().length === 0) throw new InterviewCliInputError(`--${name} is required for career-agent interview.`)
+  if (typeof value !== "string" || value.trim().length === 0) throw new CliUsageError(`--${name} is required for career-agent interview.`, USAGE.interview)
   return value
 }
 
 async function interviewCommand(argv: string[]) {
+  validateArgs(argv, ["repository", "application-id", "evidence", "answer-file", "answer-stdin", "question-id", "cite-evidence", "answer", "language", "interview-type", "interview-generator", "allow-remote-interview-generation"], USAGE.interview, { boolean: ["answer-stdin", "allow-remote-interview-generation"], repeatable: ["cite-evidence"] })
   const args = parseArgs(argv)
   const repositoryPath = requiredInterviewArgument(args, "repository")
   const applicationId = requiredInterviewArgument(args, "application-id")
@@ -456,30 +484,35 @@ async function interviewCommand(argv: string[]) {
 }
 
 export async function main(argv = Bun.argv.slice(2)) {
+  if (argv.length === 0) return helpCommand()
   if (argv[0] === "--help") return helpCommand()
   if (argv[0] === "analyze") return analyzeCommand(argv.slice(1))
   if (argv[0] === "applications") return applicationsCommand(argv.slice(1))
   if (argv[0] === "run") return runCommand(argv.slice(1))
   if (argv[0] === "interview" && argv[1] === "questions") return interviewQuestionsCommand(argv.slice(2))
-  if (argv[0] === "interview") return interviewCommand(argv.slice(1))
+  if (argv[0] === "interview") {
+    if (argv[1] && !argv[1].startsWith("--")) throw new CliUsageError(`Unknown interview action: ${argv[1]}.`, USAGE.interview)
+    return interviewCommand(argv.slice(1))
+  }
   if (argv[0] === "search") return searchCommand(argv.slice(1))
-  return searchCommand(argv)
+  if (argv[0].startsWith("--")) return searchCommand(argv)
+  throw new CliUsageError(`Unknown command: ${argv[0]}.`, "career-agent --help")
 }
 
 main().then((code) => {
   process.exit(code)
 }).catch((error) => {
-  const code = error instanceof SourceSelectionError
-    ? error.code
-    : error instanceof CandidateProfileInputError
-      ? `PROFILE_${error.code}`
-      : error instanceof CandidateDocumentEvidenceInputError
-        ? `EVIDENCE_${error.code}`
-        : error instanceof InterviewCliInputError
-          ? error.code
-          : error instanceof DiscoveryCliInputError
-            ? error.code
-        : "UNIFIED_SEARCH_ERROR"
-  console.error(JSON.stringify({ error: error instanceof Error ? error.message : String(error), code }))
+  const safe = safeCliError(error, (candidate) => candidate instanceof SourceSelectionError
+    ? { error: candidate.message, code: candidate.code }
+    : candidate instanceof CandidateProfileInputError
+      ? { error: candidate.message, code: `PROFILE_${candidate.code}` }
+      : candidate instanceof CandidateDocumentEvidenceInputError
+        ? { error: candidate.message, code: `EVIDENCE_${candidate.code}` }
+        : candidate instanceof InterviewCliInputError || candidate instanceof DiscoveryCliInputError
+          ? { error: candidate.message, code: candidate.code }
+          : candidate instanceof Error && candidate.message.startsWith("--")
+            ? { error: candidate.message, code: "CLI_USAGE_ERROR" }
+            : undefined)
+  console.error(formatCliError(safe))
   process.exit(1)
 })

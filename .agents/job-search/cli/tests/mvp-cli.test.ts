@@ -35,6 +35,62 @@ function interviewArgs(fixture: Awaited<ReturnType<typeof interviewFixture>>) {
 }
 
 describe("MVP CLI command boundary", () => {
+  it("prints help without searching for no arguments and rejects unknown command shapes", async () => {
+    const noArgs = await invoke([])
+    expect(noArgs).toMatchObject({ code: 0, stderr: "" })
+    expect(noArgs.stdout).toContain("career-agent search")
+    expect(noArgs.stdout).not.toContain("sourceStatus")
+    const help = await invoke(["--help"])
+    expect(help).toMatchObject({ code: 0, stderr: "" })
+    const unknown = await invoke(["frobnicate"])
+    expect(unknown).toMatchObject({ code: 1, stdout: "" })
+    expect(unknown.stderr).toContain('"code":"CLI_USAGE_ERROR"')
+    expect(unknown.stderr).toContain("Usage: career-agent --help")
+    expect(unknown.stderr).not.toContain("sourceStatus")
+    const application = await invoke(["applications", "remove"])
+    expect(application).toMatchObject({ code: 1, stdout: "" })
+    expect(application.stderr).toContain('"code":"CLI_USAGE_ERROR"')
+    expect(application.stderr).toContain("Usage: career-agent applications")
+    const interview = await invoke(["interview", "frobnicate"])
+    expect(interview).toMatchObject({ code: 1, stdout: "" })
+    expect(interview.stderr).toContain('"code":"CLI_USAGE_ERROR"')
+    expect(interview.stderr).toContain("Usage: career-agent interview")
+  })
+
+  it("rejects command-scoped unknown, duplicate, boolean-value, and malformed numeric options", async () => {
+    for (const invocation of [
+      ["analyze", "--unknown", "value"],
+      ["run", "--profile", "a", "--profile", "b"],
+      ["run", "--allow-remote-generation", "true"],
+      ["search", "--limit", "0"],
+      ["search", "--limit", "1.5"],
+      ["search", "--jobage", "NaN"],
+      ["search", "--format", "yaml"],
+      ["run", "--profile", "a", "--evidence", "b", "--repository", "c", "--query", "d", "--select", "9007199254740992"],
+    ]) {
+      const result = await invoke(invocation)
+      expect(result).toMatchObject({ code: 1, stdout: "" })
+      expect(result.stderr).toContain('"code":"CLI_USAGE_ERROR"')
+      expect(result.stderr).toContain("Usage:")
+      expect(result.stderr).not.toContain("Error\n    at")
+    }
+    const missing = await invoke(["applications", "list"])
+    expect(missing.stderr).toContain('"code":"CLI_USAGE_ERROR"')
+    expect(missing.stderr).toContain("Usage: career-agent applications list")
+  })
+
+  it("keeps source and evidence collection options repeatable", async () => {
+    const sources = await invoke(["search", "--source", "missing-one", "--source", "missing-two"])
+    expect(sources.code).toBe(1)
+    expect(sources.stderr).toContain("UNKNOWN_SOURCE")
+    expect(sources.stderr).not.toContain("may only be provided once")
+    const fixture = await interviewFixture()
+    const citations = await invoke([...interviewArgs(fixture), "--answer-file", fixture.answerPath, "--cite-evidence", "experience", "--cite-evidence", "experience"])
+    expect(citations.code).toBe(1)
+    expect(citations.stderr).toContain("DUPLICATE_EVIDENCE_ID")
+    expect(citations.stderr).not.toContain("may only be provided once")
+  })
+
   it("keeps legacy and explicit search source selection behavior", async () => {
     const legacy = await invoke(["--source", "does-not-exist"])
     const explicit = await invoke(["search", "--source", "does-not-exist"])
