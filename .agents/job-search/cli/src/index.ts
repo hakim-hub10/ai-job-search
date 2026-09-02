@@ -1,5 +1,20 @@
 export type { NormalizedJob, JobSourceAdapter, UnifiedSearchOptions, SourceSearchResult, SourceStatusEntry, UnifiedSearchResponse } from "./types"
 export { searchJobs } from "./engine"
+export {
+  createCoachCandidate,
+  type CoachCandidate,
+  type CreateCoachCandidateInput,
+  type CoachCandidateErrorCode,
+  type CoachCandidateError,
+  type CoachCandidateResult,
+} from "./coach-workspace"
+export { createFileCoachWorkspaceRepository } from "./coach-workspace-file-repository"
+export type {
+  CoachWorkspaceRepository,
+  CoachWorkspaceRepositoryErrorCode,
+  CoachWorkspaceRepositoryError,
+  CoachWorkspaceRepositoryResult,
+} from "./coach-workspace-repository"
 export { dedupeJobs } from "./dedupe"
 export { normalizeJob } from "./utils"
 export {
