@@ -235,6 +235,14 @@ export {
   type CandidateActivityReportWorkflowResult,
 } from "./candidate-activity-report-workflow"
 export {
+  renderCandidateActivityReport,
+  type CandidateActivityReportRenderFormat,
+  type CandidateActivityReportRenderSuccess,
+  type CandidateActivityReportRenderErrorCode,
+  type CandidateActivityReportRenderError,
+  type CandidateActivityReportRenderResult,
+} from "./candidate-activity-report-rendering"
+export {
   createCoachApplicationWorkflow,
   type CoachApplicationWorkflow,
   type CoachApplicationWorkflowError,
