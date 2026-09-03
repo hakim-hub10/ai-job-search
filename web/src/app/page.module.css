@@ -276,3 +276,53 @@
     flex-direction: column;
   }
 }
+
+.candidateList {
+  display: flex;
+  flex-direction: column;
+}
+
+.candidateRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 18px 0;
+  border-bottom: 1px solid #eaecf0;
+}
+
+.candidateRow:last-child {
+  border-bottom: 0;
+}
+
+.candidateRow strong {
+  font-size: 14px;
+}
+
+.candidateRow p {
+  margin-top: 5px;
+  color: #667085;
+  font-size: 12px;
+}
+
+.candidateMeta {
+  text-align: right;
+}
+
+.candidateMeta span,
+.candidateMeta time {
+  display: block;
+}
+
+.candidateMeta span {
+  margin-bottom: 5px;
+  color: #98a2b3;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.candidateMeta time {
+  color: #475467;
+  font-size: 12px;
+}
