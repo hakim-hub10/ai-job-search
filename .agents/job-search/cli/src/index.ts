@@ -139,6 +139,59 @@ export {
   type CoachCandidateOverviewWorkflowResult,
 } from "./coach-candidate-overview-workflow"
 export {
+  createCoachNote,
+  validateCoachNote,
+  updateCoachNote,
+  type CoachNote,
+  type CreateCoachNoteInput,
+  type UpdateCoachNoteInput,
+  type CoachNoteErrorCode,
+  type CoachNoteError,
+  type CoachNoteResult,
+} from "./coach-note"
+export {
+  createCoachGoal,
+  validateCoachGoal,
+  updateCoachGoal,
+  transitionCoachGoal,
+  type CoachGoal,
+  type CoachGoalStatus,
+  type CreateCoachGoalInput,
+  type UpdateCoachGoalInput,
+  type TransitionCoachGoalInput,
+  type CoachGoalErrorCode,
+  type CoachGoalError,
+  type CoachGoalResult,
+} from "./coach-goal"
+export {
+  createCoachActivity,
+  validateCoachActivity,
+  updateCoachActivity,
+  transitionCoachActivity,
+  type CoachActivity,
+  type CoachActivityKind,
+  type CoachActivityStatus,
+  type CreateCoachActivityInput,
+  type UpdateCoachActivityInput,
+  type TransitionCoachActivityInput,
+  type CoachActivityErrorCode,
+  type CoachActivityError,
+  type CoachActivityResult,
+} from "./coach-activity"
+export { createFileCoachOperationsRepository } from "./coach-operations-file-repository"
+export type {
+  CoachOperationsRepository,
+  CoachOperationsRepositoryErrorCode,
+  CoachOperationsRepositoryError,
+  CoachOperationsRepositoryResult,
+} from "./coach-operations-repository"
+export {
+  createCoachOperationsWorkflow,
+  type CoachOperationsWorkflow,
+  type CoachOperationsWorkflowError,
+  type CoachOperationsWorkflowResult,
+} from "./coach-operations-workflow"
+export {
   createCoachApplicationWorkflow,
   type CoachApplicationWorkflow,
   type CoachApplicationWorkflowError,
