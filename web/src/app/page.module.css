@@ -326,3 +326,23 @@
   color: #475467;
   font-size: 12px;
 }
+
+.reportFilters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 1rem;
+}
+
+.reportFilters label {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.reportFilters input {
+  min-width: 11rem;
+}
+
+.reportFilters button {
+  min-height: 2.4rem;
+}

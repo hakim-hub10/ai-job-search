@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { loadCoachCandidates } from "@/lib/coach-candidates";
 import { loadCandidateActivityReport } from "@/lib/reports";
 import styles from "../../page.module.css";
 
@@ -19,6 +20,101 @@ function toStartTimestamp(value: string) {
   return `${value}T00:00:00Z`;
 }
 
+
+function formatTimestamp(value: string) {
+  const parsed = new Date(value);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+
+  return parsed.toLocaleString("sv-SE");
+}
+
+function formatEventKind(kind: string) {
+  const labels: Record<string, string> = {
+    applicationCreated: "Application created",
+    applicationStatusChanged: "Application status changed",
+    followUpCreated: "Follow-up created",
+    followUpCompleted: "Follow-up completed",
+    coachActivityPlanned: "Coach activity planned",
+    coachActivityCompleted: "Coach activity completed",
+    coachActivityCancelled: "Coach activity cancelled",
+  };
+
+  return labels[kind] ?? kind;
+}
+
+function formatActivityKind(kind: string) {
+  const labels: Record<string, string> = {
+    applyForJob: "Apply for job",
+    updateCv: "Update CV",
+    contactEmployer: "Contact employer",
+    attendInterview: "Attend interview",
+    completeCourseStep: "Complete course step",
+    coachingMeeting: "Coaching meeting",
+  };
+
+  return labels[kind] ?? kind;
+}
+
+function eventDetails(
+  event:
+    | {
+        kind: "applicationCreated" | "applicationStatusChanged";
+        applicationId: string;
+        status: string;
+      }
+    | {
+        kind: "followUpCreated" | "followUpCompleted";
+        followUpId: string;
+        applicationId?: string;
+      }
+    | {
+        kind:
+          | "coachActivityPlanned"
+          | "coachActivityCompleted"
+          | "coachActivityCancelled";
+        activityId: string;
+        activityKind: string;
+        applicationId?: string;
+      },
+) {
+  if (
+    event.kind === "applicationCreated" ||
+    event.kind === "applicationStatusChanged"
+  ) {
+    return [
+      `Application: ${event.applicationId}`,
+      `Status: ${event.status}`,
+    ];
+  }
+
+  if (
+    event.kind === "followUpCreated" ||
+    event.kind === "followUpCompleted"
+  ) {
+    return [
+      `Follow-up: ${event.followUpId}`,
+      ...(event.applicationId
+        ? [`Application: ${event.applicationId}`]
+        : []),
+    ];
+  }
+
+  if ("activityKind" in event && "activityId" in event) {
+    return [
+      `Activity: ${formatActivityKind(event.activityKind)}`,
+      `Activity ID: ${event.activityId}`,
+      ...(event.applicationId
+        ? [`Application: ${event.applicationId}`]
+        : []),
+    ];
+  }
+
+  return [];
+}
+
 export default async function CandidateReportPage({
   params,
   searchParams,
@@ -29,11 +125,21 @@ export default async function CandidateReportPage({
   const start = query.start ?? "2026-01-01";
   const end = query.end ?? "2027-01-01";
 
-  const result = await loadCandidateActivityReport(
-    candidateId,
-    toStartTimestamp(start),
-    toStartTimestamp(end),
-  );
+  const [result, candidateResult] = await Promise.all([
+    loadCandidateActivityReport(
+      candidateId,
+      toStartTimestamp(start),
+      toStartTimestamp(end),
+    ),
+    loadCoachCandidates(),
+  ]);
+
+  const candidate =
+    candidateResult.configured && !candidateResult.error
+      ? candidateResult.candidates.find((item) => item.id === candidateId)
+      : undefined;
+
+  const candidateTitle = candidate?.displayName ?? candidateId;
 
   return (
     <div className={styles.shell}>
@@ -67,11 +173,14 @@ export default async function CandidateReportPage({
         <header className={styles.header}>
           <div>
             <p className={styles.eyebrow}>Candidate activity report</p>
-            <h1>{candidateId}</h1>
+            <h1>{candidateTitle}</h1>
             <p className={styles.subtitle}>
               Factual activity derived from the existing coach and application
               repositories.
             </p>
+            {candidate ? (
+              <p className={styles.subtitle}>Candidate ID: {candidate.id}</p>
+            ) : null}
           </div>
 
           <Link href="/reports">Back to reports</Link>
@@ -87,14 +196,14 @@ export default async function CandidateReportPage({
             </div>
           </div>
 
-          <form method="get">
+          <form method="get" className={styles.reportFilters}>
             <label>
-              Start
+              <span>Start date</span>
               <input type="date" name="start" defaultValue={start} />
             </label>
 
             <label>
-              End
+              <span>End date</span>
               <input type="date" name="end" defaultValue={end} />
             </label>
 
@@ -130,12 +239,14 @@ export default async function CandidateReportPage({
               </div>
 
               <div className={styles.candidateList}>
-                {Object.entries(result.report.summary).map(([kind, count]) => (
-                  <article className={styles.candidateRow} key={kind}>
-                    <strong>{kind}</strong>
-                    <span>{count}</span>
-                  </article>
-                ))}
+                {Object.entries(result.report.summary)
+                  .filter(([, count]) => count > 0)
+                  .map(([kind, count]) => (
+                    <article className={styles.candidateRow} key={kind}>
+                      <strong>{formatEventKind(kind)}</strong>
+                      <span>{count}</span>
+                    </article>
+                  ))}
               </div>
             </section>
 
@@ -163,12 +274,17 @@ export default async function CandidateReportPage({
                       key={`${event.timestamp}-${event.kind}-${index}`}
                     >
                       <div>
-                        <strong>{event.kind}</strong>
-                        <p>{JSON.stringify(event)}</p>
+                        <strong>{formatEventKind(event.kind)}</strong>
+
+                        <div className={styles.candidateMeta}>
+                          {eventDetails(event).map((detail) => (
+                            <span key={detail}>{detail}</span>
+                          ))}
+                        </div>
                       </div>
 
                       <time dateTime={event.timestamp}>
-                        {event.timestamp}
+                        {formatTimestamp(event.timestamp)}
                       </time>
                     </article>
                   ))}
