@@ -118,3 +118,7 @@ company_research/*.json
 
 # Brainstorm mockups (superpowers visual companion) - never ship
 .superpowers/
+
+# Allow Next.js reports route
+!web/src/app/reports/
+!web/src/app/reports/**
