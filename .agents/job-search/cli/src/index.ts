@@ -87,6 +87,42 @@ export type {
   CandidateApplicationAssociationRepositoryResult,
 } from "./coach-application-association-repository"
 export {
+  createCandidateFollowUp,
+  validateCandidateFollowUp,
+  completeCandidateFollowUp,
+  deriveCandidateFollowUpState,
+  type CandidateFollowUp,
+  type CandidateFollowUpState,
+  type CreateCandidateFollowUpInput,
+  type CompleteCandidateFollowUpInput,
+  type CandidateFollowUpErrorCode,
+  type CandidateFollowUpError,
+  type CandidateFollowUpResult,
+} from "./coach-candidate-follow-up"
+export { createFileCandidateFollowUpRepository } from "./coach-candidate-follow-up-file-repository"
+export type {
+  CandidateFollowUpRepository,
+  CandidateFollowUpRepositoryErrorCode,
+  CandidateFollowUpRepositoryError,
+  CandidateFollowUpRepositoryResult,
+} from "./coach-candidate-follow-up-repository"
+export {
+  createCandidateProgressSummary,
+  type CandidateActivity,
+  type CandidateProgressSummary,
+  type CreateCandidateProgressSummaryInput,
+  type CandidateProgressErrorCode,
+  type CandidateProgressError,
+  type CandidateProgressResult,
+} from "./coach-candidate-progress"
+export {
+  createCoachCandidateProgressWorkflow,
+  type CoachCandidateProgressWorkflow,
+  type CoachCandidateProgressWorkflowError,
+  type CoachCandidateProgressWorkflowResult,
+  type CompleteCandidateFollowUpWorkflowInput,
+} from "./coach-candidate-progress-workflow"
+export {
   createCoachApplicationWorkflow,
   type CoachApplicationWorkflow,
   type CoachApplicationWorkflowError,
