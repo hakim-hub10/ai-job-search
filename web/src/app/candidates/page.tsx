@@ -25,9 +25,9 @@ export default async function CandidatesPage() {
           <Link className={styles.active} href="/candidates">
             Candidates
           </Link>
-          <a href="#">Applications</a>
+          <Link href="/applications">Applications</Link>
           <a href="#">Coach</a>
-          <a href="#">Reports</a>
+          <Link href="/reports">Reports</Link>
         </nav>
 
         <div className={styles.sidebarFooter}>
@@ -46,9 +46,15 @@ export default async function CandidatesPage() {
             </p>
           </div>
 
-          <div className={styles.status}>
-            <span className={styles.statusDot} />
-            Local repository
+          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+            {result.configured ? (
+              <Link href="/candidates/new">New candidate</Link>
+            ) : null}
+
+            <div className={styles.status}>
+              <span className={styles.statusDot} />
+              Local repository
+            </div>
           </div>
         </header>
 
