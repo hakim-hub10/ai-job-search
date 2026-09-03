@@ -45,7 +45,11 @@ export function createCoachCandidateOverviewWorkflow(
     const records: ApplicationRecord[] = []
     for (const association of listed.value) {
       const application = await applications.getById(association.applicationId)
-      if (!application.ok) return { ok: false, error: { kind: "orphaned_application_reference", applicationId: association.applicationId, candidateId } }
+      if (!application.ok) {
+        return application.error.code === "NOT_FOUND"
+          ? { ok: false, error: { kind: "orphaned_application_reference", applicationId: association.applicationId, candidateId } }
+          : { ok: false, error: { kind: "application_repository", error: application.error } }
+      }
       records.push(structuredClone(application.value))
     }
     return { ok: true, value: records }
@@ -54,10 +58,18 @@ export function createCoachCandidateOverviewWorkflow(
   async function validateFollowUpOwnership(candidateId: string, followUp: CandidateFollowUp): Promise<CoachCandidateOverviewWorkflowResult<void>> {
     if (followUp.applicationId === undefined) return { ok: true, value: undefined }
     const association = await associations.getByApplicationId(followUp.applicationId)
-    if (!association.ok) return { ok: false, error: { kind: "follow_up_application_mismatch", followUpId: followUp.id, applicationId: followUp.applicationId, candidateId } }
+    if (!association.ok) {
+      return association.error.code === "NOT_FOUND"
+        ? { ok: false, error: { kind: "follow_up_application_mismatch", followUpId: followUp.id, applicationId: followUp.applicationId, candidateId } }
+        : { ok: false, error: { kind: "association_repository", error: association.error } }
+    }
     if (association.value.candidateId !== candidateId) return { ok: false, error: { kind: "follow_up_application_mismatch", followUpId: followUp.id, applicationId: followUp.applicationId, candidateId } }
     const application = await applications.getById(followUp.applicationId)
-    if (!application.ok) return { ok: false, error: { kind: "orphaned_application_reference", applicationId: followUp.applicationId, candidateId } }
+    if (!application.ok) {
+      return application.error.code === "NOT_FOUND"
+        ? { ok: false, error: { kind: "orphaned_application_reference", applicationId: followUp.applicationId, candidateId } }
+        : { ok: false, error: { kind: "application_repository", error: application.error } }
+    }
     return { ok: true, value: undefined }
   }
 

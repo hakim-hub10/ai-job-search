@@ -28,6 +28,16 @@ function followUps(values: CandidateFollowUp[]): CandidateFollowUpRepository {
   return { async create(value) { return { ok: true, value } }, async getById(id) { const value = values.find((item) => item.id === id); return value ? { ok: true, value: structuredClone(value) } : { ok: false, error: { code: "NOT_FOUND", message: "missing" } } }, async listByCandidateId(id) { return { ok: true, value: structuredClone(values.filter((item) => item.candidateId === id)) } }, async save(value) { return { ok: true, value } } }
 }
 
+function failingApplications(code: "READ_FAILURE" | "CORRUPT_STORAGE" | "UNSUPPORTED_SCHEMA_VERSION"): ApplicationRepository {
+  const error = { code, message: `application ${code}` }
+  return { async create(value) { return { ok: true, value } }, async save(value) { return { ok: true, value } }, async getById() { return { ok: false, error } }, async list() { return { ok: false, error } } }
+}
+
+function failingAssociations(code: "READ_FAILURE" | "CORRUPT_STORAGE" | "UNSUPPORTED_SCHEMA_VERSION", value: CandidateApplicationAssociation): CandidateApplicationAssociationRepository {
+  const error = { code, message: `association ${code}` }
+  return { async create(item) { return { ok: true, value: item } }, async getByApplicationId() { return { ok: false, error } }, async listByCandidateId() { return { ok: true, value: [value] } } }
+}
+
 describe("Phase 6.4 candidate overview workflow", () => {
   it("composes authoritative repositories without cross-candidate leakage", async () => {
     const workflow = createCoachCandidateOverviewWorkflow(
@@ -46,5 +56,22 @@ describe("Phase 6.4 candidate overview workflow", () => {
 
     const mismatched = createCoachCandidateOverviewWorkflow(candidates([candidate("candidate-a"), candidate("candidate-b")]), applications([application("application-a")]), associations([{ candidateId: "candidate-b", applicationId: "application-a", createdAt: "2026-01-01T00:00:00.000Z" }]), followUps([{ id: "follow-up", candidateId: "candidate-a", applicationId: "application-a", dueAt: "2026-01-03T00:00:00.000Z", createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z" }]))
     expect(await mismatched.getCandidateOverview("candidate-a", "2026-01-03T00:00:00.000Z")).toMatchObject({ ok: false, error: { kind: "follow_up_application_mismatch", applicationId: "application-a" } })
+  })
+
+  it.each(["READ_FAILURE", "CORRUPT_STORAGE", "UNSUPPORTED_SCHEMA_VERSION"] as const)("preserves application repository %s failures", async (code) => {
+    const workflow = createCoachCandidateOverviewWorkflow(
+      candidates([candidate("candidate-a")]),
+      failingApplications(code),
+      associations([{ candidateId: "candidate-a", applicationId: "application-a", createdAt: "2026-01-01T00:00:00.000Z" }]),
+      followUps([]),
+    )
+    expect(await workflow.getCandidateOverview("candidate-a", "2026-01-03T00:00:00.000Z")).toMatchObject({ ok: false, error: { kind: "application_repository", error: { code } } })
+  })
+
+  it("preserves non-NOT_FOUND association failures during follow-up validation", async () => {
+    const association = { candidateId: "candidate-a", applicationId: "application-a", createdAt: "2026-01-01T00:00:00.000Z" }
+    const followUp = { id: "follow-up", candidateId: "candidate-a", applicationId: "application-a", dueAt: "2026-01-03T00:00:00.000Z", createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z" }
+    const workflow = createCoachCandidateOverviewWorkflow(candidates([candidate("candidate-a")]), applications([application("application-a")]), failingAssociations("CORRUPT_STORAGE", association), followUps([followUp]))
+    expect(await workflow.getCandidateOverview("candidate-a", "2026-01-03T00:00:00.000Z")).toMatchObject({ ok: false, error: { kind: "association_repository", error: { code: "CORRUPT_STORAGE" } } })
   })
 })
