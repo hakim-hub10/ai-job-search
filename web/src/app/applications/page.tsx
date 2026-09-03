@@ -27,7 +27,7 @@ export default async function ApplicationsPage() {
             Applications
           </Link>
           <a href="#">Coach</a>
-          <a href="#">Reports</a>
+          <Link href="/reports">Reports</Link>
         </nav>
 
         <div className={styles.sidebarFooter}>
@@ -93,29 +93,33 @@ export default async function ApplicationsPage() {
 
             <div className={styles.candidateList}>
               {result.applications.map((application) => (
-                <article
-                  className={styles.candidateRow}
+                <Link
+                  href={`/applications/${encodeURIComponent(application.id)}`}
                   key={application.id}
+                  style={{ color: "inherit", textDecoration: "none" }}
                 >
-                  <div>
-                    <strong>{application.jobSnapshot.title}</strong>
-                    <p>
-                      {application.jobSnapshot.company ?? "Company unavailable"}
-                    </p>
-                  </div>
+                  <article className={styles.candidateRow}>
+                    <div>
+                      <strong>{application.jobSnapshot.title}</strong>
+                      <p>
+                        {application.jobSnapshot.company ??
+                          "Company unavailable"}
+                      </p>
+                    </div>
 
-                  <div className={styles.candidateMeta}>
-                    <span>Status: {application.status}</span>
-                    <span>
-                      Location:{" "}
-                      {application.jobSnapshot.location ??
-                        "Location unavailable"}
-                    </span>
-                    <time dateTime={application.updatedAt}>
-                      Updated: {application.updatedAt}
-                    </time>
-                  </div>
-                </article>
+                    <div className={styles.candidateMeta}>
+                      <span>Status: {application.status}</span>
+                      <span>
+                        Location:{" "}
+                        {application.jobSnapshot.location ??
+                          "Location unavailable"}
+                      </span>
+                      <time dateTime={application.updatedAt}>
+                        Updated: {application.updatedAt}
+                      </time>
+                    </div>
+                  </article>
+                </Link>
               ))}
             </div>
           </section>
