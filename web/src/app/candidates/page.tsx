@@ -92,7 +92,11 @@ export default async function CandidatesPage() {
 
             <div className={styles.candidateList}>
               {result.candidates.map((candidate) => (
-                <article className={styles.candidateRow} key={candidate.id}>
+                <Link
+                  className={styles.candidateRow}
+                  href={`/candidates/${encodeURIComponent(candidate.id)}`}
+                  key={candidate.id}
+                >
                   <div>
                     <strong>{candidate.displayName}</strong>
                     <p>{candidate.id}</p>
@@ -104,7 +108,7 @@ export default async function CandidatesPage() {
                       {candidate.createdAt}
                     </time>
                   </div>
-                </article>
+                </Link>
               ))}
             </div>
           </section>
