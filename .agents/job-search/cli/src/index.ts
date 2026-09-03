@@ -71,6 +71,29 @@ export type {
   CoachWorkspaceRepositoryError,
   CoachWorkspaceRepositoryResult,
 } from "./coach-workspace-repository"
+export {
+  createCandidateApplicationAssociation,
+  type CandidateApplicationAssociation,
+  type CreateCandidateApplicationAssociationInput,
+  type CandidateApplicationAssociationErrorCode,
+  type CandidateApplicationAssociationError,
+  type CandidateApplicationAssociationResult,
+} from "./coach-application-association"
+export { createFileCandidateApplicationAssociationRepository } from "./coach-application-association-file-repository"
+export type {
+  CandidateApplicationAssociationRepository,
+  CandidateApplicationAssociationRepositoryErrorCode,
+  CandidateApplicationAssociationRepositoryError,
+  CandidateApplicationAssociationRepositoryResult,
+} from "./coach-application-association-repository"
+export {
+  createCoachApplicationWorkflow,
+  type CoachApplicationWorkflow,
+  type CoachApplicationWorkflowError,
+  type CoachApplicationWorkflowResult,
+  type CoachApplicationOwnershipConflictCode,
+  type CoachApplicationOwnershipConflict,
+} from "./coach-application-workflow"
 export { dedupeJobs } from "./dedupe"
 export { normalizeJob } from "./utils"
 export {
