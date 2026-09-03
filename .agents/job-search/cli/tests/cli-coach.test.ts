@@ -52,4 +52,33 @@ describe("Phase 7.3 coach CLI", () => {
     await expect(coachCommand(["associations", "unknown", "--coach-dir", directory])).rejects.toBeInstanceOf(CliUsageError)
     await expect(coachCommand(["associations", "create", "--coach-dir", directory, "--application-repository", applicationPath, "--candidate-id", "candidate-a", "--application-id", "application-1", "--created-at", "bad"])).rejects.toBeInstanceOf(CliInputError)
   })
+
+  it("renders candidate activity reports as JSON, CSV, and Markdown without wrapper prose", async () => {
+    const directory = await fixture(); const applicationPath = await applicationFixture(directory)
+    await coachCommand(["candidates", "create", "--coach-dir", directory, "--candidate-id", "candidate-a", "--name", "Alex", "--created-at", "2026-01-01T00:00:00.000Z"])
+    await coachCommand(["associations", "create", "--coach-dir", directory, "--application-repository", applicationPath, "--candidate-id", "candidate-a", "--application-id", "application-1", "--created-at", "2026-01-02T00:00:00.000Z"])
+    const originalWrite = process.stdout.write; let output = ""
+    process.stdout.write = ((chunk: string | Uint8Array) => { output += chunk.toString(); return true }) as typeof process.stdout.write
+    try {
+      expect(await coachCommand(["report", "--coach-dir", directory, "--application-repository", applicationPath, "--candidate-id", "candidate-a", "--start-at", "2026-01-01T00:00:00.000Z", "--end-at", "2026-02-01T00:00:00.000Z"])).toBe(0)
+    } finally { process.stdout.write = originalWrite }
+    const json = JSON.parse(output)
+    expect(json).toMatchObject({ candidateId: "candidate-a", period: { startAt: "2026-01-01T00:00:00.000Z", endAt: "2026-02-01T00:00:00.000Z" }, events: expect.any(Array) })
+    expect(output).not.toContain("private application note")
+    for (const [format, marker] of [["csv", "candidateId,periodStartAt,periodEndAt,eventKind,timestamp"], ["markdown", "# Candidate Activity Report"]] as const) {
+      output = ""
+      process.stdout.write = ((chunk: string | Uint8Array) => { output += chunk.toString(); return true }) as typeof process.stdout.write
+      try { expect(await coachCommand(["report", "--coach-dir", directory, "--application-repository", applicationPath, "--candidate-id", "candidate-a", "--start-at", "2026-01-01T00:00:00.000Z", "--end-at", "2026-02-01T00:00:00.000Z", "--format", format])).toBe(0) } finally { process.stdout.write = originalWrite }
+      expect(output.startsWith(marker)).toBe(true)
+      expect(output).not.toContain("private application note")
+    }
+  })
+
+  it("requires a valid explicit report period and rejects unsupported formats", async () => {
+    const directory = await fixture(); const applicationPath = await applicationFixture(directory)
+    await coachCommand(["candidates", "create", "--coach-dir", directory, "--candidate-id", "candidate-a", "--name", "Alex", "--created-at", "2026-01-01T00:00:00.000Z"])
+    await expect(coachCommand(["report", "--coach-dir", directory, "--application-repository", applicationPath, "--candidate-id", "candidate-a", "--start-at", "2026-02-01T00:00:00.000Z", "--end-at", "2026-01-01T00:00:00.000Z"])).rejects.toMatchObject({ code: "INVALID_PERIOD" })
+    await expect(coachCommand(["report", "--coach-dir", directory, "--application-repository", applicationPath, "--candidate-id", "candidate-a", "--start-at", "2026-01-01T00:00:00.000Z", "--end-at", "2026-02-01T00:00:00.000Z", "--format", "xml"])).rejects.toBeInstanceOf(CliUsageError)
+    await expect(coachCommand(["report", "--coach-dir", directory, "--application-repository", applicationPath, "--candidate-id", "candidate-a", "--start-at", "2026-01-01T00:00:00.000Z", "--end-at", "2026-02-01T00:00:00.000Z", "--output", "report.json"])).rejects.toBeInstanceOf(CliUsageError)
+  })
 })
