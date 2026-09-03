@@ -21,12 +21,12 @@ export default async function ApplicationsPage() {
 
         <nav className={styles.nav}>
           <Link href="/">Dashboard</Link>
-          <a href="#">Jobs</a>
+          <span title="Coming soon">Jobs</span>
           <Link href="/candidates">Candidates</Link>
           <Link className={styles.active} href="/applications">
             Applications
           </Link>
-          <a href="#">Coach</a>
+          <Link href="/coach">Coach</Link>
           <Link href="/reports">Reports</Link>
         </nav>
 

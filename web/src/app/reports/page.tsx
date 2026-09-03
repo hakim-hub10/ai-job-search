@@ -21,10 +21,10 @@ export default async function ReportsPage() {
 
         <nav className={styles.nav}>
           <Link href="/">Dashboard</Link>
-          <a href="#">Jobs</a>
+          <span title="Coming soon">Jobs</span>
           <Link href="/candidates">Candidates</Link>
           <Link href="/applications">Applications</Link>
-          <a href="#">Coach</a>
+          <Link href="/coach">Coach</Link>
           <Link className={styles.active} href="/reports">
             Reports
           </Link>
