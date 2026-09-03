@@ -192,6 +192,23 @@ export {
   type CoachOperationsWorkflowResult,
 } from "./coach-operations-workflow"
 export {
+  createCandidateOperationalOverview,
+  type CoachNoteSummary,
+  type CoachGoalSummary,
+  type CoachActivitySummary,
+  type CandidateOperationalOverview,
+  type CreateCandidateOperationalOverviewInput,
+  type CandidateOperationalOverviewErrorCode,
+  type CandidateOperationalOverviewError,
+  type CandidateOperationalOverviewResult,
+} from "./coach-candidate-operational-overview"
+export {
+  createCoachCandidateOperationalOverviewWorkflow,
+  type CoachCandidateOperationalOverviewWorkflow,
+  type CoachCandidateOperationalOverviewWorkflowError,
+  type CoachCandidateOperationalOverviewWorkflowResult,
+} from "./coach-candidate-operational-overview-workflow"
+export {
   createCoachApplicationWorkflow,
   type CoachApplicationWorkflow,
   type CoachApplicationWorkflowError,
