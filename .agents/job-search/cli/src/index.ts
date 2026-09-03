@@ -216,6 +216,25 @@ export {
   type CoachCandidateOperationalOverviewWorkflowResult,
 } from "./coach-candidate-operational-overview-workflow"
 export {
+  createCandidateActivityReport,
+  type CandidateActivityReportPeriod,
+  type CandidateActivityReportEventKind,
+  type CandidateActivityReportEventBase,
+  type CandidateActivityReportEvent,
+  type CandidateActivityReportSummary,
+  type CandidateActivityReport,
+  type CreateCandidateActivityReportInput,
+  type CandidateActivityReportErrorCode,
+  type CandidateActivityReportError,
+  type CandidateActivityReportResult,
+} from "./candidate-activity-report"
+export {
+  createCandidateActivityReportWorkflow,
+  type CandidateActivityReportWorkflow,
+  type CandidateActivityReportWorkflowError,
+  type CandidateActivityReportWorkflowResult,
+} from "./candidate-activity-report-workflow"
+export {
   createCoachApplicationWorkflow,
   type CoachApplicationWorkflow,
   type CoachApplicationWorkflowError,
