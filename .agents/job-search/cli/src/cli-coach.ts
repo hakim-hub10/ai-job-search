@@ -16,8 +16,9 @@ import { resolveCoachRepositoryPaths } from "./coach-cli-paths"
 type CliArgs = Record<string, string | boolean>
 
 const USAGE = {
-  root: "career-agent coach <candidates|overview|operational-overview|follow-ups|notes|goals|activities> [options]",
+  root: "career-agent coach <candidates|associations|overview|operational-overview|follow-ups|notes|goals|activities> [options]",
   candidates: "career-agent coach candidates <list|show|create> --coach-dir <path> [options]",
+  associations: "career-agent coach associations create --coach-dir <path> --application-repository <path> --candidate-id <id> --application-id <id> --created-at <UTC-ISO>",
   overview: "career-agent coach overview --coach-dir <path> --application-repository <path> --candidate-id <id> --as-of <UTC-ISO>",
   operationalOverview: "career-agent coach operational-overview --coach-dir <path> --application-repository <path> --candidate-id <id> --as-of <UTC-ISO>",
   followUps: "career-agent coach follow-ups <list|create|complete> --coach-dir <path> [options]",
@@ -119,6 +120,21 @@ async function overviewCommand(argv: string[], operational: boolean): Promise<nu
   return result.ok ? output(result.value) : workflowError(result.error)
 }
 
+async function associationsCommand(argv: string[]): Promise<number> {
+  if (argv[0] !== "create") throw new CliUsageError("Expected coach associations create.", USAGE.associations)
+  validate(argv.slice(1), ["coach-dir", "application-repository", "candidate-id", "application-id", "created-at"], USAGE.associations)
+  const args = parseArgs(argv.slice(1))
+  const repos = repositories(required(args, "coach-dir", USAGE.associations))
+  const applications = createFileApplicationRepository(required(args, "application-repository", USAGE.associations))
+  const workflow = createCoachApplicationWorkflow(repos.candidates, applications, repos.associations)
+  const result = await workflow.associateApplication({
+    candidateId: required(args, "candidate-id", USAGE.associations),
+    applicationId: required(args, "application-id", USAGE.associations),
+    createdAt: required(args, "created-at", USAGE.associations),
+  })
+  return result.ok ? output(result.value) : workflowError(result.error)
+}
+
 async function followUpsCommand(argv: string[]): Promise<number> {
   const action = argv[0]; if (action !== "list" && action !== "create" && action !== "complete") throw new CliUsageError("Expected coach follow-ups list, create, or complete.", USAGE.followUps)
   const allowed = action === "list" ? ["coach-dir", "candidate-id"] : action === "create" ? ["coach-dir", "application-repository", "candidate-id", "application-id", "follow-up-id", "due-at", "created-at", "updated-at", "completed-at"] : ["coach-dir", "candidate-id", "follow-up-id", "completed-at"]
@@ -162,6 +178,7 @@ export async function coachCommand(argv: string[]): Promise<number> {
   if (!resource) throw new CliUsageError("A coach resource is required.", USAGE.root)
   if (argv[1] === "--help") return coachHelp()
   if (resource === "candidates") return candidatesCommand(argv.slice(1))
+  if (resource === "associations") return associationsCommand(argv.slice(1))
   if (resource === "overview") return overviewCommand(argv.slice(1), false)
   if (resource === "operational-overview") return overviewCommand(argv.slice(1), true)
   if (resource === "follow-ups") return followUpsCommand(argv.slice(1))
@@ -170,5 +187,5 @@ export async function coachCommand(argv: string[]): Promise<number> {
 }
 
 export function coachHelp(): number {
-  console.log([USAGE.root, USAGE.candidates, USAGE.overview, USAGE.operationalOverview, USAGE.followUps, USAGE.notes, USAGE.goals, USAGE.activities].join("\n")); return 0
+  console.log([USAGE.root, USAGE.candidates, USAGE.associations, USAGE.overview, USAGE.operationalOverview, USAGE.followUps, USAGE.notes, USAGE.goals, USAGE.activities].join("\n")); return 0
 }
