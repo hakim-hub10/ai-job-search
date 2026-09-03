@@ -30,6 +30,7 @@ import { createOpenAIDocumentGenerator } from "./providers/openai-document-gener
 import { createOpenAIInterviewGenerator } from "./providers/openai-interview-generator"
 import type { ApplicationWorkflowError } from "./application-workflow"
 import type { ApplicationStatus } from "./applications"
+import { coachCommand, coachHelp } from "./cli-coach"
 
 class InterviewCliInputError extends CliInputError {}
 class DiscoveryCliInputError extends CliInputError {}
@@ -320,6 +321,7 @@ function helpCommand() {
     "career-agent applications document --repository <path> --application-id <id> --evidence <path> --type <cv|cover-letter> [--language <en|sv>] [--output <path>] [--generator openai --allow-remote-generation]",
     "career-agent interview --repository <path> --application-id <id> --evidence <path> [answer options]",
     "career-agent interview questions --repository <path> --application-id <id> --evidence <path>",
+    "career-agent coach <candidates|overview|operational-overview|follow-ups|notes|goals|activities> [options]",
   ].join("\n"))
   return 0
 }
@@ -493,6 +495,10 @@ export async function main(argv = Bun.argv.slice(2)) {
   if (argv.length === 0) return helpCommand()
   if (argv[0] === "--help") return helpCommand()
   if (argv[0] === "analyze") return analyzeCommand(argv.slice(1))
+  if (argv[0] === "coach") {
+    if (argv[1] === "--help" || argv.length === 1) return coachHelp()
+    return coachCommand(argv.slice(1))
+  }
   if (argv[0] === "applications") return applicationsCommand(argv.slice(1))
   if (argv[0] === "run") return runCommand(argv.slice(1))
   if (argv[0] === "interview" && argv[1] === "questions") return interviewQuestionsCommand(argv.slice(2))

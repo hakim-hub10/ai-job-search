@@ -64,6 +64,13 @@ export {
   type CoachCandidateError,
   type CoachCandidateResult,
 } from "./coach-workspace"
+export { resolveCoachRepositoryPaths, type CoachRepositoryPaths } from "./coach-cli-paths"
+export {
+  createCoachCandidateWorkflow,
+  type CoachCandidateWorkflow,
+  type CoachCandidateWorkflowError,
+  type CoachCandidateWorkflowResult,
+} from "./coach-candidate-workflow"
 export { createFileCoachWorkspaceRepository } from "./coach-workspace-file-repository"
 export type {
   CoachWorkspaceRepository,
