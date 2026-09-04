@@ -28,32 +28,32 @@ export default async function CoachPage() {
 
         <nav className={styles.nav}>
           <Link href="/" className={styles.navItem}>
-            Dashboard
+            Översikt
           </Link>
 
           <span className={styles.navItem}>Jobs</span>
 
           <Link href="/candidates" className={styles.navItem}>
-            Candidates
+            Kandidater
           </Link>
 
           <Link href="/applications" className={styles.navItem}>
-            Applications
+            Ansökningar
           </Link>
 
           <Link
             href="/coach"
             className={`${styles.navItem} ${styles.active}`}
           >
-            Coach
+            Jobbcoach
           </Link>
 
           <Link href="/reports" className={styles.navItem}>
-            Reports
+            Rapporter
           </Link>
 
           <Link href="/analytics" className={styles.navItem}>
-            Analytics
+            Analys
           </Link>
         </nav>
       </aside>
@@ -61,12 +61,12 @@ export default async function CoachPage() {
       <main className={styles.main}>
         <div className={styles.topbar}>
           <div>
-            <p className={styles.eyebrow}>Coach workspace</p>
-            <h2>Candidates</h2>
+            <p className={styles.eyebrow}>Jobbcoachens arbetsyta</p>
+            <h2>Kandidater</h2>
 
             <p className={styles.subtitle}>
-              Open a candidate workspace to manage applications,
-              follow-ups, goals and activities.
+              Öppna en kandidats arbetsyta för att hantera ansökningar,
+              uppföljningar, mål och aktiviteter.
             </p>
           </div>
 
@@ -75,34 +75,34 @@ export default async function CoachPage() {
               href="/candidates/new"
               className={styles.secondaryButton}
             >
-              New candidate
+              Ny kandidat
             </Link>
           ) : null}
         </div>
 
         {!result.configured ? (
           <section className={styles.panel}>
-            <h3>Coach workspace not configured</h3>
-            <p>Set COACH_DIR before coach data can be loaded.</p>
+            <h3>Jobbcoachens arbetsyta är inte konfigurerad</h3>
+            <p>Ange COACH_DIR innan jobbcoachdata kan laddas.</p>
           </section>
         ) : result.error ? (
           <section className={styles.panel}>
-            <h3>Coach workspace could not be loaded</h3>
+            <h3>Jobbcoachens arbetsyta kunde inte laddas</h3>
             <p>
               {result.error.code}: {result.error.message}
             </p>
           </section>
         ) : result.candidates.length === 0 ? (
           <section className={styles.panel}>
-            <h3>No candidates found</h3>
-            <p>Create a candidate to start using the coach workspace.</p>
+            <h3>Inga kandidater hittades</h3>
+            <p>Skapa en kandidat för att börja använda jobbcoachens arbetsyta.</p>
           </section>
         ) : (
           <section className={styles.panel}>
             <div className={styles.sectionHeading}>
               <div>
-                <p className={styles.eyebrow}>Candidate workspaces</p>
-                <h3>{result.candidates.length} candidates</h3>
+                <p className={styles.eyebrow}>Kandidaternas arbetsytor</p>
+                <h3>{result.candidates.length} kandidater</h3>
               </div>
             </div>
 
@@ -123,7 +123,7 @@ export default async function CoachPage() {
                       <div className={styles.candidateMeta}>
                         <span>ID: {candidate.id}</span>
                         <span>
-                          Updated: {formatDate(candidate.updatedAt)}
+                          Uppdaterad: {formatDate(candidate.updatedAt)}
                         </span>
                       </div>
                     </div>

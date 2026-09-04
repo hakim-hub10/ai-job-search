@@ -21,7 +21,7 @@ export default async function Home() {
     (followUp) => followUp.completedAt === undefined,
   );
 
-  const recentApplications = data.applications.slice(0, 5);
+  const recentAnsökningar = data.applications.slice(0, 5);
   const upcomingFollowUps = openFollowUps.slice(0, 5);
 
   return (
@@ -31,35 +31,35 @@ export default async function Home() {
           <div className={styles.logoMark}>AC</div>
           <div>
             <strong>AI Career Agent</strong>
-            <span>Sweden Preview</span>
+            <span>Sverige – Förhandsversion</span>
           </div>
         </div>
 
         <nav className={styles.nav}>
           <Link className={styles.active} href="/">
-            Dashboard
+            Översikt
           </Link>
-          <span title="Coming soon">Jobs</span>
-          <Link href="/candidates">Candidates</Link>
-          <Link href="/applications">Applications</Link>
-          <Link href="/coach">Coach</Link>
-          <Link href="/reports">Reports</Link>
-          <Link href="/analytics">Analytics</Link>
+          <span title="Kommer snart">Jobb</span>
+          <Link href="/candidates">Kandidater</Link>
+          <Link href="/applications">Ansökningar</Link>
+          <Link href="/coach">Jobbcoach</Link>
+          <Link href="/reports">Rapporter</Link>
+          <Link href="/analytics">Analys</Link>
         </nav>
 
         <div className={styles.sidebarFooter}>
-          <span>Local Preview</span>
-          <small>No cloud sync</small>
+          <span>Lokal förhandsversion</span>
+          <small>Ingen molnsynkronisering</small>
         </div>
       </aside>
 
       <main className={styles.main}>
         <header className={styles.header}>
           <div>
-            <p className={styles.eyebrow}>Overview</p>
-            <h1>Dashboard</h1>
+            <p className={styles.eyebrow}>Översikt</p>
+            <h1>Översikt</h1>
             <p className={styles.subtitle}>
-              A local preview of your AI Career Agent workspace.
+              En lokal förhandsversion av din AI Career Agent-arbetsyta.
             </p>
           </div>
 
@@ -74,7 +74,7 @@ export default async function Home() {
         {data.error ? (
           <section className={styles.panel}>
             <div className={styles.emptyState}>
-              <strong>Dashboard data could not be loaded</strong>
+              <strong>Översiktsdata kunde inte laddas</strong>
               <p>
                 Check the configured local repositories and try again.
               </p>
@@ -84,42 +84,42 @@ export default async function Home() {
 
         <section className={styles.cards}>
           <article className={styles.card}>
-            <span>Candidates</span>
+            <span>Kandidater</span>
             <strong>{data.configured ? data.candidates.length : "—"}</strong>
             <small>
               {data.configured
-                ? "Local candidate records"
-                : "Coach repository not configured"}
+                ? "Lokala kandidatposter"
+                : "Jobbcoachens arkiv är inte konfigurerat"}
             </small>
           </article>
 
           <article className={styles.card}>
-            <span>Applications</span>
+            <span>Ansökningar</span>
             <strong>{data.configured ? data.applications.length : "—"}</strong>
             <small>
               {data.configured
-                ? "Local application records"
-                : "Application repository not configured"}
+                ? "Lokala ansökningsposter"
+                : "Ansökningsarkivet är inte konfigurerat"}
             </small>
           </article>
 
           <article className={styles.card}>
-            <span>Follow-ups</span>
+            <span>Uppföljningar</span>
             <strong>{data.configured ? openFollowUps.length : "—"}</strong>
             <small>
               {data.configured
-                ? "Open follow-ups"
-                : "Coach repository not configured"}
+                ? "Öppna uppföljningar"
+                : "Jobbcoachens arkiv är inte konfigurerat"}
             </small>
           </article>
 
           <article className={styles.card}>
-            <span>Reports</span>
+            <span>Rapporter</span>
             <strong>{data.configured ? data.candidates.length : "—"}</strong>
             <small>
               {data.configured
-                ? "Candidate reports available"
-                : "Reporting repositories not configured"}
+                ? "Kandidatrapporter tillgängliga"
+                : "Rapportarkiven är inte konfigurerade"}
             </small>
           </article>
         </section>
@@ -128,28 +128,28 @@ export default async function Home() {
           <article className={styles.panel}>
             <div className={styles.panelHeader}>
               <div>
-                <p className={styles.eyebrow}>Applications</p>
-                <h2>Recent applications</h2>
+                <p className={styles.eyebrow}>Ansökningar</p>
+                <h2>Senaste ansökningarna</h2>
               </div>
 
-              <Link href="/applications">View all</Link>
+              <Link href="/applications">Visa alla</Link>
             </div>
 
             {!data.configured ? (
               <div className={styles.emptyState}>
-                <strong>Application repository not configured</strong>
+                <strong>Ansökningsarkivet är inte konfigurerat</strong>
                 <p>
                   Configure APPLICATION_REPOSITORY to load application data.
                 </p>
               </div>
-            ) : recentApplications.length === 0 ? (
+            ) : recentAnsökningar.length === 0 ? (
               <div className={styles.emptyState}>
-                <strong>No applications yet</strong>
-                <p>Application records will appear here when available.</p>
+                <strong>Inga ansökningar ännu</strong>
+                <p>Ansökningar visas här när de finns tillgängliga.</p>
               </div>
             ) : (
               <div>
-                {recentApplications.map((application) => (
+                {recentAnsökningar.map((application) => (
                   <div key={application.id}>
                     <strong>{application.jobSnapshot.title}</strong>
                     <p>
@@ -168,19 +168,19 @@ export default async function Home() {
             <div className={styles.panelHeader}>
               <div>
                 <p className={styles.eyebrow}>Coach</p>
-                <h2>Upcoming follow-ups</h2>
+                <h2>Kommande uppföljningar</h2>
               </div>
             </div>
 
             {!data.configured ? (
               <div className={styles.emptyState}>
-                <strong>Coach repository not configured</strong>
-                <p>Configure COACH_DIR to load follow-up data.</p>
+                <strong>Jobbcoachens arkiv är inte konfigurerat</strong>
+                <p>Konfigurera COACH_DIR för att ladda uppföljningsdata.</p>
               </div>
             ) : upcomingFollowUps.length === 0 ? (
               <div className={styles.emptyState}>
-                <strong>No open follow-ups</strong>
-                <p>Upcoming candidate follow-ups will appear here.</p>
+                <strong>Inga öppna uppföljningar</strong>
+                <p>Kommande uppföljningar för kandidater visas här.</p>
               </div>
             ) : (
               <div>
@@ -203,19 +203,19 @@ export default async function Home() {
         <section className={styles.panel}>
           <div className={styles.panelHeader}>
             <div>
-              <p className={styles.eyebrow}>Platform</p>
-              <h2>Available capabilities</h2>
+              <p className={styles.eyebrow}>Plattform</p>
+              <h2>Tillgängliga funktioner</h2>
             </div>
           </div>
 
           <div className={styles.capabilities}>
-            <span>Job Search</span>
-            <span>Matching</span>
-            <span>Applications</span>
-            <span>CV &amp; Cover Letter</span>
-            <span>Interview Preparation</span>
-            <span>Job Coach</span>
-            <span>Activity Reporting</span>
+            <span>Jobbsökning</span>
+            <span>Matchning</span>
+            <span>Ansökningar</span>
+            <span>CV &amp; personligt brev</span>
+            <span>Intervjuförberedelse</span>
+            <span>Jobbcoach</span>
+            <span>Aktivitetsrapportering</span>
           </div>
         </section>
       </main>

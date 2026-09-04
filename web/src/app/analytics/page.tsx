@@ -77,32 +77,32 @@ export default async function AnalyticsPage({
         </div>
 
         <nav className={styles.nav}>
-          <Link href="/">Dashboard</Link>
+          <Link href="/">Översikt</Link>
           <span title="Coming soon">Jobs</span>
-          <Link href="/candidates">Candidates</Link>
-          <Link href="/applications">Applications</Link>
-          <Link href="/coach">Coach</Link>
-          <Link href="/reports">Reports</Link>
+          <Link href="/candidates">Kandidater</Link>
+          <Link href="/applications">Ansökningar</Link>
+          <Link href="/coach">Jobbcoach</Link>
+          <Link href="/reports">Rapporter</Link>
           <Link className={styles.active} href="/analytics">
-            Analytics
+            Analys
           </Link>
         </nav>
 
         <div className={styles.sidebarFooter}>
-          <span>Local Preview</span>
-          <small>No cloud sync</small>
+          <span>Lokal förhandsversion</span>
+          <small>Ingen molnsynkronisering</small>
         </div>
       </aside>
 
       <main className={styles.main}>
         <header className={styles.header}>
           <div>
-            <p className={styles.eyebrow}>Derived factual analytics</p>
-            <h1>Analytics</h1>
+            <p className={styles.eyebrow}>Härledd faktabaserad analys</p>
+            <h1>Analys</h1>
 
             <p className={styles.subtitle}>
-              Portfolio-level analytics derived from existing applications,
-              follow-ups and coach activities.
+              Analys på portföljnivå baserad på befintliga ansökningar,
+              uppföljningar och jobbcoachaktiviteter.
             </p>
           </div>
 
@@ -115,7 +115,7 @@ export default async function AnalyticsPage({
         <section className={styles.panel}>
           <div className={styles.panelHeader}>
             <div>
-              <p className={styles.eyebrow}>Analytics window</p>
+              <p className={styles.eyebrow}>Analysperiod</p>
               <h2>
                 {start} → {end}
               </h2>
@@ -124,38 +124,38 @@ export default async function AnalyticsPage({
 
           <form method="get" className={styles.reportFilters}>
             <label>
-              <span>Start date</span>
+              <span>Startdatum</span>
               <input type="date" name="start" defaultValue={start} />
             </label>
 
             <label>
-              <span>End date</span>
+              <span>Slutdatum</span>
               <input type="date" name="end" defaultValue={end} />
             </label>
 
             <label>
-              <span>As of</span>
+              <span>Per datum</span>
               <input type="date" name="asOf" defaultValue={asOfDate} />
             </label>
 
-            <button type="submit">Load analytics</button>
+            <button type="submit">Ladda analys</button>
           </form>
         </section>
 
         {!result.configured ? (
           <section className={styles.panel}>
             <div className={styles.emptyState}>
-              <strong>Analytics repositories not configured</strong>
+              <strong>Analysarkiven är inte konfigurerade</strong>
               <p>
                 Both COACH_DIR and APPLICATION_REPOSITORY are required to load
-                analytics.
+                analys.
               </p>
             </div>
           </section>
         ) : result.error ? (
           <section className={styles.panel}>
             <div className={styles.emptyState}>
-              <strong>Analytics could not be generated</strong>
+              <strong>Analysen kunde inte genereras</strong>
               <pre>{JSON.stringify(result.error, null, 2)}</pre>
             </div>
           </section>
@@ -165,28 +165,28 @@ export default async function AnalyticsPage({
               <div className={styles.panelHeader}>
                 <div>
                   <p className={styles.eyebrow}>Portfolio</p>
-                  <h2>Candidate coverage</h2>
+                  <h2>Kandidatöversikt</h2>
                 </div>
               </div>
 
               <div className={styles.candidateList}>
                 <article className={styles.candidateRow}>
-                  <strong>Total candidates</strong>
+                  <strong>Totalt antal kandidater</strong>
                   <span>{result.analytics.candidates.total}</span>
                 </article>
 
                 <article className={styles.candidateRow}>
-                  <strong>With applications</strong>
+                  <strong>Med ansökningar</strong>
                   <span>{result.analytics.candidates.withApplications}</span>
                 </article>
 
                 <article className={styles.candidateRow}>
-                  <strong>With follow-ups</strong>
+                  <strong>Med uppföljningar</strong>
                   <span>{result.analytics.candidates.withFollowUps}</span>
                 </article>
 
                 <article className={styles.candidateRow}>
-                  <strong>With coach activities</strong>
+                  <strong>Med jobbcoachaktiviteter</strong>
                   <span>{result.analytics.candidates.withCoachActivities}</span>
                 </article>
               </div>
@@ -198,8 +198,8 @@ export default async function AnalyticsPage({
               <section className={styles.panel}>
                 <div className={styles.panelHeader}>
                   <div>
-                    <p className={styles.eyebrow}>Candidates</p>
-                    <h2>Candidate analytics</h2>
+                    <p className={styles.eyebrow}>Kandidater</p>
+                    <h2>Kandidatanalys</h2>
                   </div>
                 </div>
 
@@ -215,7 +215,7 @@ export default async function AnalyticsPage({
                         <p>{candidate.id}</p>
                       </div>
 
-                      <span>View analytics</span>
+                      <span>Visa analys</span>
                     </Link>
                   ))}
                 </div>
@@ -225,34 +225,34 @@ export default async function AnalyticsPage({
             <section className={styles.panel}>
               <div className={styles.panelHeader}>
                 <div>
-                  <p className={styles.eyebrow}>Applications</p>
+                  <p className={styles.eyebrow}>Ansökningar</p>
                   <h2>Outcome funnel</h2>
                 </div>
               </div>
 
               <div className={styles.candidateList}>
                 <article className={styles.candidateRow}>
-                  <strong>Total applications</strong>
+                  <strong>Totalt antal ansökningar</strong>
                   <span>{result.analytics.applications.total}</span>
                 </article>
 
                 <article className={styles.candidateRow}>
-                  <strong>Reached applied</strong>
+                  <strong>Nådde ansökt</strong>
                   <span>{result.analytics.applications.reachedApplied}</span>
                 </article>
 
                 <article className={styles.candidateRow}>
-                  <strong>Reached interview</strong>
+                  <strong>Nådde intervju</strong>
                   <span>{result.analytics.applications.reachedInterview}</span>
                 </article>
 
                 <article className={styles.candidateRow}>
-                  <strong>Reached offer</strong>
+                  <strong>Nådde erbjudande</strong>
                   <span>{result.analytics.applications.reachedOffer}</span>
                 </article>
 
                 <article className={styles.candidateRow}>
-                  <strong>Application → applied</strong>
+                  <strong>Ansökan → ansökt</strong>
                   <span>
                     {formatRate(
                       result.analytics.applications.funnel
@@ -262,7 +262,7 @@ export default async function AnalyticsPage({
                 </article>
 
                 <article className={styles.candidateRow}>
-                  <strong>Applied → interview</strong>
+                  <strong>Ansökt → intervju</strong>
                   <span>
                     {formatRate(
                       result.analytics.applications.funnel.appliedToInterview
@@ -272,7 +272,7 @@ export default async function AnalyticsPage({
                 </article>
 
                 <article className={styles.candidateRow}>
-                  <strong>Interview → offer</strong>
+                  <strong>Intervju → erbjudande</strong>
                   <span>
                     {formatRate(
                       result.analytics.applications.funnel.interviewToOffer
@@ -286,34 +286,34 @@ export default async function AnalyticsPage({
             <section className={styles.panel}>
               <div className={styles.panelHeader}>
                 <div>
-                  <p className={styles.eyebrow}>Follow-ups</p>
+                  <p className={styles.eyebrow}>Uppföljningar</p>
                   <h2>Current and historical state</h2>
                 </div>
               </div>
 
               <div className={styles.candidateList}>
                 <article className={styles.candidateRow}>
-                  <strong>Total follow-ups</strong>
+                  <strong>Totalt antal uppföljningar</strong>
                   <span>{result.analytics.followUps.total}</span>
                 </article>
 
                 <article className={styles.candidateRow}>
-                  <strong>Completed</strong>
+                  <strong>Slutförda</strong>
                   <span>{result.analytics.followUps.completed}</span>
                 </article>
 
                 <article className={styles.candidateRow}>
-                  <strong>Incomplete</strong>
+                  <strong>Ej slutförda</strong>
                   <span>{result.analytics.followUps.incomplete}</span>
                 </article>
 
                 <article className={styles.candidateRow}>
-                  <strong>Open as of date</strong>
+                  <strong>Öppna per datum</strong>
                   <span>{result.analytics.followUps.stateAsOf.open}</span>
                 </article>
 
                 <article className={styles.candidateRow}>
-                  <strong>Overdue as of date</strong>
+                  <strong>Försenade per datum</strong>
                   <span>{result.analytics.followUps.stateAsOf.overdue}</span>
                 </article>
               </div>
@@ -322,29 +322,29 @@ export default async function AnalyticsPage({
             <section className={styles.panel}>
               <div className={styles.panelHeader}>
                 <div>
-                  <p className={styles.eyebrow}>Coach activities</p>
+                  <p className={styles.eyebrow}>Jobbcoachaktiviteter</p>
                   <h2>Activity state</h2>
                 </div>
               </div>
 
               <div className={styles.candidateList}>
                 <article className={styles.candidateRow}>
-                  <strong>Total activities</strong>
+                  <strong>Totalt antal aktiviteter</strong>
                   <span>{result.analytics.coachActivities.total}</span>
                 </article>
 
                 <article className={styles.candidateRow}>
-                  <strong>Completed</strong>
+                  <strong>Slutförda</strong>
                   <span>{result.analytics.coachActivities.completed}</span>
                 </article>
 
                 <article className={styles.candidateRow}>
-                  <strong>Cancelled</strong>
+                  <strong>Avbrutna</strong>
                   <span>{result.analytics.coachActivities.cancelled}</span>
                 </article>
 
                 <article className={styles.candidateRow}>
-                  <strong>Planned as of date</strong>
+                  <strong>Planerade per datum</strong>
                   <span>{result.analytics.coachActivities.stateAsOf.planned}</span>
                 </article>
               </div>
@@ -353,14 +353,14 @@ export default async function AnalyticsPage({
             <section className={styles.panel}>
               <div className={styles.panelHeader}>
                 <div>
-                  <p className={styles.eyebrow}>Timing</p>
+                  <p className={styles.eyebrow}>Tidsmått</p>
                   <h2>Application milestones</h2>
                 </div>
               </div>
 
               <div className={styles.candidateList}>
                 <article className={styles.candidateRow}>
-                  <strong>Average time to applied</strong>
+                  <strong>Genomsnittlig tid till ansökt</strong>
                   <span>
                     {formatDuration(
                       result.analytics.applicationTiming.timeToApplied
@@ -370,7 +370,7 @@ export default async function AnalyticsPage({
                 </article>
 
                 <article className={styles.candidateRow}>
-                  <strong>Average time to interview</strong>
+                  <strong>Genomsnittlig tid till intervju</strong>
                   <span>
                     {formatDuration(
                       result.analytics.applicationTiming.timeToInterview
@@ -380,7 +380,7 @@ export default async function AnalyticsPage({
                 </article>
 
                 <article className={styles.candidateRow}>
-                  <strong>Average time to offer</strong>
+                  <strong>Genomsnittlig tid till erbjudande</strong>
                   <span>
                     {formatDuration(
                       result.analytics.applicationTiming.timeToOffer

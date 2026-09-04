@@ -10,6 +10,29 @@ import {
 
 export const dynamic = "force-dynamic";
 
+function formatApplicationStatus(status: string) {
+  switch (status) {
+    case "saved":
+      return "Sparad";
+    case "preparing":
+      return "Förbereds";
+    case "applied":
+      return "Ansökt";
+    case "interview":
+      return "Intervju";
+    case "offer":
+      return "Erbjudande";
+    case "rejected":
+      return "Avslagen";
+    case "withdrawn":
+      return "Tillbakadragen";
+    case "closed":
+      return "Avslutad";
+    default:
+      return status;
+  }
+}
+
 const statuses = [
   "saved",
   "preparing",
@@ -35,8 +58,8 @@ export default async function ApplicationDetailPage({
   if (!result.configured) {
     return (
       <main style={{ maxWidth: 900, margin: "0 auto", padding: "48px 24px" }}>
-        <Link href="/applications">← Applications</Link>
-        <h1>Application repository not configured</h1>
+        <Link href="/applications">← Ansökningar</Link>
+        <h1>Ansökningsarkivet är inte konfigurerat</h1>
       </main>
     );
   }
@@ -44,12 +67,12 @@ export default async function ApplicationDetailPage({
   if (result.error || !result.application) {
     return (
       <main style={{ maxWidth: 900, margin: "0 auto", padding: "48px 24px" }}>
-        <Link href="/applications">← Applications</Link>
-        <h1>Application could not be loaded</h1>
+        <Link href="/applications">← Ansökningar</Link>
+        <h1>Ansökan kunde inte laddas</h1>
         <p>
           {result.error
             ? `${result.error.code}: ${result.error.message}`
-            : "Application not found."}
+            : "Ansökan hittades inte."}
         </p>
       </main>
     );
@@ -59,7 +82,7 @@ export default async function ApplicationDetailPage({
 
   return (
     <main style={{ maxWidth: 900, margin: "0 auto", padding: "48px 24px" }}>
-      <Link href="/applications">← Applications</Link>
+      <Link href="/applications">← Ansökningar</Link>
 
       <p style={{ marginTop: 32 }}>APPLICATION</p>
 
@@ -76,11 +99,11 @@ export default async function ApplicationDetailPage({
       </p>
 
       <p>
-        <strong>Current status:</strong> {application.status}
+        <strong>Aktuell status:</strong> {formatApplicationStatus(application.status)}
       </p>
 
       <section style={{ marginTop: 40 }}>
-        <h2>Update status</h2>
+        <h2>Uppdatera status</h2>
 
         <form action={updateApplicationStatusAction}>
           <input
@@ -102,26 +125,26 @@ export default async function ApplicationDetailPage({
             >
               {statuses.map((status) => (
                 <option key={status} value={status}>
-                  {status}
+                  {formatApplicationStatus(status)}
                 </option>
               ))}
             </select>
 
             <button type="submit">
-              Update status
+              Uppdatera status
             </button>
           </div>
         </form>
       </section>
 
       <section style={{ marginTop: 40 }}>
-        <h2>Assigned candidate</h2>
+        <h2>Tilldelad kandidat</h2>
 
         {!candidateResult.configured ? (
-          <p>Coach workspace is not configured.</p>
+          <p>Jobbcoachens arbetsyta är inte konfigurerad.</p>
         ) : candidateResult.error ? (
           <p>
-            Candidate assignment could not be loaded:{" "}
+            Kandidattilldelningen kunde inte laddas:{" "}
             {candidateResult.error.code}
           </p>
         ) : candidateResult.candidate ? (
@@ -130,7 +153,7 @@ export default async function ApplicationDetailPage({
             <p>{candidateResult.candidate.id}</p>
           </div>
         ) : candidateResult.candidates.length === 0 ? (
-          <p>No candidates are available.</p>
+          <p>Inga kandidater är tillgängliga.</p>
         ) : (
           <form action={associateApplicationCandidateAction}>
             <input
@@ -171,12 +194,12 @@ export default async function ApplicationDetailPage({
       </section>
 
       <section style={{ marginTop: 40 }}>
-        <h2>Status history</h2>
+        <h2>Statushistorik</h2>
 
         <div style={{ display: "grid", gap: 12 }}>
           {application.statusHistory.map((event, index) => (
             <div key={`${event.timestamp}-${index}`}>
-              <strong>{event.status}</strong>
+              <strong>{formatApplicationStatus(event.status)}</strong>
               <p>{event.timestamp}</p>
               {event.note ? <p>{event.note}</p> : null}
             </div>

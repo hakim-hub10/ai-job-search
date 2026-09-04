@@ -20,31 +20,31 @@ export default async function ReportsPage() {
         </div>
 
         <nav className={styles.nav}>
-          <Link href="/">Dashboard</Link>
+          <Link href="/">Översikt</Link>
           <span title="Coming soon">Jobs</span>
-          <Link href="/candidates">Candidates</Link>
-          <Link href="/applications">Applications</Link>
-          <Link href="/coach">Coach</Link>
+          <Link href="/candidates">Kandidater</Link>
+          <Link href="/applications">Ansökningar</Link>
+          <Link href="/coach">Jobbcoach</Link>
           <Link className={styles.active} href="/reports">
-            Reports
+            Rapporter
           </Link>
-          <Link href="/analytics">Analytics</Link>
+          <Link href="/analytics">Analys</Link>
         </nav>
 
         <div className={styles.sidebarFooter}>
-          <span>Local Preview</span>
-          <small>No cloud sync</small>
+          <span>Lokal förhandsversion</span>
+          <small>Ingen molnsynkronisering</small>
         </div>
       </aside>
 
       <main className={styles.main}>
         <header className={styles.header}>
           <div>
-            <p className={styles.eyebrow}>Activity reporting</p>
-            <h1>Reports</h1>
+            <p className={styles.eyebrow}>Aktivitetsrapportering</p>
+            <h1>Rapporter</h1>
             <p className={styles.subtitle}>
-              Candidate activity reports derived from existing applications,
-              follow-ups and coaching activities.
+              Kandidaternas aktivitetsrapporter baserade på befintliga ansökningar,
+              uppföljningar och jobbcoachaktiviteter.
             </p>
           </div>
 
@@ -57,16 +57,16 @@ export default async function ReportsPage() {
         {!result.configured ? (
           <section className={styles.panel}>
             <div className={styles.emptyState}>
-              <strong>Coach workspace not configured</strong>
+              <strong>Jobbcoachens arbetsyta är inte konfigurerad</strong>
               <p>
-                Set COACH_DIR when starting the web preview to load candidates.
+                Ange COACH_DIR när webbens förhandsversion startas för att ladda kandidater.
               </p>
             </div>
           </section>
         ) : result.error ? (
           <section className={styles.panel}>
             <div className={styles.emptyState}>
-              <strong>Candidate workspace could not be loaded</strong>
+              <strong>Kandidaternas arbetsyta kunde inte laddas</strong>
               <p>
                 {result.error.code}: {result.error.message}
               </p>
@@ -75,7 +75,7 @@ export default async function ReportsPage() {
         ) : result.candidates.length === 0 ? (
           <section className={styles.panel}>
             <div className={styles.emptyState}>
-              <strong>No candidates found</strong>
+              <strong>Inga kandidater hittades</strong>
               <p>
                 Create a coach candidate before generating an activity report.
               </p>
@@ -85,7 +85,7 @@ export default async function ReportsPage() {
           <section className={styles.panel}>
             <div className={styles.panelHeader}>
               <div>
-                <p className={styles.eyebrow}>Candidates</p>
+                <p className={styles.eyebrow}>Kandidater</p>
                 <h2>Select a candidate</h2>
               </div>
             </div>
@@ -103,9 +103,9 @@ export default async function ReportsPage() {
                   </div>
 
                   <div className={styles.candidateMeta}>
-                    <span>Open activity report</span>
+                    <span>Öppna aktivitetsrapport</span>
                     <time dateTime={candidate.updatedAt}>
-                      Updated: {candidate.updatedAt}
+                      Uppdaterad: {candidate.updatedAt}
                     </time>
                   </div>
                 </Link>

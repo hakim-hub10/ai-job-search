@@ -7,18 +7,18 @@ export const dynamic = "force-dynamic";
 export default function NewCandidatePage() {
   return (
     <main style={{ maxWidth: 720, margin: "0 auto", padding: "48px 24px" }}>
-      <p>COACH WORKSPACE</p>
+      <p>JOBBCOACHENS ARBETSYTA</p>
 
-      <h1>New candidate</h1>
+      <h1>Ny kandidat</h1>
 
       <p>
-        Create a candidate record using the existing coach workspace workflow.
+        Skapa en kandidatprofil i jobbcoachens arbetsyta.
       </p>
 
       <form action={createCandidateAction}>
         <div style={{ display: "grid", gap: 8, marginTop: 32 }}>
           <label htmlFor="displayName">
-            <strong>Display name</strong>
+            <strong>Visningsnamn</strong>
           </label>
 
           <input
@@ -27,7 +27,7 @@ export default function NewCandidatePage() {
             type="text"
             required
             autoComplete="name"
-            placeholder="Candidate name"
+            placeholder="Kandidatens namn"
             style={{
               padding: "12px",
               border: "1px solid #ccd2dc",
@@ -47,10 +47,10 @@ export default function NewCandidatePage() {
               cursor: "pointer",
             }}
           >
-            Create candidate
+            Skapa kandidat
           </button>
 
-          <Link href="/candidates">Cancel</Link>
+          <Link href="/candidates">Avbryt</Link>
         </div>
       </form>
     </main>

@@ -23,6 +23,34 @@ interface CandidatePageProps {
   }>;
 }
 
+function formatStatusLabel(status: string) {
+  switch (status) {
+    case "planned":
+      return "Planerad";
+    case "inProgress":
+      return "Pågående";
+    case "completed":
+      return "Slutförd";
+    case "cancelled":
+      return "Avbruten";
+    default:
+      return status;
+  }
+}
+
+function formatActivityKindLabel(kind: string) {
+  switch (kind) {
+    case "applyForJob":
+      return "Sök jobb";
+    case "updateCv":
+      return "Uppdatera CV";
+    case "coachingMeeting":
+      return "Coachmöte";
+    default:
+      return kind;
+  }
+}
+
 function formatDate(value?: string | null) {
   if (!value) return "—";
 
@@ -56,20 +84,20 @@ export default async function CandidatePage({
 
         <nav className={styles.nav}>
           <Link href="/" className={styles.navItem}>
-            Dashboard
+            Översikt
           </Link>
           <span className={styles.navItem}>Jobs</span>
           <Link href="/candidates" className={`${styles.navItem} ${styles.active}`}>
-            Candidates
+            Kandidater
           </Link>
           <Link href="/applications" className={styles.navItem}>
-            Applications
+            Ansökningar
           </Link>
           <Link href="/coach" className={styles.navItem}>
-            Coach
+            Jobbcoach
           </Link>
           <Link href="/reports" className={styles.navItem}>
-            Reports
+            Rapporter
           </Link>
         </nav>
       </aside>
@@ -77,60 +105,60 @@ export default async function CandidatePage({
       <main className={styles.main}>
         <div className={styles.topbar}>
           <div>
-            <p className={styles.eyebrow}>Coach workspace</p>
-            <h2>{candidate?.displayName ?? "Candidate overview"}</h2>
+            <p className={styles.eyebrow}>Jobbcoachens arbetsyta</p>
+            <h2>{candidate?.displayName ?? "Kandidatöversikt"}</h2>
             <p className={styles.subtitle}>
-              Operational data from the existing coach workflows.
+              Operativ data från jobbcoachens befintliga arbetsflöden.
             </p>
           </div>
 
           <Link href="/candidates" className={styles.secondaryButton}>
-            Back to candidates
+            Tillbaka till kandidater
           </Link>
         </div>
 
         {!result.configured ? (
           <section className={styles.panel}>
-            <h3>Coach workspace not configured</h3>
+            <h3>Jobbcoachens arbetsyta är inte konfigurerad</h3>
             <p>
-              Set COACH_DIR before candidate data can be loaded.
+              Ange COACH_DIR innan kandidatdata kan laddas.
             </p>
           </section>
         ) : result.error ? (
           <section className={styles.panel}>
-            <h3>Candidate data could not be loaded</h3>
+            <h3>Kandidatdata kunde inte laddas</h3>
             <pre className={styles.errorBlock}>
               {JSON.stringify(result.error, null, 2)}
             </pre>
           </section>
         ) : !candidate ? (
           <section className={styles.panel}>
-            <h3>Candidate not found</h3>
-            <p>No candidate record was found for {candidateId}.</p>
+            <h3>Kandidaten hittades inte</h3>
+            <p>Ingen kandidatpost hittades för {candidateId}.</p>
           </section>
         ) : (
           <>
             <section className={styles.panel}>
               <div className={styles.sectionHeading}>
                 <div>
-                  <p className={styles.eyebrow}>Candidate</p>
+                  <p className={styles.eyebrow}>Kandidat</p>
                   <h3>{candidate.displayName}</h3>
                 </div>
               </div>
 
               <div className={styles.candidateMeta}>
                 <span>ID: {candidate.id}</span>
-                <span>Created: {formatDate(candidate.createdAt)}</span>
-                <span>Updated: {formatDate(candidate.updatedAt)}</span>
+                <span>Skapad: {formatDate(candidate.createdAt)}</span>
+                <span>Uppdaterad: {formatDate(candidate.updatedAt)}</span>
               </div>
             </section>
 
             {!result.applicationRepositoryConfigured ? (
               <section className={styles.panel}>
-                <h3>Application repository not configured</h3>
+                <h3>Ansökningsarkivet är inte konfigurerat</h3>
                 <p>
-                  Candidate metadata is available, but operational application,
-                  follow-up, goal, and activity data requires
+                  Kandidatens metadata är tillgänglig, men operativ ansökningsdata,
+                  data för uppföljningar, mål och aktiviteter kräver
                   APPLICATION_REPOSITORY.
                 </p>
               </section>
@@ -138,22 +166,22 @@ export default async function CandidatePage({
               <>
                 <section className={styles.statsGrid}>
                   <article className={styles.statCard}>
-                    <p>Goals planned</p>
+                    <p>Planerade mål</p>
                     <strong>{overview.goalCounts.planned}</strong>
                   </article>
 
                   <article className={styles.statCard}>
-                    <p>Goals in progress</p>
+                    <p>Pågående mål</p>
                     <strong>{overview.goalCounts.inProgress}</strong>
                   </article>
 
                   <article className={styles.statCard}>
-                    <p>Overdue goals</p>
+                    <p>Försenade mål</p>
                     <strong>{overview.goalCounts.overdue}</strong>
                   </article>
 
                   <article className={styles.statCard}>
-                    <p>Planned activities</p>
+                    <p>Planerade aktiviteter</p>
                     <strong>{overview.activityCounts.planned}</strong>
                   </article>
                 </section>
@@ -161,15 +189,15 @@ export default async function CandidatePage({
                 <section className={styles.panel}>
                   <div className={styles.sectionHeading}>
                     <div>
-                      <p className={styles.eyebrow}>Follow-ups</p>
-                      <h3>Candidate follow-ups</h3>
+                      <p className={styles.eyebrow}>Uppföljningar</p>
+                      <h3>Kandidatens uppföljningar</h3>
                     </div>
 
                     <span>{followUpResult.followUps.length}</span>
                   </div>
 
                   {!followUpResult.configured ? (
-                    <p>Follow-up workflow is not configured.</p>
+                    <p>Arbetsflödet för uppföljningar är inte konfigurerat.</p>
                   ) : followUpResult.error ? (
                     <pre className={styles.errorBlock}>
                       {JSON.stringify(followUpResult.error, null, 2)}
@@ -185,7 +213,7 @@ export default async function CandidatePage({
 
                         <div className={styles.candidateMeta}>
                           <label>
-                            Due date
+                            Förfallodatum
                             <input
                               type="datetime-local"
                               name="dueAt"
@@ -198,12 +226,12 @@ export default async function CandidatePage({
                           type="submit"
                           className={styles.secondaryButton}
                         >
-                          Create follow-up
+                          Skapa uppföljning
                         </button>
                       </form>
 
                       {followUpResult.followUps.length === 0 ? (
-                        <p>No follow-ups found.</p>
+                        <p>Inga uppföljningar hittades.</p>
                       ) : (
                         <div className={styles.candidateList}>
                           {followUpResult.followUps.map((followUp) => (
@@ -214,24 +242,24 @@ export default async function CandidatePage({
                               <div>
                                 <strong>
                                   {followUp.completedAt
-                                    ? "Completed follow-up"
-                                    : "Open follow-up"}
+                                    ? "Slutförd uppföljning"
+                                    : "Öppen uppföljning"}
                                 </strong>
 
                                 <div className={styles.candidateMeta}>
                                   <span>
-                                    Due: {formatDate(followUp.dueAt)}
+                                    Förfaller: {formatDate(followUp.dueAt)}
                                   </span>
 
                                   {followUp.applicationId ? (
                                     <span>
-                                      Application: {followUp.applicationId}
+                                      Ansökan: {followUp.applicationId}
                                     </span>
                                   ) : null}
 
                                   {followUp.completedAt ? (
                                     <span>
-                                      Completed:{" "}
+                                      Slutförd:{" "}
                                       {formatDate(followUp.completedAt)}
                                     </span>
                                   ) : null}
@@ -271,15 +299,15 @@ export default async function CandidatePage({
                 <section className={styles.panel}>
                   <div className={styles.sectionHeading}>
                     <div>
-                      <p className={styles.eyebrow}>Coach notes</p>
-                      <h3>Candidate notes</h3>
+                      <p className={styles.eyebrow}>Jobbcoachens anteckningar</p>
+                      <h3>Kandidatens anteckningar</h3>
                     </div>
 
                     <span>{noteResult.notes.length}</span>
                   </div>
 
                   {!noteResult.configured ? (
-                    <p>Coach notes workflow is not configured.</p>
+                    <p>Arbetsflödet för jobbcoachens anteckningar är inte konfigurerat.</p>
                   ) : noteResult.error ? (
                     <pre className={styles.errorBlock}>
                       {JSON.stringify(noteResult.error, null, 2)}
@@ -299,7 +327,7 @@ export default async function CandidatePage({
                             name="text"
                             rows={4}
                             required
-                            placeholder="Add a private coach note..."
+                            placeholder="Lägg till en privat anteckning..."
                           />
                         </label>
 
@@ -307,12 +335,12 @@ export default async function CandidatePage({
                           type="submit"
                           className={styles.secondaryButton}
                         >
-                          Create note
+                          Skapa anteckning
                         </button>
                       </form>
 
                       {noteResult.notes.length === 0 ? (
-                        <p>No coach notes found.</p>
+                        <p>Inga anteckningar hittades.</p>
                       ) : (
                         <div className={styles.candidateList}>
                           {noteResult.notes.map((note) => (
@@ -342,10 +370,10 @@ export default async function CandidatePage({
 
                                 <div className={styles.candidateMeta}>
                                   <span>
-                                    Created: {formatDate(note.createdAt)}
+                                    Skapad: {formatDate(note.createdAt)}
                                   </span>
                                   <span>
-                                    Updated: {formatDate(note.updatedAt)}
+                                    Uppdaterad: {formatDate(note.updatedAt)}
                                   </span>
                                 </div>
 
@@ -353,7 +381,7 @@ export default async function CandidatePage({
                                   type="submit"
                                   className={styles.secondaryButton}
                                 >
-                                  Update note
+                                  Uppdatera anteckning
                                 </button>
                               </form>
                             </article>
@@ -367,7 +395,7 @@ export default async function CandidatePage({
                 <div className={styles.dashboardGrid}>
                   <section className={styles.panel}>
                     <div className={styles.sectionHeading}>
-                      <h3>Goals</h3>
+                      <h3>Mål</h3>
                       <span>{overview.goals.length}</span>
                     </div>
 
@@ -380,7 +408,7 @@ export default async function CandidatePage({
 
                       <div className={styles.candidateMeta}>
                         <label>
-                          Goal title
+                          Målets titel
                           <input
                             type="text"
                             name="title"
@@ -389,7 +417,7 @@ export default async function CandidatePage({
                         </label>
 
                         <label>
-                          Due date
+                          Förfallodatum
                           <input
                             type="datetime-local"
                             name="dueAt"
@@ -398,7 +426,7 @@ export default async function CandidatePage({
                       </div>
 
                       <label>
-                        Description
+                        Beskrivning
                         <textarea
                           name="description"
                           rows={3}
@@ -409,12 +437,12 @@ export default async function CandidatePage({
                         type="submit"
                         className={styles.secondaryButton}
                       >
-                        Create goal
+                        Skapa mål
                       </button>
                     </form>
 
                     {overview.goals.length === 0 ? (
-                      <p>No goals found.</p>
+                      <p>Inga mål hittades.</p>
                     ) : (
                       <div className={styles.candidateList}>
                         {overview.goals.map((goal) => (
@@ -423,9 +451,9 @@ export default async function CandidatePage({
                               <strong>{goal.title}</strong>
 
                               <div className={styles.candidateMeta}>
-                                <span>Status: {goal.status}</span>
-                                <span>Due: {formatDate(goal.dueAt)}</span>
-                                {goal.overdue ? <span>Overdue</span> : null}
+                                <span>Status: {formatStatusLabel(goal.status)}</span>
+                                <span>Förfaller: {formatDate(goal.dueAt)}</span>
+                                {goal.overdue ? <span>Försenad</span> : null}
                               </div>
                             </div>
 
@@ -445,10 +473,10 @@ export default async function CandidatePage({
                                 />
 
                                 <select name="status" required>
-                                  <option value="">Change status</option>
+                                  <option value="">Ändra status</option>
 
                                   {goal.status !== "planned" ? (
-                                    <option value="planned">Planned</option>
+                                    <option value="planned">Planerad</option>
                                   ) : null}
 
                                   {goal.status !== "inProgress" ? (
@@ -458,11 +486,11 @@ export default async function CandidatePage({
                                   ) : null}
 
                                   <option value="completed">
-                                    Completed
+                                    Slutförd
                                   </option>
 
                                   <option value="cancelled">
-                                    Cancelled
+                                    Avbruten
                                   </option>
                                 </select>
 
@@ -482,7 +510,7 @@ export default async function CandidatePage({
 
                   <section className={styles.panel}>
                     <div className={styles.sectionHeading}>
-                      <h3>Activities</h3>
+                      <h3>Aktiviteter</h3>
                       <span>{overview.activities.length}</span>
                     </div>
 
@@ -500,8 +528,8 @@ export default async function CandidatePage({
                             <option value="" disabled>
                               Select activity
                             </option>
-                            <option value="applyForJob">Apply for job</option>
-                            <option value="updateCv">Update CV</option>
+                            <option value="applyForJob">Sök jobb</option>
+                            <option value="updateCv">Uppdatera CV</option>
                             <option value="contactEmployer">
                               Contact employer
                             </option>
@@ -512,13 +540,13 @@ export default async function CandidatePage({
                               Complete course step
                             </option>
                             <option value="coachingMeeting">
-                              Coaching meeting
+                              Coachmöte
                             </option>
                           </select>
                         </label>
 
                         <label>
-                          Planned date
+                          Planerat datum
                           <input
                             type="datetime-local"
                             name="plannedAt"
@@ -530,12 +558,12 @@ export default async function CandidatePage({
                         type="submit"
                         className={styles.secondaryButton}
                       >
-                        Create activity
+                        Skapa aktivitet
                       </button>
                     </form>
 
                     {overview.activities.length === 0 ? (
-                      <p>No activities found.</p>
+                      <p>Inga aktiviteter hittades.</p>
                     ) : (
                       <div className={styles.candidateList}>
                         {overview.activities.map((activity) => (
@@ -546,22 +574,22 @@ export default async function CandidatePage({
                             <div>
                               <strong>
                                 {activity.kind === "applyForJob"
-                                  ? "Apply for job"
+                                  ? "Sök jobb"
                                   : activity.kind === "updateCv"
-                                    ? "Update CV"
+                                    ? "Uppdatera CV"
                                     : activity.kind === "contactEmployer"
                                       ? "Contact employer"
                                       : activity.kind === "attendInterview"
                                         ? "Attend interview"
                                         : activity.kind === "completeCourseStep"
                                           ? "Complete course step"
-                                          : "Coaching meeting"}
+                                          : "Coachmöte"}
                               </strong>
 
                               <div className={styles.candidateMeta}>
-                                <span>Status: {activity.status}</span>
+                                <span>Status: {formatStatusLabel(activity.status)}</span>
                                 <span>
-                                  Planned: {formatDate(activity.plannedAt)}
+                                  Planerad: {formatDate(activity.plannedAt)}
                                 </span>
                               </div>
                             </div>
@@ -582,10 +610,10 @@ export default async function CandidatePage({
 
                                 <select name="status" required defaultValue="">
                                   <option value="" disabled>
-                                    Change status
+                                    Ändra status
                                   </option>
-                                  <option value="completed">Completed</option>
-                                  <option value="cancelled">Cancelled</option>
+                                  <option value="completed">Slutförd</option>
+                                  <option value="cancelled">Avbruten</option>
                                 </select>
 
                                 <button
@@ -605,28 +633,28 @@ export default async function CandidatePage({
 
                 <section className={styles.panel}>
                   <div className={styles.sectionHeading}>
-                    <h3>Next planned activity</h3>
+                    <h3>Nästa planerade aktivitet</h3>
                   </div>
 
                   {overview.nextPlannedActivity ? (
                     <div className={styles.candidateRow}>
                       <div>
-                        <strong>{overview.nextPlannedActivity.kind}</strong>
+                        <strong>{formatActivityKindLabel(overview.nextPlannedActivity.kind)}</strong>
                         <div className={styles.candidateMeta}>
                           <span>
-                            Planned:{" "}
+                            Planerad:{" "}
                             {formatDate(
                               overview.nextPlannedActivity.plannedAt,
                             )}
                           </span>
                           <span>
-                            Status: {overview.nextPlannedActivity.status}
+                            Status: {formatStatusLabel(overview.nextPlannedActivity.status)}
                           </span>
                         </div>
                       </div>
                     </div>
                   ) : (
-                    <p>No planned activity found.</p>
+                    <p>Ingen planerad aktivitet hittades.</p>
                   )}
                 </section>
               </>

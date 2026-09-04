@@ -15,41 +15,41 @@ export default async function CandidatesPage() {
           <div className={styles.logoMark}>AC</div>
           <div>
             <strong>AI Career Agent</strong>
-            <span>Sweden Preview</span>
+            <span>Sverige – Förhandsversion</span>
           </div>
         </div>
 
         <nav className={styles.nav}>
-          <Link href="/">Dashboard</Link>
-          <span title="Coming soon">Jobs</span>
+          <Link href="/">Översikt</Link>
+          <span title="Kommer snart">Jobb</span>
           <Link className={styles.active} href="/candidates">
-            Candidates
+            Kandidater
           </Link>
-          <Link href="/applications">Applications</Link>
-          <Link href="/coach">Coach</Link>
-          <Link href="/reports">Reports</Link>
-          <Link href="/analytics">Analytics</Link>
+          <Link href="/applications">Ansökningar</Link>
+          <Link href="/coach">Jobbcoach</Link>
+          <Link href="/reports">Rapporter</Link>
+          <Link href="/analytics">Analys</Link>
         </nav>
 
         <div className={styles.sidebarFooter}>
-          <span>Local Preview</span>
-          <small>No cloud sync</small>
+          <span>Lokal förhandsversion</span>
+          <small>Ingen molnsynkronisering</small>
         </div>
       </aside>
 
       <main className={styles.main}>
         <header className={styles.header}>
           <div>
-            <p className={styles.eyebrow}>Coach workspace</p>
-            <h1>Candidates</h1>
+            <p className={styles.eyebrow}>Jobbcoachens arbetsyta</p>
+            <h1>Kandidater</h1>
             <p className={styles.subtitle}>
-              Candidates loaded from the existing local coach repository.
+              Kandidater som hämtats från det befintliga lokala jobbcoacharkivet.
             </p>
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
             {result.configured ? (
-              <Link href="/candidates/new">New candidate</Link>
+              <Link href="/candidates/new">Ny kandidat</Link>
             ) : null}
 
             <div className={styles.status}>
@@ -62,17 +62,17 @@ export default async function CandidatesPage() {
         {!result.configured ? (
           <section className={styles.panel}>
             <div className={styles.emptyState}>
-              <strong>Coach workspace not configured</strong>
+              <strong>Jobbcoachens arbetsyta är inte konfigurerad</strong>
               <p>
-                Set COACH_DIR when starting the web preview to load candidates
-                from the existing coach workspace.
+                Ange COACH_DIR när webbens förhandsversion startas för att ladda kandidater
+                från jobbcoachens befintliga arbetsyta.
               </p>
             </div>
           </section>
         ) : result.error ? (
           <section className={styles.panel}>
             <div className={styles.emptyState}>
-              <strong>Candidate repository could not be loaded</strong>
+              <strong>Kandidatarkivet kunde inte laddas</strong>
               <p>
                 {result.error.code}: {result.error.message}
               </p>
@@ -81,9 +81,9 @@ export default async function CandidatesPage() {
         ) : result.candidates.length === 0 ? (
           <section className={styles.panel}>
             <div className={styles.emptyState}>
-              <strong>No candidates found</strong>
+              <strong>Inga kandidater hittades</strong>
               <p>
-                The configured coach workspace currently contains no candidate
+                Jobbcoachens konfigurerade arbetsyta innehåller för närvarande inga kandidatposter
                 records.
               </p>
             </div>
@@ -92,8 +92,8 @@ export default async function CandidatesPage() {
           <section className={styles.panel}>
             <div className={styles.panelHeader}>
               <div>
-                <p className={styles.eyebrow}>Candidates</p>
-                <h2>{result.candidates.length} candidate records</h2>
+                <p className={styles.eyebrow}>Kandidater</p>
+                <h2>{result.candidates.length} kandidatposter</h2>
               </div>
             </div>
 
@@ -110,7 +110,7 @@ export default async function CandidatesPage() {
                   </div>
 
                   <div className={styles.candidateMeta}>
-                    <span>Created</span>
+                    <span>Skapad</span>
                     <time dateTime={candidate.createdAt}>
                       {candidate.createdAt}
                     </time>

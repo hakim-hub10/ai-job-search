@@ -5,6 +5,29 @@ import styles from "../page.module.css";
 
 export const dynamic = "force-dynamic";
 
+function formatApplicationStatus(status: string) {
+  switch (status) {
+    case "saved":
+      return "Sparad";
+    case "preparing":
+      return "Förbereds";
+    case "applied":
+      return "Ansökt";
+    case "interview":
+      return "Intervju";
+    case "offer":
+      return "Erbjudande";
+    case "rejected":
+      return "Avslagen";
+    case "withdrawn":
+      return "Tillbakadragen";
+    case "closed":
+      return "Avslutad";
+    default:
+      return status;
+  }
+}
+
 export default async function ApplicationsPage() {
   const result = await loadApplications();
 
@@ -20,30 +43,30 @@ export default async function ApplicationsPage() {
         </div>
 
         <nav className={styles.nav}>
-          <Link href="/">Dashboard</Link>
-          <span title="Coming soon">Jobs</span>
-          <Link href="/candidates">Candidates</Link>
+          <Link href="/">Översikt</Link>
+          <span title="Kommer snart">Jobb</span>
+          <Link href="/candidates">Kandidater</Link>
           <Link className={styles.active} href="/applications">
-            Applications
+            Ansökningar
           </Link>
-          <Link href="/coach">Coach</Link>
-          <Link href="/reports">Reports</Link>
-          <Link href="/analytics">Analytics</Link>
+          <Link href="/coach">Jobbcoach</Link>
+          <Link href="/reports">Rapporter</Link>
+          <Link href="/analytics">Analys</Link>
         </nav>
 
         <div className={styles.sidebarFooter}>
-          <span>Local Preview</span>
-          <small>No cloud sync</small>
+          <span>Lokal förhandsversion</span>
+          <small>Ingen molnsynkronisering</small>
         </div>
       </aside>
 
       <main className={styles.main}>
         <header className={styles.header}>
           <div>
-            <p className={styles.eyebrow}>Application workspace</p>
-            <h1>Applications</h1>
+            <p className={styles.eyebrow}>Ansökningsyta</p>
+            <h1>Ansökningar</h1>
             <p className={styles.subtitle}>
-              Applications loaded from the existing local application
+              Ansökningar som hämtats från det befintliga lokala ansökningsarkivet
               repository.
             </p>
           </div>
@@ -57,17 +80,17 @@ export default async function ApplicationsPage() {
         {!result.configured ? (
           <section className={styles.panel}>
             <div className={styles.emptyState}>
-              <strong>Application repository not configured</strong>
+              <strong>Ansökningsarkivet är inte konfigurerat</strong>
               <p>
                 Set APPLICATION_REPOSITORY when starting the web preview to
-                load application records.
+                ladda ansökningsposter.
               </p>
             </div>
           </section>
         ) : result.error ? (
           <section className={styles.panel}>
             <div className={styles.emptyState}>
-              <strong>Application repository could not be loaded</strong>
+              <strong>Ansökningsarkivet kunde inte laddas</strong>
               <p>
                 {result.error.code}: {result.error.message}
               </p>
@@ -76,10 +99,10 @@ export default async function ApplicationsPage() {
         ) : result.applications.length === 0 ? (
           <section className={styles.panel}>
             <div className={styles.emptyState}>
-              <strong>No applications found</strong>
+              <strong>Inga ansökningar hittades</strong>
               <p>
-                The configured application repository currently contains no
-                application records.
+                Det konfigurerade ansökningsarkivet innehåller för närvarande inga
+                ansökningsposter.
               </p>
             </div>
           </section>
@@ -87,8 +110,8 @@ export default async function ApplicationsPage() {
           <section className={styles.panel}>
             <div className={styles.panelHeader}>
               <div>
-                <p className={styles.eyebrow}>Applications</p>
-                <h2>{result.applications.length} application records</h2>
+                <p className={styles.eyebrow}>Ansökningar</p>
+                <h2>{result.applications.length} ansökningar</h2>
               </div>
             </div>
 
@@ -109,14 +132,14 @@ export default async function ApplicationsPage() {
                     </div>
 
                     <div className={styles.candidateMeta}>
-                      <span>Status: {application.status}</span>
+                      <span>Status: {formatApplicationStatus(application.status)}</span>
                       <span>
                         Location:{" "}
                         {application.jobSnapshot.location ??
                           "Location unavailable"}
                       </span>
                       <time dateTime={application.updatedAt}>
-                        Updated: {application.updatedAt}
+                        Uppdaterad: {application.updatedAt}
                       </time>
                     </div>
                   </article>
