@@ -636,3 +636,21 @@ export {
   type CandidateActivityAnalyticsWorkflowError,
   type CandidateActivityAnalyticsWorkflowResult,
 } from "./candidate-activity-analytics-workflow"
+
+export {
+  createCandidateTimeAnalytics,
+  type CandidateTimeAnalytics,
+  type CandidateTimeAnalyticsPeriod,
+  type CandidateTimeMetric,
+  type CreateCandidateTimeAnalyticsInput,
+  type CandidateTimeAnalyticsErrorCode,
+  type CandidateTimeAnalyticsError,
+  type CandidateTimeAnalyticsResult,
+} from "./candidate-time-analytics"
+
+export {
+  createCandidateTimeAnalyticsWorkflow,
+  type CandidateTimeAnalyticsWorkflow,
+  type CandidateTimeAnalyticsWorkflowError,
+  type CandidateTimeAnalyticsWorkflowResult,
+} from "./candidate-time-analytics-workflow"
