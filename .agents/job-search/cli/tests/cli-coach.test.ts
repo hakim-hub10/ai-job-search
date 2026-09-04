@@ -81,4 +81,187 @@ describe("Phase 7.3 coach CLI", () => {
     await expect(coachCommand(["report", "--coach-dir", directory, "--application-repository", applicationPath, "--candidate-id", "candidate-a", "--start-at", "2026-01-01T00:00:00.000Z", "--end-at", "2026-02-01T00:00:00.000Z", "--format", "xml"])).rejects.toBeInstanceOf(CliUsageError)
     await expect(coachCommand(["report", "--coach-dir", directory, "--application-repository", applicationPath, "--candidate-id", "candidate-a", "--start-at", "2026-01-01T00:00:00.000Z", "--end-at", "2026-02-01T00:00:00.000Z", "--output", "report.json"])).rejects.toBeInstanceOf(CliUsageError)
   })
+
+  it("returns candidate outcome, activity, and time analytics as one JSON result", async () => {
+    const directory = await fixture()
+    const applicationPath = await applicationFixture(directory)
+
+    await coachCommand([
+      "candidates", "create",
+      "--coach-dir", directory,
+      "--candidate-id", "candidate-a",
+      "--name", "Alex",
+      "--created-at", "2026-01-01T00:00:00.000Z",
+    ])
+
+    await coachCommand([
+      "associations", "create",
+      "--coach-dir", directory,
+      "--application-repository", applicationPath,
+      "--candidate-id", "candidate-a",
+      "--application-id", "application-1",
+      "--created-at", "2026-01-02T00:00:00.000Z",
+    ])
+
+    const lines: string[] = []
+    const originalLog = console.log
+    console.log = (...values: unknown[]) => lines.push(values.join(" "))
+
+    try {
+      expect(await coachCommand([
+        "analytics", "candidate",
+        "--coach-dir", directory,
+        "--application-repository", applicationPath,
+        "--candidate-id", "candidate-a",
+        "--start-at", "2026-01-01T00:00:00.000Z",
+        "--end-at", "2026-02-01T00:00:00.000Z",
+        "--as-of", "2026-03-01T00:00:00.000Z",
+      ])).toBe(0)
+    } finally {
+      console.log = originalLog
+    }
+
+    const json = JSON.parse(lines.join("\n"))
+
+    expect(json.outcome.candidateId).toBe("candidate-a")
+    expect(json.activity.candidateId).toBe("candidate-a")
+    expect(json.time.candidateId).toBe("candidate-a")
+
+    expect(json.outcome.period).toMatchObject({
+      startAt: "2026-01-01T00:00:00.000Z",
+      endAt: "2026-02-01T00:00:00.000Z",
+    })
+
+    expect(json.time.asOf).toBe("2026-03-01T00:00:00.000Z")
+    expect(json.outcome.applications.total).toBe(1)
+  })
+
+  it("returns coach portfolio analytics through the existing portfolio workflow", async () => {
+    const directory = await fixture()
+    const applicationPath = await applicationFixture(directory)
+
+    await coachCommand([
+      "candidates", "create",
+      "--coach-dir", directory,
+      "--candidate-id", "candidate-a",
+      "--name", "Alex",
+      "--created-at", "2026-01-01T00:00:00.000Z",
+    ])
+
+    await coachCommand([
+      "candidates", "create",
+      "--coach-dir", directory,
+      "--candidate-id", "candidate-b",
+      "--name", "Sam",
+      "--created-at", "2026-01-01T00:00:00.000Z",
+    ])
+
+    await coachCommand([
+      "associations", "create",
+      "--coach-dir", directory,
+      "--application-repository", applicationPath,
+      "--candidate-id", "candidate-a",
+      "--application-id", "application-1",
+      "--created-at", "2026-01-02T00:00:00.000Z",
+    ])
+
+    const lines: string[] = []
+    const originalLog = console.log
+    console.log = (...values: unknown[]) => lines.push(values.join(" "))
+
+    try {
+      expect(await coachCommand([
+        "analytics", "portfolio",
+        "--coach-dir", directory,
+        "--application-repository", applicationPath,
+        "--start-at", "2026-01-01T00:00:00.000Z",
+        "--end-at", "2026-02-01T00:00:00.000Z",
+        "--as-of", "2026-03-01T00:00:00.000Z",
+      ])).toBe(0)
+    } finally {
+      console.log = originalLog
+    }
+
+    const json = JSON.parse(lines.join("\n"))
+
+    expect(json.asOf).toBe("2026-03-01T00:00:00.000Z")
+    expect(json.candidates.total).toBe(2)
+    expect(json.candidates.withApplications).toBe(1)
+    expect(json.applications.total).toBe(1)
+  })
+
+  it("supports an empty analytics portfolio", async () => {
+    const directory = await fixture()
+    const applicationPath = join(directory, "applications.json")
+
+    const lines: string[] = []
+    const originalLog = console.log
+    console.log = (...values: unknown[]) => lines.push(values.join(" "))
+
+    try {
+      expect(await coachCommand([
+        "analytics", "portfolio",
+        "--coach-dir", directory,
+        "--application-repository", applicationPath,
+        "--start-at", "2026-01-01T00:00:00.000Z",
+        "--end-at", "2026-02-01T00:00:00.000Z",
+        "--as-of", "2026-03-01T00:00:00.000Z",
+      ])).toBe(0)
+    } finally {
+      console.log = originalLog
+    }
+
+    const json = JSON.parse(lines.join("\n"))
+    expect(json.candidates.total).toBe(0)
+    expect(json.applications.total).toBe(0)
+  })
+
+  it("rejects invalid analytics input and unknown analytics scope", async () => {
+    const directory = await fixture()
+    const applicationPath = await applicationFixture(directory)
+
+    await expect(
+      coachCommand(["analytics", "unknown", "--coach-dir", directory]),
+    ).rejects.toBeInstanceOf(CliUsageError)
+
+    await expect(
+      coachCommand([
+        "analytics", "candidate",
+        "--coach-dir", directory,
+        "--application-repository", applicationPath,
+        "--candidate-id", "candidate-a",
+        "--start-at", "2026-01-01T00:00:00.000Z",
+        "--end-at", "2026-02-01T00:00:00.000Z",
+      ]),
+    ).rejects.toBeInstanceOf(CliUsageError)
+
+    await expect(
+      coachCommand([
+        "analytics", "candidate",
+        "--coach-dir", directory,
+        "--application-repository", applicationPath,
+        "--candidate-id", "missing-candidate",
+        "--start-at", "2026-01-01T00:00:00.000Z",
+        "--end-at", "2026-02-01T00:00:00.000Z",
+        "--as-of", "2026-03-01T00:00:00.000Z",
+      ]),
+    ).rejects.toBeInstanceOf(CliInputError)
+  })
+
+  it("includes analytics commands in coach help", () => {
+    const lines: string[] = []
+    const originalLog = console.log
+    console.log = (...values: unknown[]) => lines.push(values.join(" "))
+
+    try {
+      expect(coachHelp()).toBe(0)
+    } finally {
+      console.log = originalLog
+    }
+
+    const help = lines.join("\n")
+    expect(help).toContain("career-agent coach analytics candidate")
+    expect(help).toContain("career-agent coach analytics portfolio")
+  })
+
 })

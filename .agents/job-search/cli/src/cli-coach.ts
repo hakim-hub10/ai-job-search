@@ -14,11 +14,15 @@ import { createFileApplicationRepository } from "./application-file-repository"
 import { resolveCoachRepositoryPaths } from "./coach-cli-paths"
 import { createCandidateActivityReportWorkflow } from "./candidate-activity-report-workflow"
 import { renderCandidateActivityReport, type CandidateActivityReportRenderFormat } from "./candidate-activity-report-rendering"
+import { createCandidateOutcomeAnalyticsWorkflow } from "./candidate-outcome-analytics-workflow"
+import { createCandidateActivityAnalyticsWorkflow } from "./candidate-activity-analytics-workflow"
+import { createCandidateTimeAnalyticsWorkflow } from "./candidate-time-analytics-workflow"
+import { createCoachPortfolioAnalyticsWorkflow } from "./coach-portfolio-analytics-workflow"
 
 type CliArgs = Record<string, string | boolean>
 
 const USAGE = {
-  root: "career-agent coach <candidates|associations|overview|operational-overview|follow-ups|notes|goals|activities> [options]",
+  root: "career-agent coach <candidates|associations|report|overview|operational-overview|follow-ups|notes|goals|activities|analytics> [options]",
   candidates: "career-agent coach candidates <list|show|create> --coach-dir <path> [options]",
   associations: "career-agent coach associations create --coach-dir <path> --application-repository <path> --candidate-id <id> --application-id <id> --created-at <UTC-ISO>",
   report: "career-agent coach report --coach-dir <path> --application-repository <path> --candidate-id <id> --start-at <UTC-ISO> --end-at <UTC-ISO> [--format <json|csv|markdown>]",
@@ -28,6 +32,8 @@ const USAGE = {
   notes: "career-agent coach notes <list|create|update> --coach-dir <path> [options]",
   goals: "career-agent coach goals <list|create|transition> --coach-dir <path> [options]",
   activities: "career-agent coach activities <list|create|transition> --coach-dir <path> [options]",
+  analyticsCandidate: "career-agent coach analytics candidate --coach-dir <path> --application-repository <path> --candidate-id <id> --start-at <UTC-ISO> --end-at <UTC-ISO> --as-of <UTC-ISO>",
+  analyticsPortfolio: "career-agent coach analytics portfolio --coach-dir <path> --application-repository <path> --start-at <UTC-ISO> --end-at <UTC-ISO> --as-of <UTC-ISO>",
 } as const
 
 function parseArgs(argv: string[]): CliArgs {
@@ -157,6 +163,116 @@ async function reportCommand(argv: string[]): Promise<number> {
   return 0
 }
 
+async function analyticsCommand(argv: string[]): Promise<number> {
+  const scope = argv[0]
+  if (scope !== "candidate" && scope !== "portfolio") {
+    throw new CliUsageError(
+      "Expected coach analytics candidate or portfolio.",
+      USAGE.analyticsCandidate,
+    )
+  }
+
+  const usage =
+    scope === "candidate"
+      ? USAGE.analyticsCandidate
+      : USAGE.analyticsPortfolio
+
+  const allowed =
+    scope === "candidate"
+      ? [
+          "coach-dir",
+          "application-repository",
+          "candidate-id",
+          "start-at",
+          "end-at",
+          "as-of",
+        ]
+      : [
+          "coach-dir",
+          "application-repository",
+          "start-at",
+          "end-at",
+          "as-of",
+        ]
+
+  validate(argv.slice(1), allowed, usage)
+
+  const args = parseArgs(argv.slice(1))
+  const repos = repositories(required(args, "coach-dir", usage))
+  const applications = createFileApplicationRepository(
+    required(args, "application-repository", usage),
+  )
+
+  const period = {
+    startAt: required(args, "start-at", usage),
+    endAt: required(args, "end-at", usage),
+  }
+
+  const asOf = required(args, "as-of", usage)
+
+  if (scope === "portfolio") {
+    const workflow = createCoachPortfolioAnalyticsWorkflow(
+      repos.candidates,
+      applications,
+      repos.associations,
+      repos.followUps,
+      repos.operations,
+    )
+
+    const result = await workflow.getCoachPortfolioAnalytics(period, asOf)
+    return result.ok ? output(result.value) : workflowError(result.error)
+  }
+
+  const candidateId = required(args, "candidate-id", usage)
+
+  const outcomeWorkflow = createCandidateOutcomeAnalyticsWorkflow(
+    repos.candidates,
+    applications,
+    repos.associations,
+  )
+
+  const activityWorkflow = createCandidateActivityAnalyticsWorkflow(
+    repos.candidates,
+    applications,
+    repos.associations,
+    repos.followUps,
+    repos.operations,
+  )
+
+  const timeWorkflow = createCandidateTimeAnalyticsWorkflow(
+    repos.candidates,
+    applications,
+    repos.associations,
+    repos.followUps,
+    repos.operations,
+  )
+
+  const outcome = await outcomeWorkflow.getCandidateOutcomeAnalytics(
+    candidateId,
+    period,
+  )
+  if (!outcome.ok) return workflowError(outcome.error)
+
+  const activity = await activityWorkflow.getCandidateActivityAnalytics(
+    candidateId,
+    period,
+  )
+  if (!activity.ok) return workflowError(activity.error)
+
+  const time = await timeWorkflow.getCandidateTimeAnalytics(
+    candidateId,
+    period,
+    asOf,
+  )
+  if (!time.ok) return workflowError(time.error)
+
+  return output({
+    outcome: outcome.value,
+    activity: activity.value,
+    time: time.value,
+  })
+}
+
 async function followUpsCommand(argv: string[]): Promise<number> {
   const action = argv[0]; if (action !== "list" && action !== "create" && action !== "complete") throw new CliUsageError("Expected coach follow-ups list, create, or complete.", USAGE.followUps)
   const allowed = action === "list" ? ["coach-dir", "candidate-id"] : action === "create" ? ["coach-dir", "application-repository", "candidate-id", "application-id", "follow-up-id", "due-at", "created-at", "updated-at", "completed-at"] : ["coach-dir", "candidate-id", "follow-up-id", "completed-at"]
@@ -202,6 +318,7 @@ export async function coachCommand(argv: string[]): Promise<number> {
   if (resource === "candidates") return candidatesCommand(argv.slice(1))
   if (resource === "associations") return associationsCommand(argv.slice(1))
   if (resource === "report") return reportCommand(argv.slice(1))
+  if (resource === "analytics") return analyticsCommand(argv.slice(1))
   if (resource === "overview") return overviewCommand(argv.slice(1), false)
   if (resource === "operational-overview") return overviewCommand(argv.slice(1), true)
   if (resource === "follow-ups") return followUpsCommand(argv.slice(1))
@@ -210,5 +327,5 @@ export async function coachCommand(argv: string[]): Promise<number> {
 }
 
 export function coachHelp(): number {
-  console.log([USAGE.root, USAGE.candidates, USAGE.associations, USAGE.report, USAGE.overview, USAGE.operationalOverview, USAGE.followUps, USAGE.notes, USAGE.goals, USAGE.activities].join("\n")); return 0
+  console.log([USAGE.root, USAGE.candidates, USAGE.associations, USAGE.report, USAGE.overview, USAGE.operationalOverview, USAGE.followUps, USAGE.notes, USAGE.goals, USAGE.activities, USAGE.analyticsCandidate, USAGE.analyticsPortfolio].join("\n")); return 0
 }
