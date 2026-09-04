@@ -617,3 +617,22 @@ export {
   type CandidateOutcomeAnalyticsWorkflowError,
   type CandidateOutcomeAnalyticsWorkflowResult,
 } from "./candidate-outcome-analytics-workflow"
+
+export {
+  createCandidateActivityAnalytics,
+  type CandidateActivityAnalytics,
+  type CandidateActivityAnalyticsPeriod,
+  type CandidateActivityConversionMetric,
+  type CandidateActivityAnalyticsCounts,
+  type CreateCandidateActivityAnalyticsInput,
+  type CandidateActivityAnalyticsErrorCode,
+  type CandidateActivityAnalyticsError,
+  type CandidateActivityAnalyticsResult,
+} from "./candidate-activity-analytics"
+
+export {
+  createCandidateActivityAnalyticsWorkflow,
+  type CandidateActivityAnalyticsWorkflow,
+  type CandidateActivityAnalyticsWorkflowError,
+  type CandidateActivityAnalyticsWorkflowResult,
+} from "./candidate-activity-analytics-workflow"
