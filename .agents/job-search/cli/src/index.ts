@@ -598,3 +598,22 @@ export {
   type LearningPlanOptions,
   type PrioritizedSkillGap,
 } from "./learning-plans"
+
+export {
+  createCandidateOutcomeAnalytics,
+  type CandidateOutcomeAnalytics,
+  type CandidateOutcomeAnalyticsPeriod,
+  type CandidateOutcomeConversionMetric,
+  type CandidateOutcomeApplicationCounts,
+  type CreateCandidateOutcomeAnalyticsInput,
+  type CandidateOutcomeAnalyticsErrorCode,
+  type CandidateOutcomeAnalyticsError,
+  type CandidateOutcomeAnalyticsResult,
+} from "./candidate-outcome-analytics"
+
+export {
+  createCandidateOutcomeAnalyticsWorkflow,
+  type CandidateOutcomeAnalyticsWorkflow,
+  type CandidateOutcomeAnalyticsWorkflowError,
+  type CandidateOutcomeAnalyticsWorkflowResult,
+} from "./candidate-outcome-analytics-workflow"
