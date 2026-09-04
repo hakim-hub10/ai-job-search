@@ -654,3 +654,23 @@ export {
   type CandidateTimeAnalyticsWorkflowError,
   type CandidateTimeAnalyticsWorkflowResult,
 } from "./candidate-time-analytics-workflow"
+
+
+export {
+  createCoachPortfolioAnalytics,
+  type CoachPortfolioAnalytics,
+  type CoachPortfolioAnalyticsPeriod,
+  type CoachPortfolioCandidateCounts,
+  type CoachPortfolioApplicationCounts,
+  type CreateCoachPortfolioAnalyticsInput,
+  type CoachPortfolioAnalyticsErrorCode,
+  type CoachPortfolioAnalyticsError,
+  type CoachPortfolioAnalyticsResult,
+} from "./coach-portfolio-analytics"
+
+export {
+  createCoachPortfolioAnalyticsWorkflow,
+  type CoachPortfolioAnalyticsWorkflow,
+  type CoachPortfolioAnalyticsWorkflowError,
+  type CoachPortfolioAnalyticsWorkflowResult,
+} from "./coach-portfolio-analytics-workflow"
