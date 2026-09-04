@@ -51,6 +51,10 @@ export default async function CoachPage() {
           <Link href="/reports" className={styles.navItem}>
             Reports
           </Link>
+
+          <Link href="/analytics" className={styles.navItem}>
+            Analytics
+          </Link>
         </nav>
       </aside>
 

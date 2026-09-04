@@ -28,6 +28,7 @@ export default async function CandidatesPage() {
           <Link href="/applications">Applications</Link>
           <Link href="/coach">Coach</Link>
           <Link href="/reports">Reports</Link>
+          <Link href="/analytics">Analytics</Link>
         </nav>
 
         <div className={styles.sidebarFooter}>

@@ -28,6 +28,7 @@ export default async function ReportsPage() {
           <Link className={styles.active} href="/reports">
             Reports
           </Link>
+          <Link href="/analytics">Analytics</Link>
         </nav>
 
         <div className={styles.sidebarFooter}>
