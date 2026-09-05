@@ -26,12 +26,19 @@ describe("portable built-in source registration", () => {
       "linkedin",
       "freehire",
       "jobtech",
+      "jobadlinks",
     ])
   })
 
   it("selects JobTech explicitly without enabling other default sources", () => {
     expect(resolveBuiltInSourceAdapters(["jobtech"]).map((adapter) => adapter.name)).toEqual([
       "jobtech",
+    ])
+  })
+
+  it("selects JobAd Links explicitly without enabling other default sources", () => {
+    expect(resolveBuiltInSourceAdapters(["jobadlinks"]).map((adapter) => adapter.name)).toEqual([
+      "jobadlinks",
     ])
   })
 

@@ -40,6 +40,7 @@ function formatSourceName(source: string): string {
     linkedin: "LinkedIn",
     freehire: "FreeHire",
     jobtech: "Platsbanken",
+    jobadlinks: "JobAd Links",
     jobindex: "Jobindex",
     jobnet: "Jobnet",
     jobbank: "Jobbank",

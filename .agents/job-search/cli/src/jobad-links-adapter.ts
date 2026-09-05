@@ -7,7 +7,7 @@ import type {
 import { normalizeJob } from "./utils"
 import { resolveMunicipalityConceptId } from "./jobtech-taxonomy"
 
-const JOBTECH_SEARCH_URL = "https://jobsearch.api.jobtechdev.se/search"
+const JOBAD_LINKS_SEARCH_URL = "https://links.api.jobtechdev.se/joblinks"
 
 type FetchLike = typeof fetch
 
@@ -20,7 +20,13 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 function asString(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null
 }
-export function jobTechHitToNormalizedJob(value: unknown): NormalizedJob | null {
+
+function uniqueStrings(values: Array<string | null>): string[] {
+  return [...new Set(values.filter((value): value is string => Boolean(value)))]
+}
+export function jobAdLinksHitToNormalizedJob(
+  value: unknown,
+): NormalizedJob | null {
   const hit = asRecord(value)
   if (!hit) return null
 
@@ -29,48 +35,75 @@ export function jobTechHitToNormalizedJob(value: unknown): NormalizedJob | null 
   if (!id || !headline) return null
 
   const employer = asRecord(hit.employer)
-  const address = asRecord(hit.workplace_address)
-  const application = asRecord(hit.application_details)
-  const description = asRecord(hit.description)
-  const employmentType = asRecord(hit.employment_type)
-  const workplaceModel = asRecord(hit.workplace_model)
-  const occupation = asRecord(hit.occupation)
+  const occupationGroup = asRecord(hit.occupation_group)
 
-  const city =
-    asString(address?.municipality) ??
-    asString(address?.city) ??
-    asString(address?.region)
+  const addresses = Array.isArray(hit.workplace_addresses)
+    ? hit.workplace_addresses.map(asRecord).filter(
+        (address): address is Record<string, unknown> => address !== null,
+      )
+    : []
+
+  const municipalities = uniqueStrings(
+    addresses.map((address) => asString(address.municipality)),
+  )
+
+  const regions = uniqueStrings(
+    addresses.map((address) => asString(address.region)),
+  )
+
+  const countries = uniqueStrings(
+    addresses.map((address) => asString(address.country)),
+  )
+
+  const location =
+    municipalities.length > 0
+      ? municipalities.join(", ")
+      : regions.length > 0
+        ? regions.join(", ")
+        : null
+
+  const sourceLinks = Array.isArray(hit.source_links)
+    ? hit.source_links.map(asRecord).filter(
+        (link): link is Record<string, unknown> => link !== null,
+      )
+    : []
+
+  const urls = uniqueStrings(
+    sourceLinks.map((link) => asString(link.url)),
+  )
+
+  const primaryUrl = urls[0] ?? null
 
   return normalizeJob({
     id,
     title: headline,
     company: asString(employer?.name),
-    location: city,
-    country: asString(address?.country),
-    url: asString(hit.webpage_url),
-    applyUrl: asString(application?.url) ?? asString(hit.webpage_url),
-    source: "jobtech",
+    location,
+    country: countries.length > 0 ? countries.join(", ") : null,
+    url: primaryUrl,
+    applyUrl: primaryUrl,
+    source: "jobadlinks",
     sourceId: id,
     date: asString(hit.publication_date),
-    employmentType: asString(employmentType?.label),
-    remote: asString(workplaceModel?.label),
-    description: asString(description?.text),
-    salary: asString(hit.salary_description),
+    employmentType: null,
+    remote: null,
+    description: asString(hit.brief),
+    salary: null,
     skills: [],
     seniority: null,
-    category: asString(occupation?.label),
+    category: asString(occupationGroup?.label),
   })
 }
 
-export function createJobTechAdapter(
+export function createJobAdLinksAdapter(
   fetchImpl: FetchLike = fetch,
 ): JobSourceAdapter {
   return {
-    name: "jobtech",
+    name: "jobadlinks",
 
     async search(options: UnifiedSearchOptions): Promise<SourceSearchResult> {
       try {
-        const url = new URL(JOBTECH_SEARCH_URL)
+        const url = new URL(JOBAD_LINKS_SEARCH_URL)
 
         const query = options.query?.trim()
         const location = options.location?.trim()
@@ -108,8 +141,8 @@ export function createJobTechAdapter(
           return {
             jobs: [],
             status: "error",
-            source: "jobtech",
-            error: `JobTech request failed with HTTP ${response.status}`,
+            source: "jobadlinks",
+            error: `JobAd Links request failed with HTTP ${response.status}`,
           }
         }
 
@@ -118,19 +151,19 @@ export function createJobTechAdapter(
         const hits = Array.isArray(root?.hits) ? root.hits : []
 
         const jobs = hits
-          .map(jobTechHitToNormalizedJob)
+          .map(jobAdLinksHitToNormalizedJob)
           .filter((job): job is NormalizedJob => job !== null)
 
         return {
           jobs,
           status: "ok",
-          source: "jobtech",
+          source: "jobadlinks",
         }
       } catch (error) {
         return {
           jobs: [],
           status: "error",
-          source: "jobtech",
+          source: "jobadlinks",
           error: error instanceof Error ? error.message : String(error),
         }
       }

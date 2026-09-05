@@ -1,8 +1,9 @@
-import { describe, expect, test } from "bun:test"
+import { beforeEach, describe, expect, test } from "bun:test"
 import {
   createJobTechAdapter,
   jobTechHitToNormalizedJob,
 } from "../src/jobtech-adapter"
+import { clearMunicipalityCacheForTests } from "../src/jobtech-taxonomy"
 
 const sampleHit = {
   id: "31354762",
@@ -37,6 +38,10 @@ const sampleHit = {
 }
 
 describe("JobTech adapter", () => {
+  beforeEach(() => {
+    clearMunicipalityCacheForTests()
+  })
+
   test("normalizes a JobTech hit", () => {
     const job = jobTechHitToNormalizedJob(sampleHit)
 

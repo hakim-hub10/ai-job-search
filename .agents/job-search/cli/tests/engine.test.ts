@@ -77,6 +77,44 @@ describe("dedupeJobs", () => {
     expect(dedupeJobs([a, b, c])).toEqual([a])
   })
 
+  it("deduplicates JobTech and JobAd Links only when they share exact identity", () => {
+    const jobTech = job("31412062", {
+      source: "jobtech",
+      sourceId: "31412062",
+      title: "Customer Support Agent till Infobric Group // Jönköping",
+      company: "Oddwork Sweden AB",
+      location: "Jönköping",
+      url: "https://arbetsformedlingen.se/platsbanken/annonser/31412062",
+    })
+
+    const samePlatsbankenAd = job("jobadlinks-copy", {
+      source: "jobadlinks",
+      sourceId: "b37b75b24014a84830bd54f55d0bc8c4",
+      title: "Customer Support Agent till Infobric Group // Jönköping",
+      company: "Oddwork Sweden AB",
+      location: "Jönköping",
+      url: "https://arbetsformedlingen.se/platsbanken/annonser/31412062",
+    })
+
+    const similarButNotExact = job("jobadlinks-related", {
+      source: "jobadlinks",
+      sourceId: "886b2782312f37c4779c44417fff2fab",
+      title: "IT-projektledare för kommun",
+      company: "Intenso Interim",
+      location: "Stockholm, Göteborg, Jönköping, Sundsvall",
+      url: "https://ingenjorsjobb.se/jobs/517335236-it-projektledare-for-kommun",
+    })
+
+    expect(dedupeJobs([
+      jobTech,
+      samePlatsbankenAd,
+      similarButNotExact,
+    ])).toEqual([
+      jobTech,
+      similarButNotExact,
+    ])
+  })
+
   it("is deterministic, preserves first-seen ordering, and does not mutate inputs", () => {
     const first = job("first")
     const unique = job("unique", { title: "Warehouse Planner", company: "Other", location: "Lund" })

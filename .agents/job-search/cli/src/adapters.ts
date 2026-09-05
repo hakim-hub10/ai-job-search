@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url"
 import type { JobDetailEvidence, JobDetailOutcome, JobSourceAdapter, NormalizedJob, SourceName, UnifiedSearchOptions } from "./types"
 import { asOptionalString, normalizeJob } from "./utils"
 import { createJobTechAdapter } from "./jobtech-adapter"
+import { createJobAdLinksAdapter } from "./jobad-links-adapter"
 
 export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue }
 
@@ -18,7 +19,7 @@ export class SourceSelectionError extends Error {
   readonly unknownSourceIds: readonly string[]
 
   constructor(unknownSourceIds: readonly string[]) {
-    const available = BUILT_IN_SOURCE_REGISTRY.map((source) => source.id).join(", ")
+    const available = SUPPORTED_SOURCE_IDS.join(", ")
     super(`Unknown source: ${unknownSourceIds.join(", ")}. Available sources: ${available}.`)
     this.name = "SourceSelectionError"
     this.unknownSourceIds = Object.freeze([...unknownSourceIds])
@@ -40,6 +41,12 @@ const BUILT_IN_SOURCE_REGISTRY: readonly BuiltInSourceDefinition[] = Object.free
   ...source,
   scriptPath: resolve(repositoryRoot, source.relativeScriptPath),
 })))
+
+const SUPPORTED_SOURCE_IDS: readonly SourceName[] = Object.freeze([
+  ...BUILT_IN_SOURCE_REGISTRY.map((source) => source.id),
+  "jobtech",
+  "jobadlinks",
+])
 
 export async function runBunJsonCommand(command: string[], cwd?: string, signal?: AbortSignal): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   const proc = Bun.spawn({
@@ -310,10 +317,7 @@ export function getBuiltInSourceDefinitions(): readonly BuiltInSourceDefinition[
 export function resolveBuiltInSourceAdapters(requestedSources?: readonly string[]): JobSourceAdapter[] {
   const requested = requestedSources?.length ? new Set(requestedSources) : undefined
   if (requested) {
-    const known = new Set<string>([
-      ...BUILT_IN_SOURCE_REGISTRY.map((source) => source.id),
-      "jobtech",
-    ])
+    const known = new Set<string>(SUPPORTED_SOURCE_IDS)
     const unknown = [...requested].filter((source) => !known.has(source))
     if (unknown.length > 0) throw new SourceSelectionError(unknown)
   }
@@ -324,6 +328,9 @@ export function resolveBuiltInSourceAdapters(requestedSources?: readonly string[
   const includeJobTech = requested ? requested.has("jobtech") : true
   if (includeJobTech) adapters.push(createJobTechAdapter())
 
+  const includeJobAdLinks = requested ? requested.has("jobadlinks") : true
+  if (includeJobAdLinks) adapters.push(createJobAdLinksAdapter())
+
   return adapters
 }
 
@@ -331,5 +338,6 @@ export function registerBuiltInSourceAdapters(): Record<string, JobSourceAdapter
   return Object.fromEntries([
     ...BUILT_IN_SOURCE_REGISTRY.map((source) => [source.id, createSourceAdapter(source.id, [source.scriptPath], repositoryRoot)] as const),
     ["jobtech", createJobTechAdapter()] as const,
+    ["jobadlinks", createJobAdLinksAdapter()] as const,
   ])
 }
