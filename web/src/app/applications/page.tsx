@@ -44,7 +44,7 @@ export default async function ApplicationsPage() {
 
         <nav className={styles.nav}>
           <Link href="/">Översikt</Link>
-          <span title="Kommer snart">Jobb</span>
+          <Link href="/jobs">Jobb</Link>
           <Link href="/candidates">Kandidater</Link>
           <Link className={styles.active} href="/applications">
             Ansökningar

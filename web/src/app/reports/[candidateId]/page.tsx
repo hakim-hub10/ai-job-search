@@ -183,7 +183,7 @@ export default async function CandidateReportPage({
 
         <nav className={styles.nav}>
           <Link href="/">Översikt</Link>
-          <span title="Coming soon">Jobs</span>
+          <Link href="/jobs">Jobb</Link>
           <Link href="/candidates">Kandidater</Link>
           <Link href="/applications">Ansökningar</Link>
           <Link href="/coach">Jobbcoach</Link>

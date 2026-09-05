@@ -39,7 +39,7 @@ export default async function Home() {
           <Link className={styles.active} href="/">
             Översikt
           </Link>
-          <span title="Kommer snart">Jobb</span>
+          <Link href="/jobs">Jobb</Link>
           <Link href="/candidates">Kandidater</Link>
           <Link href="/applications">Ansökningar</Link>
           <Link href="/coach">Jobbcoach</Link>

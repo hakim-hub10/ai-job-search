@@ -86,7 +86,7 @@ export default async function CandidatePage({
           <Link href="/" className={styles.navItem}>
             Översikt
           </Link>
-          <span className={styles.navItem}>Jobs</span>
+          <Link href="/jobs" className={styles.navItem}>Jobb</Link>
           <Link href="/candidates" className={`${styles.navItem} ${styles.active}`}>
             Kandidater
           </Link>

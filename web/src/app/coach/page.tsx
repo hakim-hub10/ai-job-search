@@ -31,7 +31,7 @@ export default async function CoachPage() {
             Översikt
           </Link>
 
-          <span className={styles.navItem}>Jobs</span>
+          <Link href="/jobs" className={styles.navItem}>Jobb</Link>
 
           <Link href="/candidates" className={styles.navItem}>
             Kandidater

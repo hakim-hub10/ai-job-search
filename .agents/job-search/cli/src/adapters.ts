@@ -1,4 +1,5 @@
-import { resolve } from "node:path"
+import { dirname, resolve } from "node:path"
+import { fileURLToPath } from "node:url"
 import type { JobDetailEvidence, JobDetailOutcome, JobSourceAdapter, NormalizedJob, SourceName, UnifiedSearchOptions } from "./types"
 import { asOptionalString, normalizeJob } from "./utils"
 
@@ -23,7 +24,8 @@ export class SourceSelectionError extends Error {
   }
 }
 
-const repositoryRoot = resolve(import.meta.dir, "../../../..")
+const moduleDirectory = dirname(fileURLToPath(import.meta.url))
+const repositoryRoot = resolve(moduleDirectory, "../../../..")
 const sourceDefinitions = [
   { id: "linkedin", relativeScriptPath: ".agents/skills/linkedin-search/cli/src/cli.ts", defaultEnabled: true },
   { id: "jobindex", relativeScriptPath: ".agents/skills/jobindex-search/cli/src/cli.ts", defaultEnabled: false },

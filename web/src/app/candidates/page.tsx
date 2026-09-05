@@ -21,7 +21,7 @@ export default async function CandidatesPage() {
 
         <nav className={styles.nav}>
           <Link href="/">Översikt</Link>
-          <span title="Kommer snart">Jobb</span>
+          <Link href="/jobs">Jobb</Link>
           <Link className={styles.active} href="/candidates">
             Kandidater
           </Link>
