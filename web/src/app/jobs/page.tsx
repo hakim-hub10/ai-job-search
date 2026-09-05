@@ -39,6 +39,7 @@ function formatSourceName(source: string): string {
   const labels: Record<string, string> = {
     linkedin: "LinkedIn",
     freehire: "FreeHire",
+    jobtech: "Platsbanken",
     jobindex: "Jobindex",
     jobnet: "Jobnet",
     jobbank: "Jobbank",

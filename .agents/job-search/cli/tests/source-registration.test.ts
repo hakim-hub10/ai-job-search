@@ -22,7 +22,23 @@ describe("portable built-in source registration", () => {
   })
 
   it("selects only default-enabled sources when none are explicitly requested", () => {
-    expect(resolveBuiltInSourceAdapters().map((adapter) => adapter.name)).toEqual(["linkedin", "freehire"])
+    expect(resolveBuiltInSourceAdapters().map((adapter) => adapter.name)).toEqual([
+      "linkedin",
+      "freehire",
+      "jobtech",
+    ])
+  })
+
+  it("selects JobTech explicitly without enabling other default sources", () => {
+    expect(resolveBuiltInSourceAdapters(["jobtech"]).map((adapter) => adapter.name)).toEqual([
+      "jobtech",
+    ])
+  })
+
+  it("keeps an explicit legacy source isolated from JobTech", () => {
+    expect(resolveBuiltInSourceAdapters(["linkedin"]).map((adapter) => adapter.name)).toEqual([
+      "linkedin",
+    ])
   })
 
   it("selects exactly one or multiple explicit sources in canonical registry order", () => {

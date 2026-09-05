@@ -1,4 +1,4 @@
-export type SourceName = "linkedin" | "jobindex" | "jobnet" | "jobbank" | "jobdanmark" | "freehire"
+export type SourceName = "linkedin" | "jobindex" | "jobnet" | "jobbank" | "jobdanmark" | "freehire" | "jobtech"
 
 export interface NormalizedJob {
   id: string

@@ -2,6 +2,7 @@ import { dirname, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import type { JobDetailEvidence, JobDetailOutcome, JobSourceAdapter, NormalizedJob, SourceName, UnifiedSearchOptions } from "./types"
 import { asOptionalString, normalizeJob } from "./utils"
+import { createJobTechAdapter } from "./jobtech-adapter"
 
 export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue }
 
@@ -309,17 +310,26 @@ export function getBuiltInSourceDefinitions(): readonly BuiltInSourceDefinition[
 export function resolveBuiltInSourceAdapters(requestedSources?: readonly string[]): JobSourceAdapter[] {
   const requested = requestedSources?.length ? new Set(requestedSources) : undefined
   if (requested) {
-    const known = new Set<string>(BUILT_IN_SOURCE_REGISTRY.map((source) => source.id))
+    const known = new Set<string>([
+      ...BUILT_IN_SOURCE_REGISTRY.map((source) => source.id),
+      "jobtech",
+    ])
     const unknown = [...requested].filter((source) => !known.has(source))
     if (unknown.length > 0) throw new SourceSelectionError(unknown)
   }
-  return BUILT_IN_SOURCE_REGISTRY
+  const adapters = BUILT_IN_SOURCE_REGISTRY
     .filter((source) => requested ? requested.has(source.id) : source.defaultEnabled)
     .map((source) => createSourceAdapter(source.id, [source.scriptPath], repositoryRoot))
+
+  const includeJobTech = requested ? requested.has("jobtech") : true
+  if (includeJobTech) adapters.push(createJobTechAdapter())
+
+  return adapters
 }
 
 export function registerBuiltInSourceAdapters(): Record<string, JobSourceAdapter> {
-  return Object.fromEntries(
-    BUILT_IN_SOURCE_REGISTRY.map((source) => [source.id, createSourceAdapter(source.id, [source.scriptPath], repositoryRoot)]),
-  )
+  return Object.fromEntries([
+    ...BUILT_IN_SOURCE_REGISTRY.map((source) => [source.id, createSourceAdapter(source.id, [source.scriptPath], repositoryRoot)] as const),
+    ["jobtech", createJobTechAdapter()] as const,
+  ])
 }
