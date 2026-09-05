@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { loadCandidateOperationalOverview } from "@/lib/candidate-overview";
 import { loadCandidateFollowUps } from "@/lib/candidate-follow-ups";
+import { loadCandidateProfile } from "@/lib/candidate-profiles";
 import {
   completeFollowUpAction,
   createActivityAction,
@@ -12,6 +13,7 @@ import {
   transitionGoalAction,
   updateNoteAction,
 } from "./actions";
+import { saveCandidateProfileAction } from "./profile-actions";
 import { loadCandidateNotes } from "@/lib/candidate-notes";
 import styles from "../../page.module.css";
 
@@ -70,6 +72,7 @@ export default async function CandidatePage({
   const result = await loadCandidateOperationalOverview(candidateId);
   const followUpResult = await loadCandidateFollowUps(candidateId);
   const noteResult = await loadCandidateNotes(candidateId);
+  const profileResult = await loadCandidateProfile(candidateId);
 
   const candidate = result.candidate;
   const overview = result.overview;
@@ -151,6 +154,245 @@ export default async function CandidatePage({
                 <span>Skapad: {formatDate(candidate.createdAt)}</span>
                 <span>Uppdaterad: {formatDate(candidate.updatedAt)}</span>
               </div>
+            </section>
+
+            <section className={styles.panel}>
+              <div className={styles.sectionHeading}>
+                <div>
+                  <p className={styles.eyebrow}>Kandidatprofil</p>
+                  <h3>Profil för jobbmatchning</h3>
+                </div>
+              </div>
+
+              {!profileResult.configured ? (
+                <p>COACH_DIR krävs för att kandidatprofilen ska kunna sparas.</p>
+              ) : profileResult.error ? (
+                <section>
+                  <h4>Kandidatprofilen kunde inte laddas</h4>
+                  <p>Ett tekniskt fel uppstod när profilinformationen lästes.</p>
+                </section>
+              ) : (
+                <form action={saveCandidateProfileAction}>
+                  <input
+                    type="hidden"
+                    name="candidateId"
+                    value={candidate.id}
+                  />
+
+                  <div className={styles.dashboardGrid}>
+                    <label>
+                      Yrkesrubrik
+                      <input
+                        type="text"
+                        name="headline"
+                        required
+                        defaultValue={profileResult.profile?.headline ?? ""}
+                        placeholder="Exempel: IT-supporttekniker"
+                      />
+                    </label>
+
+                    <label>
+                      Antal års erfarenhet
+                      <input
+                        type="number"
+                        name="yearsOfExperience"
+                        min="0"
+                        step="0.5"
+                        required
+                        defaultValue={
+                          profileResult.profile?.yearsOfExperience ?? ""
+                        }
+                      />
+                    </label>
+
+                    <label>
+                      Arbetsform
+                      <select
+                        name="workMode"
+                        required
+                        defaultValue={profileResult.profile?.workMode ?? ""}
+                      >
+                        <option value="" disabled>
+                          Välj arbetsform
+                        </option>
+                        <option value="open">Öppen</option>
+                        <option value="onsite">På plats</option>
+                        <option value="hybrid">Hybrid</option>
+                        <option value="remote">Distans</option>
+                      </select>
+                    </label>
+
+                    <label>
+                      <input
+                        type="checkbox"
+                        name="remotePreference"
+                        defaultChecked={
+                          profileResult.profile?.remotePreference ?? false
+                        }
+                      />
+                      Öppen för distansarbete
+                    </label>
+                  </div>
+
+                  <label>
+                    Målroller
+                    <textarea
+                      name="targetRoles"
+                      rows={4}
+                      defaultValue={
+                        profileResult.profile?.targetRoles.join("\n") ?? ""
+                      }
+                      placeholder={"IT Support\nIT Coordinator"}
+                    />
+                  </label>
+
+                  <label>
+                    Önskade orter
+                    <textarea
+                      name="locationPreferences"
+                      rows={4}
+                      defaultValue={
+                        profileResult.profile?.locationPreferences.join("\n") ??
+                        ""
+                      }
+                      placeholder={"Jönköping\nGöteborg"}
+                    />
+                  </label>
+
+                  <label>
+                    Branscher
+                    <textarea
+                      name="preferredIndustries"
+                      rows={4}
+                      defaultValue={
+                        profileResult.profile?.preferredIndustries.join("\n") ??
+                        ""
+                      }
+                      placeholder={"IT\nTeknik"}
+                    />
+                  </label>
+
+                  <fieldset>
+                    <legend>Anställningsformer</legend>
+
+                    {[
+                      ["full-time", "Heltid"],
+                      ["part-time", "Deltid"],
+                      ["contract", "Konsult / kontrakt"],
+                      ["temporary", "Visstid"],
+                      ["internship", "Praktik"],
+                      ["open", "Öppen"],
+                    ].map(([value, label]) => (
+                      <label key={value}>
+                        <input
+                          type="checkbox"
+                          name="preferredEmploymentType"
+                          value={value}
+                          defaultChecked={
+                            profileResult.profile?.preferredEmploymentType.includes(
+                              value as
+                                | "full-time"
+                                | "part-time"
+                                | "contract"
+                                | "temporary"
+                                | "internship"
+                                | "open",
+                            ) ?? false
+                          }
+                        />
+                        {label}
+                      </label>
+                    ))}
+                  </fieldset>
+
+                  <label>
+                    Tekniska kompetenser
+                    <textarea
+                      name="technicalSkills"
+                      rows={6}
+                      defaultValue={
+                        profileResult.profile?.skills.technical.join("\n") ?? ""
+                      }
+                      placeholder={"Microsoft 365\nAzure\nLinux"}
+                    />
+                  </label>
+
+                  <label>
+                    Mjuka kompetenser
+                    <textarea
+                      name="softSkills"
+                      rows={5}
+                      defaultValue={
+                        profileResult.profile?.skills.soft.join("\n") ?? ""
+                      }
+                      placeholder={"Kommunikation\nProblemlösning"}
+                    />
+                  </label>
+
+                  <label>
+                    Certifieringar
+                    <textarea
+                      name="certifications"
+                      rows={5}
+                      defaultValue={
+                        profileResult.profile?.certifications.join("\n") ?? ""
+                      }
+                      placeholder={"CompTIA A+\nAZ-104"}
+                    />
+                  </label>
+
+                  <label>
+                    Språk
+                    <textarea
+                      name="languages"
+                      rows={5}
+                      defaultValue={
+                        profileResult.profile?.languages
+                          .map(
+                            (language) =>
+                              `${language.name} | ${language.level}`,
+                          )
+                          .join("\n") ?? ""
+                      }
+                      placeholder={
+                        "Svenska | Professionell\nEngelska | Professionell"
+                      }
+                    />
+                    <span>
+                      Ett språk per rad i formatet: Språk | Nivå
+                    </span>
+                  </label>
+
+                  <label>
+                    Karriärmål
+                    <textarea
+                      name="careerGoals"
+                      rows={5}
+                      defaultValue={
+                        profileResult.profile?.careerGoals.join("\n") ?? ""
+                      }
+                      placeholder={"Arbeta inom IT-support\nUtvecklas inom cloud"}
+                    />
+                  </label>
+
+                  <label>
+                    Sammanfattning
+                    <textarea
+                      name="summary"
+                      rows={6}
+                      defaultValue={profileResult.profile?.summary ?? ""}
+                      placeholder="Kort professionell sammanfattning"
+                    />
+                  </label>
+
+                  <button
+                    type="submit"
+                    className={styles.secondaryButton}
+                  >
+                    Spara kandidatprofil
+                  </button>
+                </form>
+              )}
             </section>
 
             {!result.applicationRepositoryConfigured ? (
