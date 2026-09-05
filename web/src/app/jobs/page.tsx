@@ -1,5 +1,8 @@
 import Link from "next/link";
 
+import { analyzeJobsForCandidate } from "@/lib/candidate-job-matching";
+import { loadCandidateProfileRepository } from "@/lib/candidate-profiles";
+import { loadCoachCandidates } from "@/lib/coach-candidates";
 import { searchWebJobs } from "@/lib/jobs";
 import styles from "../page.module.css";
 
@@ -7,6 +10,7 @@ export const dynamic = "force-dynamic";
 
 interface JobsPageProps {
   searchParams: Promise<{
+    candidateId?: string;
     query?: string;
     location?: string;
     limit?: string;
@@ -53,9 +57,15 @@ function formatSourceName(source: string): string {
 export default async function JobsPage({ searchParams }: JobsPageProps) {
   const params = await searchParams;
 
+  const candidateId = firstValue(params.candidateId);
   const query = firstValue(params.query);
   const location = firstValue(params.location);
   const limit = parseLimit(params.limit);
+
+  const candidatesResult = await loadCoachCandidates();
+  const selectedCandidate = candidatesResult.candidates.find(
+    (candidate) => candidate.id === candidateId,
+  );
 
   const hasSearch = query.length > 0 || location.length > 0;
 
@@ -64,8 +74,34 @@ export default async function JobsPage({ searchParams }: JobsPageProps) {
         ...(query ? { query } : {}),
         ...(location ? { location } : {}),
         limit,
+        ...(selectedCandidate
+          ? { targetRoles: undefined }
+          : {}),
       })
     : null;
+
+  let matchingResult:
+    | Awaited<ReturnType<typeof analyzeJobsForCandidate>>
+    | null = null;
+
+  if (result?.ok && selectedCandidate) {
+    const profileContext = loadCandidateProfileRepository();
+
+    if (profileContext.configured && profileContext.repository) {
+      matchingResult = await analyzeJobsForCandidate(
+        {
+          candidateId: selectedCandidate.id,
+          jobs: result.jobs,
+        },
+        {
+          profileRepository: profileContext.repository,
+        },
+      );
+    }
+  }
+
+  const rankedJobs =
+    matchingResult?.ok ? matchingResult.analysis.rankedJobs : null;
 
   return (
     <div className={styles.shell}>
@@ -102,7 +138,8 @@ export default async function JobsPage({ searchParams }: JobsPageProps) {
             <p className={styles.eyebrow}>Jobbsökning</p>
             <h1>Hitta jobb</h1>
             <p className={styles.subtitle}>
-              Sök efter relevanta jobb från de anslutna jobbkällorna.
+              Sök efter relevanta jobb och analysera matchningen mot en vald
+              kandidatprofil.
             </p>
           </div>
 
@@ -128,6 +165,18 @@ export default async function JobsPage({ searchParams }: JobsPageProps) {
                 gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
               }}
             >
+              <label>
+                <span>Kandidat</span>
+                <select defaultValue={candidateId} name="candidateId">
+                  <option value="">Ingen kandidat vald</option>
+                  {candidatesResult.candidates.map((candidate) => (
+                    <option key={candidate.id} value={candidate.id}>
+                      {candidate.displayName}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
               <label>
                 <span>Sökord eller roll</span>
                 <input
@@ -165,6 +214,61 @@ export default async function JobsPage({ searchParams }: JobsPageProps) {
           </form>
         </section>
 
+        {!candidatesResult.configured ? (
+          <section className={styles.panel}>
+            <div className={styles.emptyState}>
+              <strong>Jobbcoachens arbetsyta är inte konfigurerad</strong>
+              <p>
+                Jobbsökning fungerar fortfarande, men kandidatmatchning kräver
+                att COACH_DIR är konfigurerad.
+              </p>
+            </div>
+          </section>
+        ) : candidatesResult.error ? (
+          <section className={styles.panel}>
+            <div className={styles.emptyState}>
+              <strong>Kandidaterna kunde inte laddas</strong>
+              <p>Kandidatmatchning är inte tillgänglig just nu.</p>
+            </div>
+          </section>
+        ) : candidateId && !selectedCandidate ? (
+          <section className={styles.panel}>
+            <div className={styles.emptyState}>
+              <strong>Den valda kandidaten finns inte</strong>
+              <p>Välj en kandidat från listan och försök igen.</p>
+            </div>
+          </section>
+        ) : null}
+
+        {result?.ok &&
+        selectedCandidate &&
+        matchingResult &&
+        !matchingResult.ok &&
+        matchingResult.code === "PROFILE_NOT_FOUND" ? (
+          <section className={styles.panel}>
+            <div className={styles.emptyState}>
+              <strong>Kandidatprofil saknas</strong>
+              <p>
+                Lägg till profilinformation för att analysera jobbmatchning för{" "}
+                {selectedCandidate.displayName}.
+              </p>
+            </div>
+          </section>
+        ) : null}
+
+        {result?.ok &&
+        selectedCandidate &&
+        matchingResult &&
+        !matchingResult.ok &&
+        matchingResult.code !== "PROFILE_NOT_FOUND" ? (
+          <section className={styles.panel}>
+            <div className={styles.emptyState}>
+              <strong>Jobbmatchningen kunde inte analyseras</strong>
+              <p>Ett tekniskt fel uppstod när kandidatprofilen analyserades.</p>
+            </div>
+          </section>
+        ) : null}
+
         {!hasSearch ? (
           <section className={styles.panel}>
             <div className={styles.emptyState}>
@@ -193,37 +297,75 @@ export default async function JobsPage({ searchParams }: JobsPageProps) {
             <div className={styles.panelHeader}>
               <div>
                 <p className={styles.eyebrow}>Resultat</p>
-                <h2>{result.jobs.length} relevanta jobb</h2>
+                <h2>
+                  {rankedJobs
+                    ? `${rankedJobs.length} analyserade jobb`
+                    : `${result.jobs.length} relevanta jobb`}
+                </h2>
               </div>
             </div>
 
             <div className={styles.candidateList}>
-              {result.jobs.map((job) => (
-                <article
-                  className={styles.candidateRow}
-                  key={`${job.source}:${job.id}`}
-                >
-                  <div>
-                    <strong>{job.title}</strong>
-                    <p>{job.company ?? "Företag saknas"}</p>
-                  </div>
+              {rankedJobs
+                ? rankedJobs.map((ranked) => {
+                    const job = ranked.job;
 
-                  <div className={styles.candidateMeta}>
-                    <span>{job.location ?? "Plats saknas"}</span>
-                    <span>Källa: {formatSourceName(job.source)}</span>
-
-                    {job.url ? (
-                      <a
-                        href={job.url}
-                        rel="noreferrer"
-                        target="_blank"
+                    return (
+                      <article
+                        className={styles.candidateRow}
+                        key={`${job.source}:${job.id}`}
                       >
-                        Visa jobb
-                      </a>
-                    ) : null}
-                  </div>
-                </article>
-              ))}
+                        <div>
+                          <strong>{job.title}</strong>
+                          <p>{job.company ?? "Företag saknas"}</p>
+                          <p>
+                            Matchningsgrad: <strong>{ranked.score}/100</strong>
+                          </p>
+                        </div>
+
+                        <div className={styles.candidateMeta}>
+                          <span>{job.location ?? "Plats saknas"}</span>
+                          <span>Källa: {formatSourceName(job.source)}</span>
+
+                          {job.url ? (
+                            <a
+                              href={job.url}
+                              rel="noreferrer"
+                              target="_blank"
+                            >
+                              Visa jobb
+                            </a>
+                          ) : null}
+                        </div>
+                      </article>
+                    );
+                  })
+                : result.jobs.map((job) => (
+                    <article
+                      className={styles.candidateRow}
+                      key={`${job.source}:${job.id}`}
+                    >
+                      <div>
+                        <strong>{job.title}</strong>
+                        <p>{job.company ?? "Företag saknas"}</p>
+                      </div>
+
+                      <div className={styles.candidateMeta}>
+                        <span>{job.location ?? "Plats saknas"}</span>
+                        <span>Källa: {formatSourceName(job.source)}</span>
+
+                        {job.url ? (
+                          <a
+                            href={job.url}
+                            rel="noreferrer"
+                            target="_blank"
+                          >
+                            Visa jobb
+                          </a>
+                        ) : null}
+                      </div>
+                    </article>
+                  ))}
             </div>
           </section>
         ) : null}
