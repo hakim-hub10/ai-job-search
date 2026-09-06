@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { loadApplicationDetail } from "@/lib/application-detail";
 import { loadApplicationCandidate } from "@/lib/application-candidate";
+import { loadApplicationDocumentState } from "@/lib/application-documents";
 
 import {
   associateApplicationCandidateAction,
@@ -33,6 +34,10 @@ function formatApplicationStatus(status: string) {
   }
 }
 
+function formatDocumentType(documentType: string) {
+  return documentType === "cv" ? "CV" : "Personligt brev";
+}
+
 const statuses = [
   "saved",
   "preparing",
@@ -54,6 +59,7 @@ export default async function ApplicationDetailPage({
 
   const result = await loadApplicationDetail(decodedId);
   const candidateResult = await loadApplicationCandidate(decodedId);
+  const documentResult = await loadApplicationDocumentState(decodedId);
 
   if (!result.configured) {
     return (
@@ -146,6 +152,42 @@ export default async function ApplicationDetailPage({
             </button>
           </div>
         </form>
+      </section>
+
+      <section style={{ marginTop: 40 }}>
+        <h2>Dokument</h2>
+
+        {!documentResult.ok ? (
+          <p>Dokumentstatus kunde inte laddas just nu.</p>
+        ) : (
+          <>
+            <p>
+              Kandidatprofil: {documentResult.profile
+                ? "Tillgänglig"
+                : documentResult.associationMissing
+                  ? "Kandidatkoppling saknas"
+                  : "Profilinformation saknas"}
+            </p>
+            <p>
+              Dokumentunderlag: {documentResult.profile && !documentResult.associationMissing
+                ? "Redo"
+                : "Saknas"}
+            </p>
+            {(["cv", "coverLetter"] as const).map((documentType) => {
+              const latest = [...documentResult.documents]
+                .filter((document) => document.documentType === documentType)
+                .sort((a, b) => b.version - a.version)[0];
+
+              return (
+                <p key={documentType}>
+                  {formatDocumentType(documentType)}: {latest
+                    ? `Utkast finns (version ${latest.version})`
+                    : "Inte skapat"}
+                </p>
+              );
+            })}
+          </>
+        )}
       </section>
 
       <section style={{ marginTop: 40 }}>
