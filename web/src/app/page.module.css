@@ -669,3 +669,40 @@
     width: 100%;
   }
 }
+
+  .baseCvContent {
+    display: grid;
+    gap: 16px;
+    margin: 20px 0;
+  }
+
+  .baseCvContent section {
+    padding-top: 14px;
+    border-top: 1px solid #eaecf0;
+  }
+
+  .baseCvContent h4 {
+    color: #344054;
+    font-size: 13px;
+  }
+
+  .baseCvContent p {
+    margin-top: 6px;
+    color: #475467;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  .baseCvEditor {
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid #eaecf0;
+  }
+
+  .baseCvEditor summary {
+    width: fit-content;
+    color: #175cd3;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 700;
+  }

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { loadCandidateOperationalOverview } from "@/lib/candidate-overview";
 import { loadCandidateFollowUps } from "@/lib/candidate-follow-ups";
 import { loadCandidateProfile } from "@/lib/candidate-profiles";
+import { loadCandidateBaseCvState } from "@/lib/candidate-base-cv-state";
 import {
   completeFollowUpAction,
   createActivityAction,
@@ -14,6 +15,10 @@ import {
   updateNoteAction,
 } from "./actions";
 import { saveCandidateProfileAction } from "./profile-actions";
+import {
+  createBaseCvAction,
+  updateBaseCvAction,
+} from "./base-cv-actions";
 import { loadCandidateNotes } from "@/lib/candidate-notes";
 import styles from "../../page.module.css";
 
@@ -73,6 +78,7 @@ export default async function CandidatePage({
   const followUpResult = await loadCandidateFollowUps(candidateId);
   const noteResult = await loadCandidateNotes(candidateId);
   const profileResult = await loadCandidateProfile(candidateId);
+  const baseCvResult = await loadCandidateBaseCvState(candidateId);
 
   const candidate = result.candidate;
   const overview = result.overview;
@@ -407,6 +413,179 @@ export default async function CandidatePage({
                     </button>
                   </div>
                 </form>
+              )}
+            </section>
+
+            <section className={styles.panel}>
+              <div className={styles.sectionHeading}>
+                <div>
+                  <p className={styles.eyebrow}>Dokumentgrund</p>
+                  <h3>Grund-CV</h3>
+                </div>
+              </div>
+
+              {!baseCvResult.ok ? (
+                <>
+                  <p>
+                    {baseCvResult.code === "PROFILE_NOT_FOUND"
+                      ? "Kandidatprofil saknas. Lägg till profilinformation innan du skapar ett grund-CV."
+                      : "Grund-CV:t kunde inte laddas just nu."}
+                  </p>
+                </>
+              ) : !baseCvResult.baseCv ? (
+                <>
+                  <p>Grund-CV är inte skapat ännu.</p>
+                  <p>Kandidatprofil: Tillgänglig</p>
+                  <form action={createBaseCvAction}>
+                    <input
+                      type="hidden"
+                      name="candidateId"
+                      value={candidate.id}
+                    />
+                    <button type="submit" className={styles.secondaryButton}>
+                      Skapa grund-CV från kandidatprofil
+                    </button>
+                  </form>
+                </>
+              ) : (
+                <>
+                  <p>
+                    Senast uppdaterat: {formatDate(baseCvResult.baseCv.updatedAt)}
+                  </p>
+
+                  <div className={styles.baseCvContent}>
+                    {baseCvResult.baseCv.visibility.headline ? (
+                      <section>
+                        <h4>Yrkesrubrik</h4>
+                        <p>{baseCvResult.baseCv.headline}</p>
+                      </section>
+                    ) : null}
+
+                    {baseCvResult.baseCv.visibility.summary &&
+                    baseCvResult.baseCv.summary ? (
+                      <section>
+                        <h4>Profil</h4>
+                        <p>{baseCvResult.baseCv.summary}</p>
+                      </section>
+                    ) : null}
+
+                    {baseCvResult.baseCv.visibility.workExperience &&
+                    baseCvResult.baseCv.workExperience.length > 0 ? (
+                      <section>
+                        <h4>Erfarenhet</h4>
+                        {baseCvResult.baseCv.workExperience.map((experience) => (
+                          <p key={`${experience.title}-${experience.company}`}>
+                            <strong>{experience.title}</strong>, {experience.company}
+                            {experience.summary ? `: ${experience.summary}` : ""}
+                          </p>
+                        ))}
+                      </section>
+                    ) : null}
+
+                    {baseCvResult.baseCv.visibility.education &&
+                    baseCvResult.baseCv.education.length > 0 ? (
+                      <section>
+                        <h4>Utbildning</h4>
+                        {baseCvResult.baseCv.education.map((education) => (
+                          <p key={`${education.degree}-${education.institution}`}>
+                            {education.degree}, {education.field} ({education.institution})
+                          </p>
+                        ))}
+                      </section>
+                    ) : null}
+
+                    {baseCvResult.baseCv.visibility.technicalSkills &&
+                    baseCvResult.baseCv.technicalSkills.length > 0 ? (
+                      <section>
+                        <h4>Tekniska kompetenser</h4>
+                        <p>{baseCvResult.baseCv.technicalSkills.join(", ")}</p>
+                      </section>
+                    ) : null}
+
+                    {baseCvResult.baseCv.visibility.softSkills &&
+                    baseCvResult.baseCv.softSkills.length > 0 ? (
+                      <section>
+                        <h4>Mjuka kompetenser</h4>
+                        <p>{baseCvResult.baseCv.softSkills.join(", ")}</p>
+                      </section>
+                    ) : null}
+
+                    {baseCvResult.baseCv.visibility.certifications &&
+                    baseCvResult.baseCv.certifications.length > 0 ? (
+                      <section>
+                        <h4>Certifieringar</h4>
+                        <p>{baseCvResult.baseCv.certifications.join(", ")}</p>
+                      </section>
+                    ) : null}
+
+                    {baseCvResult.baseCv.visibility.languages &&
+                    baseCvResult.baseCv.languages.length > 0 ? (
+                      <section>
+                        <h4>Språk</h4>
+                        <p>
+                          {baseCvResult.baseCv.languages
+                            .map((language) => `${language.name} (${language.level})`)
+                            .join(", ")}
+                        </p>
+                      </section>
+                    ) : null}
+                  </div>
+
+                  <details className={styles.baseCvEditor}>
+                    <summary>Redigera grund-CV</summary>
+                    <form action={updateBaseCvAction} className={styles.profileForm}>
+                      <input
+                        type="hidden"
+                        name="candidateId"
+                        value={candidate.id}
+                      />
+                      <label className={styles.profileField}>
+                        Yrkesrubrik
+                        <input
+                          type="text"
+                          name="headline"
+                          required
+                          defaultValue={baseCvResult.baseCv.headline}
+                        />
+                      </label>
+                      <label className={styles.profileField}>
+                        Profiltext
+                        <textarea
+                          name="summary"
+                          rows={5}
+                          defaultValue={baseCvResult.baseCv.summary ?? ""}
+                        />
+                      </label>
+                      <fieldset className={styles.profileFieldset}>
+                        <legend>Visa avsnitt</legend>
+                        <div className={styles.profileOptions}>
+                          {([
+                            ["headline", "Yrkesrubrik"],
+                            ["summary", "Profil"],
+                            ["workExperience", "Erfarenhet"],
+                            ["education", "Utbildning"],
+                            ["technicalSkills", "Tekniska kompetenser"],
+                            ["softSkills", "Mjuka kompetenser"],
+                            ["certifications", "Certifieringar"],
+                            ["languages", "Språk"],
+                          ] as const).map(([key, label]) => (
+                            <label key={key} className={styles.profileOption}>
+                              <input
+                                type="checkbox"
+                                name={`visibility.${key}`}
+                                defaultChecked={baseCvResult.baseCv?.visibility[key]}
+                              />
+                              {label}
+                            </label>
+                          ))}
+                        </div>
+                      </fieldset>
+                      <button type="submit" className={styles.secondaryButton}>
+                        Spara grund-CV
+                      </button>
+                    </form>
+                  </details>
+                </>
               )}
             </section>
 
