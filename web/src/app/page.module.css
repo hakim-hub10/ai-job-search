@@ -706,3 +706,94 @@
     font-size: 13px;
     font-weight: 700;
   }
+
+  .documentPage {
+    width: min(100% - 32px, 860px);
+    margin: 0 auto;
+    padding: 40px 0 64px;
+    color: #17202a;
+  }
+
+  .documentHeader {
+    display: grid;
+    gap: 10px;
+    margin: 28px 0;
+  }
+
+  .documentHeader h1 {
+    font-size: 32px;
+  }
+
+  .documentPreview {
+    min-height: 720px;
+    padding: 48px;
+    background: #ffffff;
+    border: 1px solid #eaecf0;
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(16, 24, 40, 0.06);
+  }
+
+  .documentPage-traditional .documentPreview {
+    border-top: 4px solid #344054;
+  }
+
+  .documentPage-compact .documentPreview {
+    padding: 32px;
+    border-radius: 4px;
+    box-shadow: none;
+  }
+
+  .documentSection {
+    margin-top: 28px;
+  }
+
+  .documentSection:first-child {
+    margin-top: 0;
+  }
+
+  .documentSection h2 {
+    margin-bottom: 12px;
+    color: #344054;
+    font-size: 18px;
+  }
+
+  .documentSection p {
+    margin-top: 7px;
+    color: #475467;
+    font-size: 15px;
+    line-height: 1.65;
+    overflow-wrap: anywhere;
+  }
+
+  @media (max-width: 720px) {
+    .documentPage {
+      width: min(100% - 24px, 860px);
+      padding-top: 24px;
+    }
+
+    .documentPreview {
+      min-height: 0;
+      padding: 24px;
+    }
+  }
+
+  @media print {
+    .documentPage {
+      width: 100%;
+      padding: 0;
+    }
+
+    .documentPage > a,
+    .documentHeader > p:first-child,
+    .documentHeader > p:last-child,
+    .documentHeader label {
+      display: none;
+    }
+
+    .documentPreview {
+      min-height: 0;
+      padding: 0;
+      border: 0;
+      box-shadow: none;
+    }
+  }
