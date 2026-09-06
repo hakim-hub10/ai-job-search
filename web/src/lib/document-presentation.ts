@@ -16,6 +16,21 @@ export interface DocumentPresentationSection {
   items: string[];
 }
 
+export type CvSectionColumn = "sidebar" | "main";
+
+function normalizedHeading(heading: string): string {
+  return heading.toLocaleLowerCase("sv-SE").replace(/[åä]/gu, "a").replace(/ö/gu, "o").trim();
+}
+
+export function classifyCvSection(section: DocumentPresentationSection): CvSectionColumn {
+  const sidebarHeadings = new Set([
+    "kontakt", "contact", "kontakta", "kompetenser", "kompetens", "skills", "skill",
+    "certifieringar", "certifiering", "certifications", "certification", "sprak", "languages",
+    "links", "lankar", "lankar / links",
+  ]);
+  return sidebarHeadings.has(normalizedHeading(section.heading)) ? "sidebar" : "main";
+}
+
 export interface DocumentPresentationModel {
   documentType: PresentationDocumentType;
   version: number;
@@ -74,7 +89,7 @@ function parseSections(content: string): DocumentPresentationSection[] {
   let current: DocumentPresentationSection | null = null;
 
   for (const line of content.split(/\r?\n/u)) {
-    const heading = /^##\s+(.+)$/u.exec(line.trim());
+    const heading = /^\\?##\s+(.+)$/u.exec(line.trim());
     if (heading) {
       current = { heading: heading[1], items: [] };
       sections.push(current);
@@ -82,6 +97,12 @@ function parseSections(content: string): DocumentPresentationSection[] {
     }
     const item = /^[-*]\s+(.+)$/u.exec(line.trim());
     if (item) {
+      const escapedHeading = /^\\?##\s+(.+)$/u.exec(item[1]);
+      if (escapedHeading) {
+        current = { heading: escapedHeading[1], items: [] };
+        sections.push(current);
+        continue;
+      }
       if (!current) {
         current = { heading: "", items: [] };
         sections.push(current);

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 
 import type { ApplicationDocumentRecord } from "../../../.agents/job-search/cli/src/application-document-repository";
-import { DOCUMENT_TEMPLATES, resolveDocumentTemplate, toDocumentPresentationModel } from "./document-presentation";
+import { classifyCvSection, DOCUMENT_TEMPLATES, resolveDocumentTemplate, toDocumentPresentationModel } from "./document-presentation";
 
 function record(documentType: "cv" | "coverLetter", content: string): ApplicationDocumentRecord {
   return {
@@ -36,5 +36,15 @@ describe("document presentation architecture", () => {
     expect(letter.documentType).toBe("coverLetter");
     expect(letter.sections.find((section) => section.heading === "Ansökningskontext")).toEqual({ heading: "Ansökningskontext", items: ["Exempel AB"] });
     expect(cv.sections.find((section) => section.heading === "Utbildning")).toBeUndefined();
+  });
+
+  it("classifies known sidebar sections and keeps unknown sections in the main column", () => {
+    for (const heading of ["Kompetenser", "Skills", "Certifieringar", "Languages", "Kontakt", "Links"]) {
+      expect(classifyCvSection({ heading, items: ["verified text"] })).toBe("sidebar");
+    }
+    for (const heading of ["Profil", "Summary", "Erfarenhet", "Work Experience", "Utbildning", "Projects", "New Section"]) {
+      expect(classifyCvSection({ heading, items: ["verified text"] })).toBe("main");
+    }
+    expect(classifyCvSection({ heading: "", items: [] })).toBe("main");
   });
 });

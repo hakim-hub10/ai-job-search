@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import type { DocumentPresentationModel, DocumentTemplateDefinition } from "@/lib/document-presentation";
 import TemplateSelector from "./template-selector";
+import ModernCvPreview from "./modern-cv-preview";
 
 export function DocumentPreview({
   applicationId,
@@ -14,6 +15,16 @@ export function DocumentPreview({
   template: DocumentTemplateDefinition;
   editPath: string;
 }) {
+  if (presentation.documentType === "cv" && template.id === "modern") {
+    return (
+      <ModernCvPreview
+        applicationId={applicationId}
+        presentation={presentation}
+        template={template}
+      />
+    );
+  }
+
   return (
     <main className={`documentPage documentPage-${template.layout}`}>
       <Link href={`/applications/${encodeURIComponent(applicationId)}/documents/${presentation.documentType === "cv" ? "cv" : "cover-letter"}`}>
