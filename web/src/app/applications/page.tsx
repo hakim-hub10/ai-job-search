@@ -38,7 +38,7 @@ export default async function ApplicationsPage() {
           <div className={styles.logoMark}>AC</div>
           <div>
             <strong>AI Career Agent</strong>
-            <span>Sweden Preview</span>
+            <span>Förhandsversion Sverige</span>
           </div>
         </div>
 
@@ -66,14 +66,13 @@ export default async function ApplicationsPage() {
             <p className={styles.eyebrow}>Ansökningsyta</p>
             <h1>Ansökningar</h1>
             <p className={styles.subtitle}>
-              Ansökningar som hämtats från det befintliga lokala ansökningsarkivet
-              repository.
+              Ansökningar från det lokala ansökningsarkivet.
             </p>
           </div>
 
           <div className={styles.status}>
             <span className={styles.statusDot} />
-            Local repository
+            Lokalt arkiv
           </div>
         </header>
 
@@ -82,8 +81,7 @@ export default async function ApplicationsPage() {
             <div className={styles.emptyState}>
               <strong>Ansökningsarkivet är inte konfigurerat</strong>
               <p>
-                Set APPLICATION_REPOSITORY when starting the web preview to
-                ladda ansökningsposter.
+                Ansökningsarkivet behöver konfigureras innan poster kan laddas.
               </p>
             </div>
           </section>
@@ -92,7 +90,7 @@ export default async function ApplicationsPage() {
             <div className={styles.emptyState}>
               <strong>Ansökningsarkivet kunde inte laddas</strong>
               <p>
-                {result.error.code}: {result.error.message}
+                Ansökningsarkivet kunde inte läsas just nu.
               </p>
             </div>
           </section>
@@ -126,17 +124,16 @@ export default async function ApplicationsPage() {
                     <div>
                       <strong>{application.jobSnapshot.title}</strong>
                       <p>
-                        {application.jobSnapshot.company ??
-                          "Company unavailable"}
+                        {application.jobSnapshot.company ?? "Företag saknas"}
                       </p>
                     </div>
 
                     <div className={styles.candidateMeta}>
                       <span>Status: {formatApplicationStatus(application.status)}</span>
                       <span>
-                        Location:{" "}
+                        Plats:{" "}
                         {application.jobSnapshot.location ??
-                          "Location unavailable"}
+                          "Plats saknas"}
                       </span>
                       <time dateTime={application.updatedAt}>
                         Uppdaterad: {application.updatedAt}

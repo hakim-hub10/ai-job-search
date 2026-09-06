@@ -69,11 +69,7 @@ export default async function ApplicationDetailPage({
       <main style={{ maxWidth: 900, margin: "0 auto", padding: "48px 24px" }}>
         <Link href="/applications">← Ansökningar</Link>
         <h1>Ansökan kunde inte laddas</h1>
-        <p>
-          {result.error
-            ? `${result.error.code}: ${result.error.message}`
-            : "Ansökan hittades inte."}
-        </p>
+        <p>Ansökan hittades inte i det lokala ansökningsarkivet.</p>
       </main>
     );
   }
@@ -84,14 +80,14 @@ export default async function ApplicationDetailPage({
     <main style={{ maxWidth: 900, margin: "0 auto", padding: "48px 24px" }}>
       <Link href="/applications">← Ansökningar</Link>
 
-      <p style={{ marginTop: 32 }}>APPLICATION</p>
+      <p style={{ marginTop: 32 }}>ANSÖKAN</p>
 
       <h1>{application.jobSnapshot.title}</h1>
 
       <p>
-        {application.jobSnapshot.company ?? "Unknown company"}
+        {application.jobSnapshot.company ?? "Företag saknas"}
         {" · "}
-        {application.jobSnapshot.location ?? "Unknown location"}
+        {application.jobSnapshot.location ?? "Plats saknas"}
       </p>
 
       <p>
@@ -101,6 +97,19 @@ export default async function ApplicationDetailPage({
       <p>
         <strong>Aktuell status:</strong> {formatApplicationStatus(application.status)}
       </p>
+
+      {application.jobSnapshot.url ? (
+        <p>
+          <strong>Originalannons:</strong>{" "}
+          <a
+            href={application.jobSnapshot.url}
+            rel="noreferrer"
+            target="_blank"
+          >
+            Öppna jobbannons
+          </a>
+        </p>
+      ) : null}
 
       <section style={{ marginTop: 40 }}>
         <h2>Uppdatera status</h2>
@@ -113,7 +122,9 @@ export default async function ApplicationDetailPage({
           />
 
           <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+            <label htmlFor="applicationStatus">Status</label>
             <select
+              id="applicationStatus"
               name="status"
               defaultValue={application.status}
               style={{
@@ -143,10 +154,7 @@ export default async function ApplicationDetailPage({
         {!candidateResult.configured ? (
           <p>Jobbcoachens arbetsyta är inte konfigurerad.</p>
         ) : candidateResult.error ? (
-          <p>
-            Kandidattilldelningen kunde inte laddas:{" "}
-            {candidateResult.error.code}
-          </p>
+          <p>Kandidattilldelningen kunde inte laddas just nu.</p>
         ) : candidateResult.candidate ? (
           <div>
             <strong>{candidateResult.candidate.displayName}</strong>
@@ -163,7 +171,9 @@ export default async function ApplicationDetailPage({
             />
 
             <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+              <label htmlFor="candidateId">Kandidat</label>
               <select
+                id="candidateId"
                 name="candidateId"
                 required
                 defaultValue=""
@@ -175,7 +185,7 @@ export default async function ApplicationDetailPage({
                 }}
               >
                 <option value="" disabled>
-                  Select candidate
+                  Välj kandidat
                 </option>
 
                 {candidateResult.candidates.map((candidate) => (
@@ -186,7 +196,7 @@ export default async function ApplicationDetailPage({
               </select>
 
               <button type="submit">
-                Assign candidate
+                Tilldela kandidat
               </button>
             </div>
           </form>

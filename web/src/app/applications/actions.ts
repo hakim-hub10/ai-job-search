@@ -23,7 +23,7 @@ export async function updateApplicationStatusAction(formData: FormData) {
   const repositoryPath = process.env.APPLICATION_REPOSITORY;
 
   if (!repositoryPath) {
-    throw new Error("APPLICATION_REPOSITORY is not configured.");
+    throw new Error("Ansökningsarkivet är inte konfigurerat.");
   }
 
   const applicationIdValue = formData.get("applicationId");
@@ -36,11 +36,11 @@ export async function updateApplicationStatusAction(formData: FormData) {
     typeof statusValue === "string" ? statusValue.trim() : "";
 
   if (!applicationId) {
-    throw new Error("Application ID is required.");
+    throw new Error("Ansökans ID saknas.");
   }
 
   if (!APPLICATION_STATUSES.has(status as ApplicationStatus)) {
-    throw new Error("Unsupported application status.");
+    throw new Error("Statusen kunde inte användas.");
   }
 
   const repository = createFileApplicationRepository(resolve(repositoryPath));
@@ -53,14 +53,7 @@ export async function updateApplicationStatusAction(formData: FormData) {
   });
 
   if (!result.ok) {
-    const message =
-      result.error.kind === "domain"
-        ? result.error.error.message
-        : result.error.kind === "repository"
-          ? result.error.error.message
-          : "Application status could not be updated.";
-
-    throw new Error(message);
+    throw new Error("Ansökans status kunde inte uppdateras.");
   }
 
   redirect(`/applications/${encodeURIComponent(applicationId)}`);
@@ -71,11 +64,11 @@ export async function associateApplicationCandidateAction(formData: FormData) {
   const repositoryPath = process.env.APPLICATION_REPOSITORY;
 
   if (!coachDir) {
-    throw new Error("COACH_DIR is not configured.");
+    throw new Error("Jobbcoachens arbetsyta är inte konfigurerad.");
   }
 
   if (!repositoryPath) {
-    throw new Error("APPLICATION_REPOSITORY is not configured.");
+    throw new Error("Ansökningsarkivet är inte konfigurerat.");
   }
 
   const applicationIdValue = formData.get("applicationId");
@@ -92,7 +85,7 @@ export async function associateApplicationCandidateAction(formData: FormData) {
       : "";
 
   if (!applicationId || !candidateId) {
-    throw new Error("Application and candidate are required.");
+    throw new Error("Ansökan och kandidat måste anges.");
   }
 
   const { createCoachApplicationWorkflow } =
@@ -136,22 +129,13 @@ export async function associateApplicationCandidateAction(formData: FormData) {
         result.error.error.code ===
         "ALREADY_ASSOCIATED_WITH_CANDIDATE"
       ) {
-        throw new Error(
-          "This application is already assigned to this candidate.",
-        );
+        throw new Error("Ansökan är redan kopplad till den här kandidaten.");
       }
 
-      throw new Error(
-        "This application is already assigned to another candidate.",
-      );
+      throw new Error("Ansökan är redan kopplad till en annan kandidat.");
     }
 
-    const message =
-      "error" in result.error && "message" in result.error.error
-        ? result.error.error.message
-        : "Candidate could not be assigned.";
-
-    throw new Error(message);
+    throw new Error("Kandidaten kunde inte kopplas till ansökan.");
   }
 
   redirect(`/applications/${encodeURIComponent(applicationId)}`);
