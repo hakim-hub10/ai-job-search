@@ -14,6 +14,19 @@ import { createFileCoachWorkspaceRepository } from "../../../../.agents/job-sear
 import { loadCandidateProfileRepository } from "@/lib/candidate-profiles";
 import { createTailoredCv } from "@/lib/tailored-cv";
 import { createCoverLetter } from "@/lib/cover-letter";
+import {
+  buildApplicationDocumentFoundation,
+  createTailoringPlan,
+  generateDocumentProposal,
+  renderGeneratedApplicationDocument,
+  createOpenAIDocumentGenerator,
+} from "../../../../.agents/job-search/cli/src/index";
+import {
+  createConfiguredDocumentEditorDependencies,
+  type DocumentRewriteProviderRequest,
+  requestDocumentAiRewrite,
+  saveDocumentEdit,
+} from "@/lib/document-editor";
 import { createApplicationWorkflow } from "../../../../.agents/job-search/cli/src/application-workflow";
 import type { ApplicationStatus } from "../../../../.agents/job-search/cli/src/applications";
 
@@ -243,4 +256,105 @@ export async function createCoverLetterAction(formData: FormData) {
   revalidatePath(`/applications/${encodeURIComponent(applicationId)}`);
   revalidatePath(`/applications/${encodeURIComponent(applicationId)}/documents/cover-letter`);
   redirect(`/applications/${encodeURIComponent(applicationId)}`);
+}
+
+export async function saveDocumentEditAction(formData: FormData) {
+  const applicationId = typeof formData.get("applicationId") === "string"
+    ? String(formData.get("applicationId")).trim()
+    : "";
+  const documentType = typeof formData.get("documentType") === "string"
+    ? String(formData.get("documentType")).trim()
+    : "";
+  const content = typeof formData.get("content") === "string"
+    ? String(formData.get("content"))
+    : "";
+  const dependencies = createConfiguredDocumentEditorDependencies();
+
+  if (!dependencies) throw new Error("Dokumentvyn är inte fullständigt konfigurerad.");
+  const result = await saveDocumentEdit(
+    { applicationId, documentType, content },
+    dependencies,
+  );
+
+  if (!result.ok) throw new Error(result.message);
+  const documentPath = documentType === "coverLetter" ? "cover-letter" : documentType;
+  revalidatePath(`/applications/${encodeURIComponent(applicationId)}`);
+  revalidatePath(`/applications/${encodeURIComponent(applicationId)}/documents/${documentPath}`);
+  redirect(`/applications/${encodeURIComponent(applicationId)}/documents/${documentPath}`);
+}
+
+export async function requestDocumentAiRewriteAction(formData: FormData) {
+  const applicationId = typeof formData.get("applicationId") === "string"
+    ? String(formData.get("applicationId")).trim()
+    : "";
+  const documentType = typeof formData.get("documentType") === "string"
+    ? String(formData.get("documentType")).trim()
+    : "";
+  const mode = typeof formData.get("rewriteMode") === "string"
+    ? String(formData.get("rewriteMode")).trim()
+    : "";
+  const currentDraft = typeof formData.get("currentDraft") === "string"
+    ? String(formData.get("currentDraft"))
+    : "";
+  const dependencies = createConfiguredDocumentEditorDependencies();
+
+  if (!dependencies) {
+    return { ok: false as const, code: "AI_UNAVAILABLE", message: "AI-assistans är inte konfigurerad." };
+  }
+
+  const enabled = process.env.AI_DOCUMENTS_ENABLED === "true";
+  const consent = process.env.AI_REMOTE_GENERATION_CONSENT === "true";
+  const apiKey = process.env.OPENAI_API_KEY?.trim() ?? "";
+  if (!enabled || !consent || !apiKey) {
+    return { ok: false as const, code: "AI_UNAVAILABLE", message: "AI-assistans är inte konfigurerad." };
+  }
+
+  const provider = {
+    async rewrite(request: DocumentRewriteProviderRequest) {
+      const generator = createOpenAIDocumentGenerator({
+        enabled,
+        remoteGenerationConsent: consent,
+        apiKey,
+        model: process.env.OPENAI_MODEL?.trim() || "gpt-4.1-mini",
+        maxOutputTokens: 1200,
+        timeoutMs: 30_000,
+      });
+      const foundation = buildApplicationDocumentFoundation(request.application, {
+        evidence: request.candidateEvidence,
+      });
+      if (!foundation.ok) return { ok: false as const, message: "AI-förslaget kunde inte valideras." };
+      const plan = createTailoringPlan(foundation.value, {
+        type: request.documentType,
+        language: "sv",
+      });
+      if (!plan.ok) return { ok: false as const, message: "AI-förslaget kunde inte valideras." };
+      const generated = await generateDocumentProposal(foundation.value, plan.value, generator, {
+        untrustedJobDescription: request.untrustedJobContext.description ?? undefined,
+      });
+      if (!generated.ok) return { ok: false as const, message: "AI-förslaget kunde inte skapas." };
+      const document = {
+        applicationId: request.applicationId,
+        documentType: request.documentType,
+        language: "sv" as const,
+        requiresHumanReview: generated.value.requiresHumanReview,
+        warnings: [],
+        sections: generated.value.proposal.sections,
+      };
+      const rendered = renderGeneratedApplicationDocument(document);
+      if (!rendered.ok) return { ok: false as const, message: "AI-förslaget kunde inte valideras." };
+      return {
+        ok: true as const,
+        value: {
+          content: rendered.value.content,
+          evidenceIds: document.sections.flatMap((section) => section.claims.flatMap((claim) => claim.evidenceIds)),
+        },
+      };
+    },
+  };
+
+  return requestDocumentAiRewrite(
+    { applicationId, documentType, mode, currentDraft },
+    dependencies,
+    provider,
+  );
 }

@@ -50,6 +50,11 @@ export default async function ApplicationCoverLetterPage({
       <h1>Personligt brev</h1>
       <p>Version {coverLetter.version} · Skapad: {coverLetter.createdAt}</p>
       <p>Detta är en strukturerad disposition som ska granskas av användaren.</p>
+      <p>
+        <Link href={`/applications/${encodeURIComponent(decodedId)}/documents/cover-letter/edit`}>
+          Redigera personligt brev
+        </Link>
+      </p>
       <pre
         style={{
           marginTop: 32,

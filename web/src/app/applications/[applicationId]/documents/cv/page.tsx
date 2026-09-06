@@ -50,6 +50,11 @@ export default async function ApplicationCvPage({
       <h1>CV</h1>
       <p>Version {cv.version} · Skapad: {cv.createdAt}</p>
       <p>Detta är ett internt utkast som ska granskas av användaren.</p>
+      <p>
+        <Link href={`/applications/${encodeURIComponent(decodedId)}/documents/cv/edit`}>
+          Redigera CV
+        </Link>
+      </p>
       <pre
         style={{
           marginTop: 32,
