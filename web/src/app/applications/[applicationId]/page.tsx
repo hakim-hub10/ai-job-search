@@ -7,6 +7,7 @@ import { loadCandidateBaseCvState } from "@/lib/candidate-base-cv-state";
 
 import {
   associateApplicationCandidateAction,
+  createCoverLetterAction,
   createTailoredCvAction,
   updateApplicationStatusAction,
 } from "../actions";
@@ -212,6 +213,36 @@ export default async function ApplicationDetailPage({
                       <p>
                         Grund-CV saknas. Skapa ett grund-CV innan du skapar ett anpassat CV.
                       </p>
+                    )}
+                  </div>
+                );
+              }
+
+              if (documentType === "coverLetter") {
+                return (
+                  <div key={documentType}>
+                    <p>
+                      Personligt brev: {latest
+                        ? `Version ${latest.version} · Skapad: ${latest.createdAt}`
+                        : "Inte skapat"}
+                    </p>
+                    {latest ? (
+                      <>
+                        <p>
+                          <Link href={`/applications/${encodeURIComponent(application.id)}/documents/cover-letter`}>
+                            Visa personligt brev
+                          </Link>
+                        </p>
+                        <form action={createCoverLetterAction}>
+                          <input type="hidden" name="applicationId" value={application.id} />
+                          <button type="submit">Skapa ny version</button>
+                        </form>
+                      </>
+                    ) : (
+                      <form action={createCoverLetterAction}>
+                        <input type="hidden" name="applicationId" value={application.id} />
+                        <button type="submit">Skapa personligt brev</button>
+                      </form>
                     )}
                   </div>
                 );
