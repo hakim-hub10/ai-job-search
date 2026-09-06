@@ -2,6 +2,15 @@ import type { ApplicationDocumentRecord } from "../../../.agents/job-search/cli/
 
 export type DocumentTemplateId = "modern" | "classic" | "minimal";
 export type PresentationDocumentType = "cv" | "coverLetter";
+export type CvRendererId = "modern" | "classic" | "minimal" | "shared";
+
+export function cvRendererForTemplate(
+  documentType: PresentationDocumentType,
+  templateId: DocumentTemplateId,
+): CvRendererId {
+  if (documentType !== "cv") return "shared";
+  return templateId;
+}
 
 export interface DocumentTemplateDefinition {
   id: DocumentTemplateId;
@@ -29,6 +38,16 @@ export function classifyCvSection(section: DocumentPresentationSection): CvSecti
     "links", "lankar", "lankar / links",
   ]);
   return sidebarHeadings.has(normalizedHeading(section.heading)) ? "sidebar" : "main";
+}
+
+export function documentTitleForCv(
+  sections: DocumentPresentationSection[],
+): string | undefined {
+  const titleSection = sections.find((section) => {
+    const heading = section.heading.toLocaleLowerCase("sv-SE").replace(/[åä]/gu, "a").replace(/ö/gu, "o").trim();
+    return heading === "profil" || heading === "summary" || heading === "headline";
+  });
+  return titleSection?.items[0];
 }
 
 export interface DocumentPresentationModel {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 
 import type { ApplicationDocumentRecord } from "../../../.agents/job-search/cli/src/application-document-repository";
-import { classifyCvSection, DOCUMENT_TEMPLATES, resolveDocumentTemplate, toDocumentPresentationModel } from "./document-presentation";
+import { classifyCvSection, cvRendererForTemplate, documentTitleForCv, DOCUMENT_TEMPLATES, resolveDocumentTemplate, toDocumentPresentationModel } from "./document-presentation";
 
 function record(documentType: "cv" | "coverLetter", content: string): ApplicationDocumentRecord {
   return {
@@ -27,6 +27,13 @@ describe("document presentation architecture", () => {
     expect(resolveDocumentTemplate("unknown")).toMatchObject({ ok: false, code: "INVALID_TEMPLATE", fallback: { id: "modern" } });
   });
 
+  it("selects dedicated CV renderers without applying them to cover letters", () => {
+    expect(cvRendererForTemplate("cv", "modern")).toBe("modern");
+    expect(cvRendererForTemplate("cv", "classic")).toBe("classic");
+    expect(cvRendererForTemplate("cv", "minimal")).toBe("minimal");
+    expect(cvRendererForTemplate("coverLetter", "modern")).toBe("shared");
+  });
+
   it("adapts stored CV and cover-letter content without inferring facts", () => {
     const cv = toDocumentPresentationModel(record("cv", "## Profil\n- Supporttekniker\n## Kompetenser\n- Microsoft 365"));
     const letter = toDocumentPresentationModel(record("coverLetter", "## Ansökningskontext\n- Exempel AB\n## Profil\n- Supporttekniker"));
@@ -46,5 +53,14 @@ describe("document presentation architecture", () => {
       expect(classifyCvSection({ heading, items: ["verified text"] })).toBe("main");
     }
     expect(classifyCvSection({ heading: "", items: [] })).toBe("main");
+  });
+
+  it("never fabricates an identity heading and preserves an actual document title", () => {
+    const missing = [{ heading: "Kompetenser", items: ["Microsoft 365"] }];
+    const actual = [{ heading: "Profil", items: ["Supporttekniker"] }];
+
+    expect(documentTitleForCv(missing)).toBeUndefined();
+    expect(documentTitleForCv(actual)).toBe("Supporttekniker");
+    expect(missing).toEqual([{ heading: "Kompetenser", items: ["Microsoft 365"] }]);
   });
 });

@@ -1,8 +1,10 @@
 import Link from "next/link";
 
-import type { DocumentPresentationModel, DocumentTemplateDefinition } from "@/lib/document-presentation";
+import { cvRendererForTemplate, type DocumentPresentationModel, type DocumentTemplateDefinition } from "@/lib/document-presentation";
 import TemplateSelector from "./template-selector";
 import ModernCvPreview from "./modern-cv-preview";
+import ClassicCvPreview from "./classic-cv-preview";
+import MinimalCvPreview from "./minimal-cv-preview";
 
 export function DocumentPreview({
   applicationId,
@@ -15,7 +17,9 @@ export function DocumentPreview({
   template: DocumentTemplateDefinition;
   editPath: string;
 }) {
-  if (presentation.documentType === "cv" && template.id === "modern") {
+  const renderer = cvRendererForTemplate(presentation.documentType, template.id);
+
+  if (renderer === "modern") {
     return (
       <ModernCvPreview
         applicationId={applicationId}
@@ -23,6 +27,14 @@ export function DocumentPreview({
         template={template}
       />
     );
+  }
+
+  if (renderer === "classic") {
+    return <ClassicCvPreview applicationId={applicationId} presentation={presentation} template={template} />;
+  }
+
+  if (renderer === "minimal") {
+    return <MinimalCvPreview applicationId={applicationId} presentation={presentation} template={template} />;
   }
 
   return (

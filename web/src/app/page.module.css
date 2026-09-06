@@ -947,6 +947,189 @@
       background: #ffffff;
     }
 
+    .classicCvPage,
+    .minimalCvPage {
+      min-height: 100vh;
+      padding: 32px 16px 64px;
+      background: #eef1f3;
+      color: #17202a;
+    }
+
+    .classicCvToolbar,
+    .minimalCvToolbar {
+      width: min(100% - 0px, 794px);
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      margin: 0 auto 18px;
+    }
+
+    .classicCv,
+    .minimalCv {
+      width: min(100%, 794px);
+      min-height: 1123px;
+      margin: 0 auto;
+      padding: 70px 72px;
+      background: #ffffff;
+      box-shadow: 0 16px 40px rgba(16, 24, 40, 0.12);
+    }
+
+    .classicCvHeader {
+      padding-bottom: 30px;
+      text-align: center;
+      border-bottom: 1px solid #98a2b3;
+    }
+
+    .classicCvLabel {
+      color: #667085;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.22em;
+    }
+
+    .classicCvHeader h1 {
+      margin-top: 16px;
+      color: #17202a;
+      font-size: 36px;
+      font-weight: 700;
+      line-height: 1.15;
+      overflow-wrap: anywhere;
+    }
+
+    .classicCvHeader p:last-child {
+      margin-top: 12px;
+      color: #667085;
+      font-size: 12px;
+    }
+
+    .classicCvSection {
+      margin-top: 30px;
+    }
+
+    .classicCvSection h2 {
+      padding-bottom: 8px;
+      border-bottom: 1px solid #d0d5dd;
+      color: #344054;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    .classicCvSection div {
+      display: grid;
+      gap: 9px;
+      margin-top: 13px;
+    }
+
+    .classicCvSection p {
+      color: #475467;
+      font-size: 14px;
+      line-height: 1.6;
+      overflow-wrap: anywhere;
+    }
+
+    .minimalCv {
+      padding: 78px 82px;
+      border-top: 5px solid #17202a;
+      box-shadow: 0 12px 32px rgba(16, 24, 40, 0.08);
+    }
+
+    .minimalCvHeader {
+      padding-bottom: 32px;
+    }
+
+    .minimalCvHeader h1 {
+      max-width: 560px;
+      color: #17202a;
+      font-size: 38px;
+      font-weight: 650;
+      letter-spacing: -0.03em;
+      line-height: 1.05;
+      overflow-wrap: anywhere;
+    }
+
+    .minimalCvHeader p {
+      margin-top: 16px;
+      color: #98a2b3;
+      font-size: 11px;
+      letter-spacing: 0.04em;
+    }
+
+    .minimalCvBody {
+      max-width: 620px;
+    }
+
+    .minimalCvSection {
+      display: grid;
+      grid-template-columns: minmax(130px, 0.34fr) minmax(0, 1fr);
+      gap: 24px;
+      padding: 22px 0;
+      border-top: 1px solid #eaecf0;
+    }
+
+    .minimalCvSection h2 {
+      color: #667085;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    .minimalCvSection p {
+      margin-top: 6px;
+      color: #344054;
+      font-size: 14px;
+      line-height: 1.65;
+      overflow-wrap: anywhere;
+    }
+
+    @media (max-width: 720px) {
+      .classicCvPage,
+      .minimalCvPage {
+        padding: 16px 8px 32px;
+      }
+
+      .classicCv,
+      .minimalCv {
+        min-height: 0;
+        padding: 42px 24px;
+      }
+
+      .classicCvToolbar,
+      .minimalCvToolbar {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .minimalCvSection {
+        grid-template-columns: 1fr;
+        gap: 10px;
+      }
+    }
+
+    @media print {
+      .classicCvPage,
+      .minimalCvPage {
+        min-height: 0;
+        padding: 0;
+        background: #ffffff;
+      }
+
+      .classicCvToolbar,
+      .minimalCvToolbar {
+        display: none;
+      }
+
+      .classicCv,
+      .minimalCv {
+        width: 100%;
+        min-height: 0;
+        padding: 0;
+        box-shadow: none;
+      }
+    }
+
     .modernCvToolbar {
       display: none;
     }
