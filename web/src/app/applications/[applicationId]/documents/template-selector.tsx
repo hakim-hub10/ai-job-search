@@ -1,7 +1,16 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import type { DocumentTemplateDefinition } from "@/lib/document-presentation";
+import { DOCUMENT_TEMPLATES, templateQueryHref, type DocumentTemplateDefinition } from "@/lib/document-presentation";
+
+function Miniature({ id }: { id: DocumentTemplateDefinition["id"] }) {
+  return (
+    <span className={`templateMiniature templateMiniature-${id}`} aria-hidden="true">
+      <span className="templateMiniatureTop" />
+      <span className="templateMiniatureBody"><i /><i /><i /><i /></span>
+    </span>
+  );
+}
 
 export default function TemplateSelector({
   selectedTemplate,
@@ -11,21 +20,23 @@ export default function TemplateSelector({
   const router = useRouter();
 
   return (
-    <label style={{ display: "grid", gap: 6, maxWidth: 240 }}>
-      Dokumentdesign
-      <select
-        aria-label="Dokumentdesign"
-        defaultValue={selectedTemplate.id}
-        onChange={(event) => {
-          const params = new URLSearchParams(window.location.search);
-          params.set("template", event.target.value);
-          router.push(`${window.location.pathname}?${params.toString()}`);
-        }}
-      >
-        <option value="modern">Modern</option>
-        <option value="classic">Klassisk</option>
-        <option value="minimal">Minimal</option>
-      </select>
-    </label>
+    <fieldset className="templatePicker">
+      <legend>Dokumentdesign</legend>
+      <div className="templatePickerOptions">
+        {DOCUMENT_TEMPLATES.map((template) => (
+          <button
+            className={`templateOption${selectedTemplate.id === template.id ? " templateOptionSelected" : ""}`}
+            key={template.id}
+            type="button"
+            aria-pressed={selectedTemplate.id === template.id}
+            onClick={() => router.push(templateQueryHref(window.location.pathname, window.location.search, template.id))}
+          >
+            <Miniature id={template.id} />
+            <span className="templateOptionLabel">{template.label}</span>
+            <span className="templateOptionDescription">{template.description}</span>
+          </button>
+        ))}
+      </div>
+    </fieldset>
   );
 }

@@ -69,21 +69,21 @@ export const DOCUMENT_TEMPLATES: readonly DocumentTemplateDefinition[] = [
   {
     id: "modern",
     label: "Modern",
-    description: "Luftig layout med tydlig visuell hierarki.",
+    description: "Tvåkolumnsdesign med tydlig sidopanel.",
     supportedDocumentTypes: allDocumentTypes,
     layout: "editorial",
   },
   {
     id: "classic",
     label: "Klassisk",
-    description: "Traditionell layout med markerade avsnitt.",
+    description: "Formell och tidlös layout med tydlig struktur.",
     supportedDocumentTypes: allDocumentTypes,
     layout: "traditional",
   },
   {
     id: "minimal",
     label: "Minimal",
-    description: "Kompakt layout med fokus på innehållet.",
+    description: "Ren och luftig design med fokus på innehållet.",
     supportedDocumentTypes: allDocumentTypes,
     layout: "compact",
   },
@@ -101,6 +101,16 @@ export function resolveDocumentTemplate(templateId?: string): TemplateResolution
   return template
     ? { ok: true, selected: true, template }
     : { ok: false, code: "INVALID_TEMPLATE", fallback: defaultTemplate };
+}
+
+export function templateQueryHref(
+  pathname: string,
+  currentSearch: string,
+  templateId: DocumentTemplateId,
+): string {
+  const params = new URLSearchParams(currentSearch);
+  params.set("template", templateId);
+  return `${pathname}?${params.toString()}`;
 }
 
 function parseSections(content: string): DocumentPresentationSection[] {

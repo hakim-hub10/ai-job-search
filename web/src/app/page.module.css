@@ -724,6 +724,126 @@
     font-size: 32px;
   }
 
+  .templatePicker {
+    min-width: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .templatePicker legend {
+    margin-bottom: 10px;
+    color: #475467;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .templatePickerOptions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(150px, 1fr));
+    gap: 10px;
+  }
+
+  .templateOption {
+    display: grid;
+    align-content: start;
+    gap: 7px;
+    min-width: 0;
+    padding: 10px;
+    border: 1px solid #d0d5dd;
+    border-radius: 8px;
+    background: #ffffff;
+    color: #344054;
+    cursor: pointer;
+    font: inherit;
+    text-align: left;
+  }
+
+  .templateOption:hover,
+  .templateOptionSelected {
+    border-color: #175cd3;
+    background: #f5f8ff;
+  }
+
+  .templateOptionSelected {
+    box-shadow: 0 0 0 2px rgba(23, 92, 211, 0.12);
+  }
+
+  .templateOption:focus-visible {
+    outline: 3px solid rgba(23, 92, 211, 0.3);
+    outline-offset: 2px;
+  }
+
+  .templateOptionLabel {
+    font-size: 13px;
+    font-weight: 750;
+  }
+
+  .templateOptionDescription {
+    min-height: 32px;
+    color: #667085;
+    font-size: 11px;
+    line-height: 1.4;
+  }
+
+  .templateMiniature {
+    display: grid;
+    gap: 5px;
+    height: 64px;
+    padding: 8px;
+    border: 1px solid #d0d5dd;
+    background: #ffffff;
+  }
+
+  .templateMiniatureTop {
+    display: block;
+    width: 55%;
+    height: 7px;
+    background: #344054;
+  }
+
+  .templateMiniatureBody {
+    display: grid;
+    gap: 4px;
+  }
+
+  .templateMiniatureBody i {
+    display: block;
+    width: 82%;
+    height: 4px;
+    background: #d0d5dd;
+  }
+
+  .templateMiniature-modern {
+    grid-template-columns: 31% 1fr;
+    border-left: 22px solid #24343b;
+  }
+
+  .templateMiniature-modern .templateMiniatureTop,
+  .templateMiniature-modern .templateMiniatureBody {
+    grid-column: 2;
+  }
+
+  .templateMiniature-classic {
+    justify-items: center;
+  }
+
+  .templateMiniature-classic .templateMiniatureTop {
+    width: 45%;
+  }
+
+  .templateMiniature-classic .templateMiniatureBody {
+    width: 84%;
+  }
+
+  .templateMiniature-minimal {
+    border-top: 3px solid #17202a;
+    padding-top: 12px;
+  }
+
+  .templateMiniature-minimal .templateMiniatureBody {
+    gap: 7px;
+  }
+
   .documentPreview {
     min-height: 720px;
     padding: 48px;
@@ -1150,6 +1270,10 @@
     .documentPreview {
       min-height: 0;
       padding: 24px;
+    }
+
+    .templatePickerOptions {
+      grid-template-columns: 1fr;
     }
   }
 
