@@ -5,6 +5,7 @@ import { loadCandidateProfileRepository } from "@/lib/candidate-profiles";
 import { loadCoachCandidates } from "@/lib/coach-candidates";
 import { searchWebJobs } from "@/lib/jobs";
 import styles from "../page.module.css";
+import { startApplicationAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +15,7 @@ interface JobsPageProps {
     query?: string;
     location?: string;
     limit?: string;
+    applicationError?: string;
   }>;
 }
 
@@ -37,6 +39,25 @@ function formatSearchError(
   return code === "ALL_SOURCES_FAILED"
     ? "Ingen av de valda jobbkällorna kunde nås just nu."
     : "Ett tekniskt fel uppstod under jobbsökningen.";
+}
+
+function formatApplicationError(code: string): string {
+  const messages: Record<string, string> = {
+    CONFIGURATION_MISSING: "Ansökningsarkivet eller jobbcoachens arbetsyta är inte konfigurerad.",
+    INVALID_INPUT: "Kandidatens eller jobbets information är ogiltig.",
+    CANDIDATE_NOT_FOUND: "Den valda kandidaten kunde inte hittas.",
+    CANDIDATE_STORAGE_FAILURE: "Kandidatregistret kunde inte läsas.",
+    PROFILE_NOT_FOUND: "Kandidatprofil saknas för den valda kandidaten.",
+    PROFILE_STORAGE_FAILURE: "Kandidatprofilen kunde inte läsas.",
+    SEARCH_FAILED: "Jobbet kunde inte hämtas igen för att skapa ansökan.",
+    JOB_NOT_FOUND: "Det valda jobbet kunde inte hittas i den aktuella sökningen.",
+    APPLICATION_STORAGE_FAILURE: "Ansökningsarkivet kunde inte uppdateras.",
+    DUPLICATE_APPLICATION: "Det finns redan en ansökan för det här jobbet och kandidaten.",
+    APPLICATION_CREATION_FAILED: "Ansökan kunde inte skapas.",
+    APPLICATION_ASSOCIATION_FAILED: "Ansökan skapades, men kunde inte kopplas till kandidaten.",
+  };
+
+  return messages[code] ?? "Ansökan kunde inte startas.";
 }
 
 function formatSourceName(source: string): string {
@@ -124,6 +145,7 @@ export default async function JobsPage({ searchParams }: JobsPageProps) {
   const query = firstValue(params.query);
   const location = firstValue(params.location);
   const limit = parseLimit(params.limit);
+  const applicationError = firstValue(params.applicationError);
 
   const candidatesResult = await loadCoachCandidates();
   const selectedCandidate = candidatesResult.candidates.find(
@@ -276,6 +298,15 @@ export default async function JobsPage({ searchParams }: JobsPageProps) {
             </div>
           </form>
         </section>
+
+        {applicationError ? (
+          <section className={styles.panel}>
+            <div className={styles.emptyState}>
+              <strong>Ansökan kunde inte startas</strong>
+              <p>{formatApplicationError(applicationError)}</p>
+            </div>
+          </section>
+        ) : null}
 
         {!candidatesResult.configured ? (
           <section className={styles.panel}>
@@ -496,6 +527,37 @@ export default async function JobsPage({ searchParams }: JobsPageProps) {
                             Underlagets täckning: {Math.round(ranked.scoringBreakdown.confidence * 100)}% · {formatSeverity(ranked.scoringBreakdown.confidenceLabel)}
                           </p>
                         </details>
+
+                        <div className={styles.applicationStart}>
+                          <form action={startApplicationAction}>
+                            <input
+                              type="hidden"
+                              name="candidateId"
+                              value={candidateId}
+                            />
+                            <input
+                              type="hidden"
+                              name="jobId"
+                              value={job.id}
+                            />
+                            <input type="hidden" name="query" value={query} />
+                            <input
+                              type="hidden"
+                              name="location"
+                              value={location}
+                            />
+                            <input
+                              type="hidden"
+                              name="limit"
+                              value={String(limit)}
+                            />
+                            <button type="submit">Starta ansökan</button>
+                          </form>
+                          <p>
+                            Ansökan skapas i AI Career Agent. Du skickar inget
+                            till arbetsgivaren ännu.
+                          </p>
+                        </div>
                       </article>
                     );
                   })
