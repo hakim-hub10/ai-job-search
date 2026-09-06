@@ -347,6 +347,142 @@
   min-height: 2.4rem;
 }
 
+.jobResult {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px 24px;
+  padding: 20px 0;
+  border-bottom: 1px solid #eaecf0;
+}
+
+.jobResult:last-child {
+  border-bottom: 0;
+}
+
+.jobResultHeader {
+  min-width: 0;
+}
+
+.jobResultHeader strong {
+  font-size: 15px;
+}
+
+.jobResultHeader p {
+  margin-top: 5px;
+  color: #667085;
+  font-size: 12px;
+}
+
+.analysisDetails {
+  grid-column: 1 / -1;
+  border-top: 1px solid #eaecf0;
+  padding-top: 14px;
+}
+
+.analysisDetails summary {
+  width: fit-content;
+  color: #175cd3;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.analysisDetails summary:hover {
+  color: #1849a9;
+}
+
+.analysisGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  margin-top: 18px;
+}
+
+.analysisSection {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid #eaecf0;
+  border-radius: 10px;
+  background: #fcfcfd;
+}
+
+.analysisSection h4 {
+  color: #344054;
+  font-size: 13px;
+}
+
+.analysisSection ul,
+.analysisSection ol {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0 0;
+  padding-left: 18px;
+  color: #475467;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.analysisSection li {
+  padding-left: 2px;
+}
+
+.analysisSection li strong,
+.analysisSection li span {
+  display: block;
+}
+
+.analysisSection li span {
+  margin-top: 3px;
+  color: #667085;
+  font-size: 12px;
+}
+
+.analysisConfidence {
+  margin-top: 18px;
+  color: #667085;
+  font-size: 12px;
+}
+
+.learningPlan {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid #eaecf0;
+}
+
+.learningPlanList {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding-left: 24px;
+}
+
+.learningPlanList li {
+  padding-left: 6px;
+  color: #344054;
+}
+
+.learningPlanList strong,
+.learningPlanList span {
+  display: block;
+}
+
+.learningPlanList span {
+  margin-top: 4px;
+  color: #667085;
+  font-size: 12px;
+}
+
+@media (max-width: 720px) {
+  .jobResult,
+  .analysisGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .candidateMeta {
+    text-align: left;
+  }
+}
+
 .profileForm {
   display: grid;
   gap: 20px;

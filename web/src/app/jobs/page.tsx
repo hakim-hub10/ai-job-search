@@ -54,6 +54,69 @@ function formatSourceName(source: string): string {
   return labels[source] ?? source;
 }
 
+const dimensionLabels: Record<string, string> = {
+  targetRole: "Målroll",
+  technicalSkills: "Tekniska kompetenser",
+  softSkills: "Mjuka kompetenser",
+  location: "Plats",
+  remotePreference: "Arbetsform",
+  employmentType: "Anställningsform",
+  yearsOfExperience: "Erfarenhet",
+  certifications: "Certifieringar",
+  languages: "Språk",
+  preferredIndustries: "Bransch",
+};
+
+const severityLabels: Record<string, string> = {
+  critical: "Kritisk",
+  high: "Hög",
+  medium: "Medel",
+  low: "Låg",
+};
+
+function formatDimension(dimension: string): string {
+  return dimensionLabels[dimension] ?? dimension;
+}
+
+function formatSeverity(severity: string): string {
+  return severityLabels[severity] ?? severity;
+}
+
+function formatEvidence(evidence: {
+  dimension: string;
+  requirementCoverage?: {
+    matchedRequirements: string[];
+    missingRequirements: string[];
+  };
+}): string[] {
+  const requirements = evidence.requirementCoverage?.matchedRequirements ?? [];
+
+  return requirements.length > 0
+    ? requirements.map((requirement) => `${formatDimension(evidence.dimension)}: ${requirement}`)
+    : [formatDimension(evidence.dimension)];
+}
+
+function formatGapType(type: string): string {
+  const labels: Record<string, string> = {
+    missing_skill: "Saknad kompetens",
+    insufficient_skill: "Otillräcklig kompetens",
+    missing_certification: "Saknad certifiering",
+    missing_language: "Saknat språk",
+    experience_gap: "Erfarenhetsgap",
+    education_gap: "Utbildningsgap",
+    other: "Övrigt gap",
+  };
+
+  return labels[type] ?? type;
+}
+
+function formatRequirement(requirement: string): string {
+  const separator = requirement.indexOf(":");
+  return separator >= 0
+    ? requirement.slice(separator + 1).trim()
+    : requirement;
+}
+
 export default async function JobsPage({ searchParams }: JobsPageProps) {
   const params = await searchParams;
 
@@ -312,10 +375,10 @@ export default async function JobsPage({ searchParams }: JobsPageProps) {
 
                     return (
                       <article
-                        className={styles.candidateRow}
+                        className={styles.jobResult}
                         key={`${job.source}:${job.id}`}
                       >
-                        <div>
+                        <div className={styles.jobResultHeader}>
                           <strong>{job.title}</strong>
                           <p>{job.company ?? "Företag saknas"}</p>
                           <p>
@@ -337,6 +400,102 @@ export default async function JobsPage({ searchParams }: JobsPageProps) {
                             </a>
                           ) : null}
                         </div>
+
+                        <details className={styles.analysisDetails}>
+                          <summary>Visa matchningsanalys</summary>
+
+                          <div className={styles.analysisGrid}>
+                            <section className={styles.analysisSection}>
+                              <h4>Varför jobbet matchar</h4>
+                              <ul>
+                                {ranked.matchingResult.matched.flatMap(formatEvidence).map((item, index) => (
+                                  <li key={`${item}:${index}`}>{item}</li>
+                                ))}
+                              </ul>
+                            </section>
+
+                            <section className={styles.analysisSection}>
+                              <h4>Matchade krav</h4>
+                              <ul>
+                                {ranked.matchingResult.matched
+                                  .flatMap((evidence) => evidence.requirementCoverage?.matchedRequirements ?? [])
+                                  .map((requirement, index) => (
+                                    <li key={`${requirement}:${index}`}>{requirement}</li>
+                                  ))}
+                                {ranked.skillGapResult.strengths.map((strength, index) => (
+                                  <li key={`${strength.title}:${index}`}>{strength.title}</li>
+                                ))}
+                              </ul>
+                            </section>
+
+                            <section className={styles.analysisSection}>
+                              <h4>Saknade krav / utvecklingsområden</h4>
+                              <ul>
+                                {ranked.matchingResult.missing.flatMap(formatEvidence).map((item, index) => (
+                                  <li key={`${item}:${index}`}>{item}</li>
+                                ))}
+                              </ul>
+                            </section>
+
+                            <section className={styles.analysisSection}>
+                              <h4>Information som saknas för bedömning</h4>
+                              <ul>
+                                {ranked.matchingResult.unknown.map((evidence, index) => (
+                                  <li key={`${evidence.dimension}:match:${index}`}>
+                                    {formatDimension(evidence.dimension)}
+                                  </li>
+                                ))}
+                                {ranked.skillGapResult.unknowns.map((unknown, index) => (
+                                  <li key={`${unknown.dimension}:gap:${index}`}>
+                                    {formatDimension(unknown.dimension)}
+                                  </li>
+                                ))}
+                              </ul>
+                            </section>
+
+                            <section className={styles.analysisSection}>
+                              <h4>Motstridig information</h4>
+                              <ul>
+                                {ranked.matchingResult.conflicting.flatMap(formatEvidence).map((item, index) => (
+                                  <li key={`${item}:${index}`}>{item}</li>
+                                ))}
+                              </ul>
+                            </section>
+
+                            <section className={styles.analysisSection}>
+                              <h4>Kompetensgap</h4>
+                              <ul>
+                                {ranked.skillGapResult.gaps.map((gap) => (
+                                  <li key={`${gap.type}:${gap.jobRequirement}`}>
+                                    <strong>{formatRequirement(gap.jobRequirement)}</strong>
+                                    <span>
+                                      {formatGapType(gap.type)} · {formatSeverity(gap.severity)}
+                                    </span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </section>
+
+                            <section className={styles.analysisSection}>
+                              <h4>Rekommenderad utveckling</h4>
+                              <ol>
+                                {ranked.skillGapResult.recommendations.map((recommendation) => (
+                                  <li key={recommendation.title}>
+                                    Fokusera på {recommendation.targetGaps
+                                      .map((targetGap) => ranked.skillGapResult.gaps.find((gap) => gap.title === targetGap))
+                                      .filter((gap): gap is NonNullable<typeof gap> => Boolean(gap))
+                                      .map((gap) => formatRequirement(gap.jobRequirement))
+                                      .join(", ") || "identifierade kompetensgap"}
+                                  </li>
+                                ))}
+                              </ol>
+                            </section>
+                          </div>
+
+                          <p className={styles.analysisConfidence}>
+                            Underlagets täckning: {Math.round(ranked.scoringBreakdown.confidence * 100)}% · {formatSeverity(ranked.scoringBreakdown.confidenceLabel)}
+                          </p>
+                        </details>
                       </article>
                     );
                   })
@@ -367,6 +526,35 @@ export default async function JobsPage({ searchParams }: JobsPageProps) {
                     </article>
                   ))}
             </div>
+
+            {matchingResult?.ok ? (
+              <section className={styles.learningPlan}>
+                <div className={styles.panelHeader}>
+                  <div>
+                    <p className={styles.eyebrow}>Plan för utveckling</p>
+                    <h3>Befintlig lärandeplan</h3>
+                  </div>
+                  <span>{matchingResult.analysis.learningPlan.totalGaps} prioriterade gap</span>
+                </div>
+
+                {matchingResult.analysis.learningPlan.prioritizedGaps.length === 0 ? (
+                  <p>Inga bekräftade kompetensgap identifierades bland de analyserade jobben.</p>
+                ) : (
+                  <ol className={styles.learningPlanList}>
+                    {matchingResult.analysis.learningPlan.prioritizedGaps.map((gap) => (
+                      <li key={gap.canonicalKey}>
+                        <div>
+                          <strong>{gap.skill}</strong>
+                          <span>
+                            {formatSeverity(gap.severity)} · {gap.frequencyScore}% av jobben · påverkan {gap.impactScore}%
+                          </span>
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
+                )}
+              </section>
+            ) : null}
           </section>
         ) : null}
       </main>
