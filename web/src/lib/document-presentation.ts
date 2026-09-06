@@ -4,6 +4,15 @@ export type DocumentTemplateId = "modern" | "classic" | "minimal";
 export type PresentationDocumentType = "cv" | "coverLetter";
 export type CvRendererId = "modern" | "classic" | "minimal" | "shared";
 
+export type CoverLetterRendererId = "modern" | "classic" | "minimal";
+
+export function coverLetterRendererForTemplate(
+  documentType: PresentationDocumentType,
+  templateId: DocumentTemplateId,
+): CoverLetterRendererId | "shared" {
+  return documentType === "coverLetter" ? templateId : "shared";
+}
+
 export function cvRendererForTemplate(
   documentType: PresentationDocumentType,
   templateId: DocumentTemplateId,

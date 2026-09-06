@@ -1,10 +1,13 @@
 import Link from "next/link";
 
-import { cvRendererForTemplate, type DocumentPresentationModel, type DocumentTemplateDefinition } from "@/lib/document-presentation";
+import { coverLetterRendererForTemplate, cvRendererForTemplate, type DocumentPresentationModel, type DocumentTemplateDefinition } from "@/lib/document-presentation";
 import TemplateSelector from "./template-selector";
 import ModernCvPreview from "./modern-cv-preview";
 import ClassicCvPreview from "./classic-cv-preview";
 import MinimalCvPreview from "./minimal-cv-preview";
+import ModernCoverLetterPreview from "./modern-cover-letter-preview";
+import ClassicCoverLetterPreview from "./classic-cover-letter-preview";
+import MinimalCoverLetterPreview from "./minimal-cover-letter-preview";
 
 export function DocumentPreview({
   applicationId,
@@ -36,6 +39,11 @@ export function DocumentPreview({
   if (renderer === "minimal") {
     return <MinimalCvPreview applicationId={applicationId} presentation={presentation} template={template} />;
   }
+
+  const coverLetterRenderer = coverLetterRendererForTemplate(presentation.documentType, template.id);
+  if (coverLetterRenderer === "modern") return <ModernCoverLetterPreview applicationId={applicationId} presentation={presentation} template={template} />;
+  if (coverLetterRenderer === "classic") return <ClassicCoverLetterPreview applicationId={applicationId} presentation={presentation} template={template} />;
+  if (coverLetterRenderer === "minimal") return <MinimalCoverLetterPreview applicationId={applicationId} presentation={presentation} template={template} />;
 
   return (
     <main className={`documentPage documentPage-${template.layout}`}>

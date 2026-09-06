@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 
 import type { ApplicationDocumentRecord } from "../../../.agents/job-search/cli/src/application-document-repository";
-import { classifyCvSection, cvRendererForTemplate, documentTitleForCv, DOCUMENT_TEMPLATES, resolveDocumentTemplate, templateQueryHref, toDocumentPresentationModel } from "./document-presentation";
+import { classifyCvSection, coverLetterRendererForTemplate, cvRendererForTemplate, documentTitleForCv, DOCUMENT_TEMPLATES, resolveDocumentTemplate, templateQueryHref, toDocumentPresentationModel } from "./document-presentation";
 
 function record(documentType: "cv" | "coverLetter", content: string): ApplicationDocumentRecord {
   return {
@@ -32,6 +32,10 @@ describe("document presentation architecture", () => {
     expect(cvRendererForTemplate("cv", "classic")).toBe("classic");
     expect(cvRendererForTemplate("cv", "minimal")).toBe("minimal");
     expect(cvRendererForTemplate("coverLetter", "modern")).toBe("shared");
+    expect(coverLetterRendererForTemplate("coverLetter", "modern")).toBe("modern");
+    expect(coverLetterRendererForTemplate("coverLetter", "classic")).toBe("classic");
+    expect(coverLetterRendererForTemplate("coverLetter", "minimal")).toBe("minimal");
+    expect(coverLetterRendererForTemplate("cv", "modern")).toBe("shared");
   });
 
   it("builds only allowlisted template query links without mutating content", () => {

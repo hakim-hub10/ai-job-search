@@ -1204,6 +1204,210 @@
       overflow-wrap: anywhere;
     }
 
+    .modernLetterPage,
+    .classicLetterPage,
+    .minimalLetterPage {
+      min-height: 100vh;
+      padding: 32px 16px 64px;
+      background: #eef1f3;
+    }
+
+    .modernLetterToolbar,
+    .classicLetterToolbar,
+    .minimalLetterToolbar {
+      width: min(100%, 794px);
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      margin: 0 auto 18px;
+    }
+
+    .modernLetter,
+    .classicLetter,
+    .minimalLetter {
+      width: min(100%, 794px);
+      min-height: 1123px;
+      margin: 0 auto;
+      background: #ffffff;
+      box-shadow: 0 16px 40px rgba(16, 24, 40, 0.12);
+    }
+
+    .modernLetter {
+      display: grid;
+      grid-template-columns: 18px 1fr;
+    }
+
+    .modernLetterRail {
+      background: #24343b;
+    }
+
+    .modernLetterContent {
+      padding: 64px 72px;
+    }
+
+    .modernLetterHeader,
+    .classicLetterHeader {
+      padding-bottom: 26px;
+      border-bottom: 1px solid #d9e0e2;
+    }
+
+    .modernLetterHeader p:first-child,
+    .classicLetterHeader p:first-child {
+      color: #718087;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.2em;
+    }
+
+    .modernLetterHeader p:last-child,
+    .classicLetterHeader p:last-child {
+      margin-top: 12px;
+      color: #98a2b3;
+      font-size: 11px;
+    }
+
+    .modernLetterSection,
+    .classicLetterSection {
+      margin-top: 30px;
+    }
+
+    .modernLetterSection h2,
+    .classicLetterSection h2 {
+      color: #24343b;
+      font-size: 15px;
+      font-weight: 750;
+    }
+
+    .modernLetterSection p,
+    .classicLetterSection p {
+      max-width: 620px;
+      margin-top: 12px;
+      color: #47565d;
+      font-size: 15px;
+      line-height: 1.75;
+      overflow-wrap: anywhere;
+    }
+
+    .classicLetter {
+      padding: 70px 72px;
+    }
+
+    .classicLetterHeader {
+      text-align: center;
+      border-bottom-color: #98a2b3;
+    }
+
+    .classicLetterBody {
+      max-width: 620px;
+      margin: 0 auto;
+    }
+
+    .classicLetterSection h2 {
+      padding-bottom: 8px;
+      border-bottom: 1px solid #d0d5dd;
+      color: #344054;
+      font-size: 13px;
+      letter-spacing: 0.11em;
+      text-transform: uppercase;
+    }
+
+    .classicLetterSection p {
+      color: #344054;
+    }
+
+    .minimalLetter {
+      padding: 82px 86px;
+      border-top: 5px solid #17202a;
+      box-shadow: 0 12px 32px rgba(16, 24, 40, 0.08);
+    }
+
+    .minimalLetterHeader {
+      padding-bottom: 34px;
+    }
+
+    .minimalLetterHeader h1 {
+      color: #17202a;
+      font-size: 32px;
+      font-weight: 650;
+      letter-spacing: -0.025em;
+    }
+
+    .minimalLetterHeader p {
+      margin-top: 12px;
+      color: #98a2b3;
+      font-size: 11px;
+    }
+
+    .minimalLetterBody {
+      max-width: 600px;
+    }
+
+    .minimalLetterSection {
+      padding: 24px 0;
+      border-top: 1px solid #eaecf0;
+    }
+
+    .minimalLetterSection h2 {
+      color: #667085;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.13em;
+      text-transform: uppercase;
+    }
+
+    .minimalLetterSection p {
+      margin-top: 12px;
+      color: #344054;
+      font-size: 15px;
+      line-height: 1.8;
+      overflow-wrap: anywhere;
+    }
+
+    @media (max-width: 720px) {
+      .modernLetterPage,
+      .classicLetterPage,
+      .minimalLetterPage {
+        padding: 16px 8px 32px;
+      }
+
+      .modernLetterToolbar,
+      .classicLetterToolbar,
+      .minimalLetterToolbar {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .modernLetterContent,
+      .classicLetter,
+      .minimalLetter {
+        padding: 38px 24px;
+      }
+    }
+
+    @media print {
+      .modernLetterPage,
+      .classicLetterPage,
+      .minimalLetterPage {
+        min-height: 0;
+        padding: 0;
+        background: #ffffff;
+      }
+
+      .modernLetterToolbar,
+      .classicLetterToolbar,
+      .minimalLetterToolbar {
+        display: none;
+      }
+
+      .modernLetter,
+      .classicLetter,
+      .minimalLetter {
+        width: 100%;
+        min-height: 0;
+        box-shadow: none;
+      }
+    }
+
     @media (max-width: 720px) {
       .classicCvPage,
       .minimalCvPage {

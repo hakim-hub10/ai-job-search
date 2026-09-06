@@ -1,0 +1,38 @@
+import Link from "next/link";
+
+import type { DocumentPresentationModel, DocumentTemplateDefinition } from "@/lib/document-presentation";
+import styles from "../../../page.module.css";
+import TemplateSelector from "./template-selector";
+
+export default function ClassicCoverLetterPreview({
+  applicationId,
+  presentation,
+  template,
+}: {
+  applicationId: string;
+  presentation: DocumentPresentationModel;
+  template: DocumentTemplateDefinition;
+}) {
+  return (
+    <main className={styles.classicLetterPage}>
+      <div className={styles.classicLetterToolbar}>
+        <Link href={`/applications/${encodeURIComponent(applicationId)}/documents/cover-letter`}>← Tillbaka till ansökan</Link>
+        <TemplateSelector selectedTemplate={template} />
+      </div>
+      <article className={styles.classicLetter}>
+        <header className={styles.classicLetterHeader}>
+          <p>PERSONLIGT BREV</p>
+          <p>Version {presentation.version} · Skapad {presentation.createdAt}</p>
+        </header>
+        <div className={styles.classicLetterBody}>
+          {presentation.sections.map((section) => (
+            <section className={styles.classicLetterSection} key={section.heading}>
+              {section.heading ? <h2>{section.heading}</h2> : null}
+              {section.items.map((item) => <p key={item}>{item}</p>)}
+            </section>
+          ))}
+        </div>
+      </article>
+    </main>
+  );
+}
