@@ -3,9 +3,11 @@ import Link from "next/link";
 import { loadApplicationDetail } from "@/lib/application-detail";
 import { loadApplicationCandidate } from "@/lib/application-candidate";
 import { loadApplicationDocumentState } from "@/lib/application-documents";
+import { loadCandidateBaseCvState } from "@/lib/candidate-base-cv-state";
 
 import {
   associateApplicationCandidateAction,
+  createTailoredCvAction,
   updateApplicationStatusAction,
 } from "../actions";
 
@@ -81,6 +83,9 @@ export default async function ApplicationDetailPage({
   }
 
   const application = result.application;
+  const baseCvResult = candidateResult.candidate
+    ? await loadCandidateBaseCvState(candidateResult.candidate.id)
+    : null;
 
   return (
     <main style={{ maxWidth: 900, margin: "0 auto", padding: "48px 24px" }}>
@@ -177,6 +182,40 @@ export default async function ApplicationDetailPage({
               const latest = [...documentResult.documents]
                 .filter((document) => document.documentType === documentType)
                 .sort((a, b) => b.version - a.version)[0];
+
+              if (documentType === "cv") {
+                return (
+                  <div key={documentType}>
+                    <p>
+                      CV: {latest
+                        ? `Version ${latest.version} · Skapad: ${latest.createdAt}`
+                        : "Inte skapat"}
+                    </p>
+                    {latest ? (
+                      <>
+                        <p>
+                          <Link href={`/applications/${encodeURIComponent(application.id)}/documents/cv`}>
+                            Visa CV
+                          </Link>
+                        </p>
+                        <form action={createTailoredCvAction}>
+                          <input type="hidden" name="applicationId" value={application.id} />
+                          <button type="submit">Skapa ny version</button>
+                        </form>
+                      </>
+                    ) : baseCvResult?.ok && baseCvResult.baseCv ? (
+                      <form action={createTailoredCvAction}>
+                        <input type="hidden" name="applicationId" value={application.id} />
+                        <button type="submit">Skapa anpassat CV</button>
+                      </form>
+                    ) : (
+                      <p>
+                        Grund-CV saknas. Skapa ett grund-CV innan du skapar ett anpassat CV.
+                      </p>
+                    )}
+                  </div>
+                );
+              }
 
               return (
                 <p key={documentType}>

@@ -2,9 +2,17 @@
 
 import { resolve } from "node:path";
 
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { createFileApplicationRepository } from "../../../../.agents/job-search/cli/src/application-file-repository";
+import { createFileApplicationDocumentRepository } from "../../../../.agents/job-search/cli/src/application-document-file-repository";
+import { createFileCandidateBaseCvRepository } from "@/lib/candidate-base-cv-file-repository";
+import { createFileCandidateApplicationAssociationRepository } from "../../../../.agents/job-search/cli/src/coach-application-association-file-repository";
+import { resolveCoachRepositoryPaths } from "../../../../.agents/job-search/cli/src/coach-cli-paths";
+import { createFileCoachWorkspaceRepository } from "../../../../.agents/job-search/cli/src/coach-workspace-file-repository";
+import { loadCandidateProfileRepository } from "@/lib/candidate-profiles";
+import { createTailoredCv } from "@/lib/tailored-cv";
 import { createApplicationWorkflow } from "../../../../.agents/job-search/cli/src/application-workflow";
 import type { ApplicationStatus } from "../../../../.agents/job-search/cli/src/applications";
 
@@ -138,5 +146,54 @@ export async function associateApplicationCandidateAction(formData: FormData) {
     throw new Error("Kandidaten kunde inte kopplas till ansökan.");
   }
 
+  redirect(`/applications/${encodeURIComponent(applicationId)}`);
+}
+
+export async function createTailoredCvAction(formData: FormData) {
+  const applicationIdValue = formData.get("applicationId");
+  const applicationId =
+    typeof applicationIdValue === "string" ? applicationIdValue.trim() : "";
+  const coachDir = process.env.COACH_DIR?.trim();
+  const applicationRepositoryPath = process.env.APPLICATION_REPOSITORY?.trim();
+  const documentRepositoryPath = process.env.APPLICATION_DOCUMENT_REPOSITORY?.trim();
+
+  if (!applicationId) throw new Error("Ansökans ID saknas.");
+  if (!coachDir || !applicationRepositoryPath || !documentRepositoryPath) {
+    throw new Error("Dokumentvyn är inte fullständigt konfigurerad.");
+  }
+
+  const paths = resolveCoachRepositoryPaths(resolve(coachDir));
+  const result = await createTailoredCv(
+    { applicationId },
+    {
+      applicationRepository: createFileApplicationRepository(resolve(applicationRepositoryPath)),
+      associationRepository: createFileCandidateApplicationAssociationRepository(paths.associations),
+      candidateRepository: createFileCoachWorkspaceRepository(paths.candidates),
+      profileRepository: loadCandidateProfileRepository().repository!,
+      baseCvRepository: createFileCandidateBaseCvRepository(resolve(coachDir, "candidate-cvs.json")),
+      documentRepository: createFileApplicationDocumentRepository(resolve(documentRepositoryPath)),
+    },
+  );
+
+  if (!result.ok) {
+    const messages: Record<string, string> = {
+      APPLICATION_NOT_FOUND: "Ansökan hittades inte.",
+      ASSOCIATION_NOT_FOUND: "Ansökan saknar kandidatkoppling.",
+      CANDIDATE_NOT_FOUND: "Den kopplade kandidaten hittades inte.",
+      PROFILE_NOT_FOUND: "Kandidatprofil saknas.",
+      BASE_CV_NOT_FOUND: "Grund-CV saknas. Skapa ett grund-CV innan du skapar ett anpassat CV.",
+      APPLICATION_STORAGE_FAILURE: "Ansökningsarkivet kunde inte läsas.",
+      ASSOCIATION_STORAGE_FAILURE: "Kandidatkopplingen kunde inte läsas.",
+      CANDIDATE_STORAGE_FAILURE: "Kandidatregistret kunde inte läsas.",
+      PROFILE_STORAGE_FAILURE: "Kandidatprofilen kunde inte läsas.",
+      BASE_CV_STORAGE_FAILURE: "Grund-CV-lagringen kunde inte läsas.",
+      TAILORING_FAILED: "Det anpassade CV:t kunde inte skapas.",
+      DOCUMENT_STORAGE_FAILURE: "Det anpassade CV:t kunde inte sparas.",
+    };
+    throw new Error(messages[result.code] ?? "Det anpassade CV:t kunde inte skapas.");
+  }
+
+  revalidatePath(`/applications/${encodeURIComponent(applicationId)}`);
+  revalidatePath(`/applications/${encodeURIComponent(applicationId)}/documents/cv`);
   redirect(`/applications/${encodeURIComponent(applicationId)}`);
 }
