@@ -81,8 +81,8 @@ export default async function CandidatePage({
     <div className={styles.shell}>
       <aside className={styles.sidebar}>
         <div>
-          <p className={styles.eyebrow}>AI Career Agent</p>
-          <h1 className={styles.brand}>Career Workspace</h1>
+          <p className={styles.eyebrow}>AI-jobbcoach</p>
+          <h1 className={styles.brand}>Jobbcoachens arbetsyta</h1>
         </div>
 
         <nav className={styles.nav}>
@@ -161,6 +161,10 @@ export default async function CandidatePage({
                 <div>
                   <p className={styles.eyebrow}>Kandidatprofil</p>
                   <h3>Profil för jobbmatchning</h3>
+                  <p className={styles.formIntro}>
+                    Fyll i dina preferenser så att jobbmatchningen kan anpassas
+                    efter din erfarenhet och dina mål.
+                  </p>
                 </div>
               </div>
 
@@ -172,15 +176,18 @@ export default async function CandidatePage({
                   <p>Ett tekniskt fel uppstod när profilinformationen lästes.</p>
                 </section>
               ) : (
-                <form action={saveCandidateProfileAction}>
+                <form
+                  action={saveCandidateProfileAction}
+                  className={styles.profileForm}
+                >
                   <input
                     type="hidden"
                     name="candidateId"
                     value={candidate.id}
                   />
 
-                  <div className={styles.dashboardGrid}>
-                    <label>
+                  <div className={styles.profileGrid}>
+                    <label className={styles.profileField}>
                       Yrkesrubrik
                       <input
                         type="text"
@@ -191,7 +198,7 @@ export default async function CandidatePage({
                       />
                     </label>
 
-                    <label>
+                    <label className={styles.profileField}>
                       Antal års erfarenhet
                       <input
                         type="number"
@@ -205,7 +212,7 @@ export default async function CandidatePage({
                       />
                     </label>
 
-                    <label>
+                    <label className={styles.profileField}>
                       Arbetsform
                       <select
                         name="workMode"
@@ -222,7 +229,7 @@ export default async function CandidatePage({
                       </select>
                     </label>
 
-                    <label>
+                    <label className={styles.profileCheckbox}>
                       <input
                         type="checkbox"
                         name="remotePreference"
@@ -234,7 +241,8 @@ export default async function CandidatePage({
                     </label>
                   </div>
 
-                  <label>
+                  <div className={styles.profileGrid}>
+                  <label className={styles.profileField}>
                     Målroller
                     <textarea
                       name="targetRoles"
@@ -246,7 +254,7 @@ export default async function CandidatePage({
                     />
                   </label>
 
-                  <label>
+                  <label className={styles.profileField}>
                     Önskade orter
                     <textarea
                       name="locationPreferences"
@@ -259,7 +267,7 @@ export default async function CandidatePage({
                     />
                   </label>
 
-                  <label>
+                  <label className={styles.profileField}>
                     Branscher
                     <textarea
                       name="preferredIndustries"
@@ -271,10 +279,12 @@ export default async function CandidatePage({
                       placeholder={"IT\nTeknik"}
                     />
                   </label>
+                  </div>
 
-                  <fieldset>
+                  <fieldset className={styles.profileFieldset}>
                     <legend>Anställningsformer</legend>
 
+                    <div className={styles.profileOptions}>
                     {[
                       ["full-time", "Heltid"],
                       ["part-time", "Deltid"],
@@ -283,7 +293,7 @@ export default async function CandidatePage({
                       ["internship", "Praktik"],
                       ["open", "Öppen"],
                     ].map(([value, label]) => (
-                      <label key={value}>
+                      <label key={value} className={styles.profileOption}>
                         <input
                           type="checkbox"
                           name="preferredEmploymentType"
@@ -303,9 +313,11 @@ export default async function CandidatePage({
                         {label}
                       </label>
                     ))}
+                    </div>
                   </fieldset>
 
-                  <label>
+                  <div className={styles.profileGrid}>
+                  <label className={`${styles.profileField} ${styles.profileFieldWide}`}>
                     Tekniska kompetenser
                     <textarea
                       name="technicalSkills"
@@ -317,7 +329,7 @@ export default async function CandidatePage({
                     />
                   </label>
 
-                  <label>
+                  <label className={styles.profileField}>
                     Mjuka kompetenser
                     <textarea
                       name="softSkills"
@@ -329,7 +341,7 @@ export default async function CandidatePage({
                     />
                   </label>
 
-                  <label>
+                  <label className={styles.profileField}>
                     Certifieringar
                     <textarea
                       name="certifications"
@@ -341,7 +353,7 @@ export default async function CandidatePage({
                     />
                   </label>
 
-                  <label>
+                  <label className={styles.profileField}>
                     Språk
                     <textarea
                       name="languages"
@@ -358,12 +370,12 @@ export default async function CandidatePage({
                         "Svenska | Professionell\nEngelska | Professionell"
                       }
                     />
-                    <span>
+                    <span className={styles.profileHelper}>
                       Ett språk per rad i formatet: Språk | Nivå
                     </span>
                   </label>
 
-                  <label>
+                  <label className={styles.profileField}>
                     Karriärmål
                     <textarea
                       name="careerGoals"
@@ -375,7 +387,7 @@ export default async function CandidatePage({
                     />
                   </label>
 
-                  <label>
+                  <label className={`${styles.profileField} ${styles.profileFieldWide}`}>
                     Sammanfattning
                     <textarea
                       name="summary"
@@ -384,13 +396,16 @@ export default async function CandidatePage({
                       placeholder="Kort professionell sammanfattning"
                     />
                   </label>
+                  </div>
 
-                  <button
-                    type="submit"
-                    className={styles.secondaryButton}
-                  >
-                    Spara kandidatprofil
-                  </button>
+                  <div className={styles.profileActions}>
+                    <button
+                      type="submit"
+                      className={styles.secondaryButton}
+                    >
+                      Spara kandidatprofil
+                    </button>
+                  </div>
                 </form>
               )}
             </section>
@@ -526,7 +541,7 @@ export default async function CandidatePage({
                                     type="submit"
                                     className={styles.secondaryButton}
                                   >
-                                    Complete
+                                    Slutför
                                   </button>
                                 </form>
                               ) : null}
@@ -564,7 +579,7 @@ export default async function CandidatePage({
                         />
 
                         <label>
-                          New note
+                          Ny anteckning
                           <textarea
                             name="text"
                             rows={4}
@@ -723,7 +738,7 @@ export default async function CandidatePage({
 
                                   {goal.status !== "inProgress" ? (
                                     <option value="inProgress">
-                                      In progress
+                                      Pågående
                                     </option>
                                   ) : null}
 
@@ -740,7 +755,7 @@ export default async function CandidatePage({
                                   type="submit"
                                   className={styles.secondaryButton}
                                 >
-                                  Update
+                                  Uppdatera
                                 </button>
                               </form>
                             ) : null}
@@ -765,21 +780,21 @@ export default async function CandidatePage({
 
                       <div className={styles.candidateMeta}>
                         <label>
-                          Activity
+                          Aktivitet
                           <select name="kind" required defaultValue="">
                             <option value="" disabled>
-                              Select activity
+                              Välj aktivitet
                             </option>
                             <option value="applyForJob">Sök jobb</option>
                             <option value="updateCv">Uppdatera CV</option>
                             <option value="contactEmployer">
-                              Contact employer
+                              Kontakta arbetsgivare
                             </option>
                             <option value="attendInterview">
-                              Attend interview
+                              Gå på intervju
                             </option>
                             <option value="completeCourseStep">
-                              Complete course step
+                              Slutför kurssteg
                             </option>
                             <option value="coachingMeeting">
                               Coachmöte
@@ -820,11 +835,11 @@ export default async function CandidatePage({
                                   : activity.kind === "updateCv"
                                     ? "Uppdatera CV"
                                     : activity.kind === "contactEmployer"
-                                      ? "Contact employer"
+                                      ? "Kontakta arbetsgivare"
                                       : activity.kind === "attendInterview"
-                                        ? "Attend interview"
+                                        ? "Gå på intervju"
                                         : activity.kind === "completeCourseStep"
-                                          ? "Complete course step"
+                                          ? "Slutför kurssteg"
                                           : "Coachmöte"}
                               </strong>
 
@@ -862,7 +877,7 @@ export default async function CandidatePage({
                                   type="submit"
                                   className={styles.secondaryButton}
                                 >
-                                  Update
+                                  Uppdatera
                                 </button>
                               </form>
                             ) : null}
