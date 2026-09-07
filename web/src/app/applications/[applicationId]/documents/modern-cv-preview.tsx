@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { classifyCvSection, documentTitleForCv, type DocumentPresentationModel, type DocumentPresentationSection, type DocumentTemplateDefinition } from "@/lib/document-presentation";
 import styles from "../../../page.module.css";
+import { DocumentExportControls } from "./document-export-controls";
 import TemplateSelector from "./template-selector";
 
 function sidebarSections(sections: DocumentPresentationSection[]) {
@@ -30,6 +31,7 @@ export default function ModernCvPreview({
       <div className={styles.modernCvToolbar}>
         <Link href={`/applications/${encodeURIComponent(applicationId)}/documents/cv`}>← Tillbaka till ansökan</Link>
         <TemplateSelector selectedTemplate={template} />
+        <DocumentExportControls applicationId={applicationId} documentType="cv" templateId={template.id} />
       </div>
       <article className={styles.modernCv}>
         <aside className={styles.modernCvSidebar}>

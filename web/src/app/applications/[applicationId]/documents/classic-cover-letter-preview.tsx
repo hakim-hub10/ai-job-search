@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import type { DocumentPresentationModel, DocumentTemplateDefinition } from "@/lib/document-presentation";
 import styles from "../../../page.module.css";
+import { DocumentExportControls } from "./document-export-controls";
 import TemplateSelector from "./template-selector";
 
 export default function ClassicCoverLetterPreview({
@@ -18,6 +19,7 @@ export default function ClassicCoverLetterPreview({
       <div className={styles.classicLetterToolbar}>
         <Link href={`/applications/${encodeURIComponent(applicationId)}/documents/cover-letter`}>← Tillbaka till ansökan</Link>
         <TemplateSelector selectedTemplate={template} />
+        <DocumentExportControls applicationId={applicationId} documentType="coverLetter" templateId={template.id} />
       </div>
       <article className={styles.classicLetter}>
         <header className={styles.classicLetterHeader}>

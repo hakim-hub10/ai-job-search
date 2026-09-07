@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { documentTitleForCv, type DocumentPresentationModel, type DocumentTemplateDefinition } from "@/lib/document-presentation";
 import styles from "../../../page.module.css";
+import { DocumentExportControls } from "./document-export-controls";
 import TemplateSelector from "./template-selector";
 
 export default function MinimalCvPreview({
@@ -20,6 +21,7 @@ export default function MinimalCvPreview({
       <div className={styles.minimalCvToolbar}>
         <Link href={`/applications/${encodeURIComponent(applicationId)}/documents/cv`}>← Tillbaka till ansökan</Link>
         <TemplateSelector selectedTemplate={template} />
+        <DocumentExportControls applicationId={applicationId} documentType="cv" templateId={template.id} />
       </div>
       <article className={styles.minimalCv}>
         <header className={styles.minimalCvHeader}>

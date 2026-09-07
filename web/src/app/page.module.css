@@ -743,6 +743,45 @@
     gap: 10px;
   }
 
+  .documentExport {
+    display: grid;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .documentExport > span {
+    color: #475467;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .documentExport > div {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .documentExport a {
+    padding: 8px 10px;
+    border: 1px solid #175cd3;
+    border-radius: 6px;
+    background: #ffffff;
+    color: #175cd3;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  .documentExport a:first-child {
+    background: #175cd3;
+    color: #ffffff;
+  }
+
+  .documentExport a:focus-visible {
+    outline: 3px solid rgba(23, 92, 211, 0.3);
+    outline-offset: 2px;
+  }
+
   .templateOption {
     display: grid;
     align-content: start;
