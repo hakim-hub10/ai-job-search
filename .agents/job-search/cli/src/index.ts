@@ -674,3 +674,11 @@ export {
   type CoachPortfolioAnalyticsWorkflowError,
   type CoachPortfolioAnalyticsWorkflowResult,
 } from "./coach-portfolio-analytics-workflow"
+
+export { createFileInterviewSessionRepository } from "./interview-session-file-repository"
+export type {
+  InterviewSessionRepository,
+  InterviewSessionRepositoryErrorCode,
+  InterviewSessionRepositoryError,
+  InterviewSessionRepositoryResult,
+} from "./interview-session-repository"
