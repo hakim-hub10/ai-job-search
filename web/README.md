@@ -34,3 +34,29 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Interview data (Phase 12.1)
+
+`src/lib/interview-data.ts` provides server-side `loadInterviewOverview(applicationId)`
+and `loadInterviewSession(applicationId, sessionId)` reads. Configure private runtime
+variables `APPLICATION_REPOSITORY` and `INTERVIEW_SESSION_REPOSITORY` with trusted
+storage paths outside public assets. The latter uses the existing core envelope
+`{ schemaVersion: 1, sessions: InterviewSession[] }`. Missing configuration is an
+explicit error; a missing session file is an empty collection. Reads never save.
+
+This module imports Node-backed repositories and uses Next.js’s `server-only`
+marker to reject imports from client components. Pass its plain read models to UI components;
+do not pass dependencies, repositories or paths. Tests can supply read-only fake
+repository dependencies without using the preview store.
+
+Sessions retain repository order (stable ID order for file storage), which is not
+chronological. There are no timestamps or latest-session semantics. The read models
+contain application/job labels and session progress counts from the Phase 5 summary
+API, with no answer bodies or warning tokens. They make no feedback-availability,
+preparation-availability or provider-configuration claims.
+
+Preparation can be derived by the existing core API from an application snapshot
+and explicit candidate document evidence, but this read layer does not generate it.
+Feedback also requires a compatible preparation plan and is not persisted. Evidence
+selection and historical plan compatibility remain decisions for later phases.
+Optional AI remains behind future explicit actions. No interview GUI is added here.
