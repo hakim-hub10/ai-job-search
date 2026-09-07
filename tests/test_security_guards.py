@@ -299,6 +299,18 @@ class GitignorePatternBehaviorTests(unittest.TestCase):
 
 
 class GitignoreNegationTests(GuardRepoFixture):
+    def test_web_bun_lock_exception_is_narrowly_allowlisted(self):
+        allowed_rules = list(security_guards.REQUIRED_IGNORE_RULES) + ["!web/bun.lock"]
+        self.write_gitignore(allowed_rules)
+        result = run_guards(self.root)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+        self.write_gitignore(allowed_rules + ["!web/secret.txt"])
+        result = run_guards(self.root)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("negation rule not in the reviewed allowlist", result.stdout)
+        self.assertIn("!web/secret.txt", result.stdout)
+
     def test_negation_reincluding_personal_data_fails(self):
         # .gitignore is order-sensitive: `!salary_data.json` after the
         # `salary_data.json` rule re-includes the file, so the required rule is
