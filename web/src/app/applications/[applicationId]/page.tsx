@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { applicationInterviewPath } from "@/lib/interview-presentation";
 
 import { loadApplicationDetail } from "@/lib/application-detail";
 import { loadApplicationCandidate } from "@/lib/application-candidate";
@@ -91,6 +92,10 @@ export default async function ApplicationDetailPage({
   return (
     <main style={{ maxWidth: 900, margin: "0 auto", padding: "48px 24px" }}>
       <Link href="/applications">← Ansökningar</Link>
+
+      <nav aria-label="Ansökans sidor" style={{ marginTop: 24 }}>
+        <Link href={applicationInterviewPath(application.id)}>Intervju</Link>
+      </nav>
 
       <p style={{ marginTop: 32 }}>ANSÖKAN</p>
 
