@@ -1,0 +1,78 @@
+import { describe, expect, it } from "bun:test";
+
+import type { ApplicationDocumentRecord } from "../../../.agents/job-search/cli/src/application-document-repository";
+import type { ApplicationDocumentRepository } from "../../../.agents/job-search/cli/src/application-document-repository";
+import { prepareDocumentExport, suggestedDocumentFilename } from "./document-export";
+
+const content = "## Profil\n- Supporttekniker\n## Kompetenser\n- Microsoft 365\n";
+
+function record(version: number, documentType: "cv" | "coverLetter" = "cv"): ApplicationDocumentRecord {
+  return {
+    id: `document-${version}`,
+    applicationId: "application-1",
+    documentType,
+    language: "sv",
+    version,
+    createdAt: `2026-09-0${version}T10:00:00.000Z`,
+    generatedDocument: {} as ApplicationDocumentRecord["generatedDocument"],
+    renderedDocument: { content } as ApplicationDocumentRecord["renderedDocument"],
+  };
+}
+
+function repository(records: ApplicationDocumentRecord[]): ApplicationDocumentRepository {
+  return {
+    async create(value) { return { ok: true, value }; },
+    async getById() { return { ok: false, error: { code: "NOT_FOUND", message: "missing" } }; },
+    async listByApplication() { return { ok: true, value: records }; },
+    async listVersions() { return { ok: true, value: records }; },
+    async getLatest() { return { ok: true, value: structuredClone(records.at(-1)!) }; },
+  };
+}
+
+describe("Phase 11.7A document export preparation", () => {
+  it.each([
+    ["cv", "modern", "pdf", "cv-modern-v3.pdf"],
+    ["cv", "classic", "docx", "cv-classic-v3.docx"],
+    ["coverLetter", "modern", "pdf", "personligt-brev-modern-v3.pdf"],
+    ["coverLetter", "minimal", "docx", "personligt-brev-minimal-v3.docx"],
+  ] as const)("prepares %s %s %s from the latest stored version", async (documentType, templateId, format, filename) => {
+    const result = await prepareDocumentExport({ applicationId: "application-1", documentType, templateId, format }, { documentRepository: repository([record(1, documentType), record(3, documentType)]) });
+    expect(result).toMatchObject({ ok: true, value: { applicationId: "application-1", documentVersion: 3, templateId, suggestedFilename: filename, format: { format, extension: format, mediaType: format === "pdf" ? "application/pdf" : "application/vnd.openxmlformats-officedocument.wordprocessingml.document" }, presentation: { rawContent: content, version: 3 } } });
+  });
+
+  it("accepts all canonical templates and rejects invalid template, format, and document type", async () => {
+    for (const templateId of ["modern", "classic", "minimal"] as const) {
+      expect((await prepareDocumentExport({ applicationId: "application-1", documentType: "cv", templateId, format: "pdf" }, { documentRepository: repository([record(3)]) })).ok).toBe(true);
+    }
+    expect(await prepareDocumentExport({ applicationId: "application-1", documentType: "cv", templateId: "unknown" as never, format: "pdf" }, { documentRepository: repository([record(3)]) })).toMatchObject({ ok: false, error: { code: "INVALID_TEMPLATE" } });
+    expect(await prepareDocumentExport({ applicationId: "application-1", documentType: "cv", templateId: "modern", format: "html" as never }, { documentRepository: repository([record(3)]) })).toMatchObject({ ok: false, error: { code: "INVALID_FORMAT" } });
+    expect(await prepareDocumentExport({ applicationId: "application-1", documentType: "html" as never, templateId: "modern", format: "pdf" }, { documentRepository: repository([record(3)]) })).toMatchObject({ ok: false, error: { code: "INVALID_DOCUMENT_TYPE" } });
+  });
+
+  it("returns safe document-not-found/storage errors and does not require candidate profile data", async () => {
+    const missing: ApplicationDocumentRepository = { ...repository([]), async getLatest() { return { ok: false, error: { code: "NOT_FOUND", message: "/private/path" } }; } };
+    const broken: ApplicationDocumentRepository = { ...repository([]), async getLatest() { return { ok: false, error: { code: "READ_FAILURE", message: "/private/path" } }; } };
+    expect(await prepareDocumentExport({ applicationId: "application-1", documentType: "cv", templateId: "modern", format: "pdf" }, { documentRepository: missing })).toMatchObject({ ok: false, error: { code: "DOCUMENT_NOT_FOUND" } });
+    expect(await prepareDocumentExport({ applicationId: "application-1", documentType: "cv", templateId: "modern", format: "pdf" }, { documentRepository: broken })).toMatchObject({ ok: false, error: { code: "DOCUMENT_STORAGE_FAILURE" } });
+  });
+
+  it("keeps filenames bounded and safe even when the helper receives hostile template-like input", () => {
+    const filename = suggestedDocumentFilename("cv", "modern", 3, "pdf");
+    expect(filename).toBe("cv-modern-v3.pdf");
+    expect(filename).not.toContain("/");
+    expect(filename).not.toContain("\\");
+    expect(filename).not.toContain("\0");
+    expect(suggestedDocumentFilename("coverLetter", "minimal", 99, "docx").length).toBeLessThan(100);
+  });
+
+  it("is deterministic, preserves unknown sections, and does not mutate the source record", async () => {
+    const stored = record(3);
+    const before = structuredClone(stored);
+    const dependencies = { documentRepository: repository([stored]) };
+    const first = await prepareDocumentExport({ applicationId: "application-1", documentType: "cv", templateId: "modern", format: "pdf" }, dependencies);
+    const second = await prepareDocumentExport({ applicationId: "application-1", documentType: "cv", templateId: "modern", format: "pdf" }, dependencies);
+    expect(first).toEqual(second);
+    expect(stored).toEqual(before);
+    expect(first.ok && first.value.presentation.sections).toContainEqual({ heading: "Profil", items: ["Supporttekniker"] });
+  });
+});
