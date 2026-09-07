@@ -127,15 +127,15 @@ function parseSections(content: string): DocumentPresentationSection[] {
   let current: DocumentPresentationSection | null = null;
 
   for (const line of content.split(/\r?\n/u)) {
-    const heading = /^\\?##\s+(.+)$/u.exec(line.trim());
+    const heading = /^\\?##\s+([\s\S]+)$/u.exec(line.trim());
     if (heading) {
       current = { heading: heading[1], items: [] };
       sections.push(current);
       continue;
     }
-    const item = /^[-*]\s+(.+)$/u.exec(line.trim());
+    const item = /^[-*]\s+([\s\S]+)$/u.exec(line.trim());
     if (item) {
-      const escapedHeading = /^\\?##\s+(.+)$/u.exec(item[1]);
+      const escapedHeading = /^\\?##\s+([\s\S]+)$/u.exec(item[1]);
       if (escapedHeading) {
         current = { heading: escapedHeading[1], items: [] };
         sections.push(current);

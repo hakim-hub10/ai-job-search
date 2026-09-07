@@ -2,7 +2,7 @@ import PDFDocument from "pdfkit";
 import { existsSync } from "node:fs";
 
 import { classifyCvSection, type DocumentPresentationSection } from "./document-presentation";
-import type { DocumentExportModel } from "./document-export";
+import { sanitizedDocumentExportModel, type DocumentExportModel } from "./document-export";
 
 export interface ExportedPdfDocument {
   bytes: Uint8Array;
@@ -112,8 +112,10 @@ function validateModel(model: DocumentExportModel): DocumentPdfExportResult | nu
 export async function exportDocumentToPdf(model: DocumentExportModel): Promise<DocumentPdfExportResult> {
   const invalid = validateModel(model);
   if (invalid) return invalid;
+  const safeModel = sanitizedDocumentExportModel(model);
+  if (!safeModel) return failure("INVALID_EXPORT_MODEL", "Document export model is invalid.");
   try {
-    const bytes = await renderPdf(model);
+    const bytes = await renderPdf(safeModel);
     if (bytes.length < 100 || String.fromCharCode(...bytes.slice(0, 4)) !== "%PDF") return failure("PDF_EXPORT_FAILED", "PDF export did not produce a valid PDF.");
     return { ok: true, value: { bytes, filename: model.suggestedFilename, mediaType: "application/pdf" } };
   } catch {

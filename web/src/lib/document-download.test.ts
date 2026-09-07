@@ -83,6 +83,22 @@ describe("secure document download boundary", () => {
     expect(await failed.text()).toBe("Exporten kunde inte genomföras.");
   });
 
+  it("returns exporter bytes exactly and rejects mismatched MIME or filename extensions", async () => {
+    const bytes = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d]);
+    const success = await downloadDocument({ applicationId, documentType: "cv", templateId: "modern", format: "pdf" }, {
+      documentRepository: repository(record("cv")),
+      async exportPdf() { return { ok: true, value: { bytes, filename: "cv-modern-v3.pdf", mediaType: "application/pdf" } }; },
+    });
+    expect(new Uint8Array(await success.arrayBuffer())).toEqual(bytes);
+
+    const invalid = await downloadDocument({ applicationId, documentType: "cv", templateId: "modern", format: "pdf" }, {
+      documentRepository: repository(record("cv")),
+      async exportPdf() { return { ok: true, value: { bytes, filename: "cv-modern-v3.docx", mediaType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" } } as never; },
+    });
+    expect(invalid.status).toBe(500);
+    expect(invalid.headers.get("Content-Disposition")).toBeNull();
+  });
+
   it("builds download URLs from identifiers and selected templates only", () => {
     const href = documentDownloadHref("application-1", "cv", "classic", "docx");
     expect(href).toBe("/applications/application-1/documents/export?documentType=cv&template=classic&format=docx");

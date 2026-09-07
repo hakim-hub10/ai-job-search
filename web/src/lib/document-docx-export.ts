@@ -13,7 +13,7 @@ import {
 } from "docx";
 
 import { classifyCvSection, documentTitleForCv, type DocumentPresentationSection } from "./document-presentation";
-import type { DocumentExportModel } from "./document-export";
+import { sanitizedDocumentExportModel, type DocumentExportModel } from "./document-export";
 
 export interface ExportedDocxDocument {
   bytes: Uint8Array;
@@ -176,8 +176,10 @@ function validateModel(model: DocumentExportModel): DocumentDocxExportResult | n
 export async function exportDocumentToDocx(model: DocumentExportModel): Promise<DocumentDocxExportResult> {
   const invalid = validateModel(model);
   if (invalid) return invalid;
+  const safeModel = sanitizedDocumentExportModel(model);
+  if (!safeModel) return failure("INVALID_EXPORT_MODEL", "Document export model is invalid.");
   try {
-    const bytes = new Uint8Array(await Packer.toBuffer(documentFor(model)));
+    const bytes = new Uint8Array(await Packer.toBuffer(documentFor(safeModel)));
     if (bytes.length < 100 || bytes[0] !== 0x50 || bytes[1] !== 0x4b) return failure("DOCX_EXPORT_FAILED", "DOCX export did not produce a valid package.");
     return { ok: true, value: { bytes, filename: model.suggestedFilename, mediaType: DOCX_MEDIA_TYPE } };
   } catch {

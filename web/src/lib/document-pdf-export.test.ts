@@ -91,6 +91,18 @@ describe("Phase 11.7B PDF export", () => {
     expect(source).toEqual(before);
   });
 
+  it("removes XML-invalid controls without changing valid Swedish Unicode", async () => {
+    const source = model("cv", "classic", "## Profil\n- Före\u0000\u0007\u001b\tåäö\u2028\u2029\u200b\u202eEfter");
+    const result = await exportDocumentToPdf(source);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.error.message);
+    const text = await pdfText(result.value.bytes);
+    expect(text).toContain("Före");
+    expect(text).toContain("åäö");
+    expect(text).not.toContain("BEL");
+    expect(source.presentation.sections[0].items[0]).toContain("\u0000");
+  });
+
   it("rejects unsupported template/model combinations without invoking LibreOffice", async () => {
     const result = await exportDocumentToPdf({ ...model("cv", "modern"), templateId: "unknown" as never });
     expect(result).toMatchObject({ ok: false, error: { code: "UNSUPPORTED_PDF_TEMPLATE" } });

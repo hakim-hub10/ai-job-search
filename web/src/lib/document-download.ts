@@ -48,6 +48,10 @@ function safeAttachmentFilename(value: string): string | null {
   return /^[a-z0-9]+(?:-[a-z0-9]+)*-v[1-9][0-9]*\.(?:pdf|docx)$/u.test(value) ? value : null;
 }
 
+function expectedMediaType(format: "pdf" | "docx"): "application/pdf" | "application/vnd.openxmlformats-officedocument.wordprocessingml.document" {
+  return format === "pdf" ? "application/pdf" : "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+}
+
 export async function downloadDocument(
   request: DocumentDownloadRequest,
   dependencies: DocumentDownloadDependencies,
@@ -74,7 +78,7 @@ export async function downloadDocument(
   if (!exported.ok) return errorResponse(500, "Exporten kunde inte genomföras.");
 
   const filename = safeAttachmentFilename(exported.value.filename);
-  if (!filename) return errorResponse(500, "Exporten kunde inte genomföras.");
+  if (!filename || !filename.endsWith(`.${request.format}`) || exported.value.mediaType !== expectedMediaType(request.format)) return errorResponse(500, "Exporten kunde inte genomföras.");
   const bytes = new Uint8Array(exported.value.bytes).buffer;
   return new Response(bytes, {
     status: 200,

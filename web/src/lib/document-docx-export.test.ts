@@ -102,6 +102,17 @@ describe("Phase 11.7C DOCX export", () => {
     expect(source).toEqual(before);
   });
 
+  it("removes XML-invalid controls while preserving Swedish and valid Unicode text", async () => {
+    const source = model("cv", "minimal", "## Profil\n- Före\u0000\u0007\u001b\tåäö\u2028\u2029\u200b\u202eEfter");
+    const result = await exportDocumentToDocx(source);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.error.message);
+    const documentXml = await docxPart(result.value.bytes, "word/document.xml");
+    expect(documentXml).toContain("Före\tåäö\u2028\u2029\u200b\u202eEfter");
+    expect(documentXml).not.toMatch(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/u);
+    expect(source.presentation.sections[0].items[0]).toContain("\u0000");
+  });
+
   it("returns typed errors for invalid formats and templates", async () => {
     expect(await exportDocumentToDocx({ ...model("cv", "modern"), templateId: "unknown" as never })).toMatchObject({ ok: false, error: { code: "UNSUPPORTED_DOCX_TEMPLATE" } });
     expect(await exportDocumentToDocx({ ...model("cv", "modern"), format: { format: "pdf", extension: "pdf", mediaType: "application/pdf" } })).toMatchObject({ ok: false, error: { code: "INVALID_EXPORT_MODEL" } });

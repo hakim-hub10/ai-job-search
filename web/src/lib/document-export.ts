@@ -2,6 +2,8 @@ import type { DocumentType } from "../../../.agents/job-search/cli/src/applicati
 import type { ApplicationDocumentRecord, ApplicationDocumentRepository } from "../../../.agents/job-search/cli/src/application-document-repository";
 import { DOCUMENT_TEMPLATES, resolveDocumentTemplate, toDocumentPresentationModel, type DocumentPresentationModel, type DocumentTemplateId } from "./document-presentation";
 
+export const MAX_DOCUMENT_EXPORT_LENGTH = 20_000;
+
 export type DocumentExportFormat = "pdf" | "docx";
 
 export interface DocumentExportRequest {
@@ -90,6 +92,28 @@ export function documentExportFormat(format: unknown): DocumentExportFormatDefin
   return isFormat(format) ? FORMAT_DEFINITIONS[format] : null;
 }
 
+/** Removes only characters forbidden by XML 1.0 while preserving normal document Unicode. */
+export function sanitizeDocumentExportText(value: string): string {
+  return value.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/gu, "");
+}
+
+export function sanitizedDocumentExportModel(model: DocumentExportModel): DocumentExportModel | null {
+  if (!model.presentation || !Array.isArray(model.presentation.sections) || typeof model.presentation.rawContent !== "string") return null;
+  const sections: DocumentPresentationModel["sections"] = [];
+  for (const section of model.presentation.sections) {
+    if (!section || typeof section.heading !== "string" || !Array.isArray(section.items) || !section.items.every((item) => typeof item === "string")) return null;
+    sections.push({ heading: sanitizeDocumentExportText(section.heading), items: section.items.map(sanitizeDocumentExportText) });
+  }
+  return {
+    ...model,
+    presentation: {
+      ...model.presentation,
+      rawContent: sanitizeDocumentExportText(model.presentation.rawContent),
+      sections,
+    },
+  };
+}
+
 export interface PrepareDocumentExportDependencies {
   documentRepository: ApplicationDocumentRepository;
 }
@@ -117,8 +141,14 @@ export async function prepareDocumentExport(
   }
 
   const record: ApplicationDocumentRecord = latest.value;
+  if (record.applicationId !== request.applicationId || record.documentType !== request.documentType || !Number.isInteger(record.version) || record.version < 1 || typeof record.renderedDocument?.content !== "string" || record.renderedDocument.content.length > MAX_DOCUMENT_EXPORT_LENGTH) {
+    return failure("EXPORT_PREPARATION_FAILED", "Document export could not be prepared.");
+  }
   try {
-    const presentation = toDocumentPresentationModel(record);
+    const presentation = toDocumentPresentationModel({
+      ...record,
+      renderedDocument: { ...record.renderedDocument, content: sanitizeDocumentExportText(record.renderedDocument.content) },
+    });
     return {
       ok: true,
       value: {

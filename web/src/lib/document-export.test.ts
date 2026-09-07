@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 
 import type { ApplicationDocumentRecord } from "../../../.agents/job-search/cli/src/application-document-repository";
 import type { ApplicationDocumentRepository } from "../../../.agents/job-search/cli/src/application-document-repository";
-import { prepareDocumentExport, suggestedDocumentFilename } from "./document-export";
+import { MAX_DOCUMENT_EXPORT_LENGTH, prepareDocumentExport, suggestedDocumentFilename } from "./document-export";
 
 const content = "## Profil\n- Supporttekniker\n## Kompetenser\n- Microsoft 365\n";
 
@@ -74,5 +74,24 @@ describe("Phase 11.7A document export preparation", () => {
     expect(first).toEqual(second);
     expect(stored).toEqual(before);
     expect(first.ok && first.value.presentation.sections).toContainEqual({ heading: "Profil", items: ["Supporttekniker"] });
+  });
+
+  it("rejects oversized stored content and removes only XML-invalid controls from export text", async () => {
+    const oversized = record(3);
+    oversized.renderedDocument = { content: `## Profil\n- ${"x".repeat(MAX_DOCUMENT_EXPORT_LENGTH + 1)}` } as ApplicationDocumentRecord["renderedDocument"];
+    expect(await prepareDocumentExport({ applicationId: "application-1", documentType: "cv", templateId: "modern", format: "pdf" }, { documentRepository: repository([oversized]) })).toMatchObject({ ok: false, error: { code: "EXPORT_PREPARATION_FAILED" } });
+
+    const controls = record(3);
+    controls.renderedDocument = { content: "## Profil\n- Före\u0000\u0007\u001b\tåäö\u2028\u2029\u200b\u202eEfter" } as ApplicationDocumentRecord["renderedDocument"];
+    const prepared = await prepareDocumentExport({ applicationId: "application-1", documentType: "cv", templateId: "modern", format: "docx" }, { documentRepository: repository([controls]) });
+    expect(prepared).toMatchObject({ ok: true, value: { presentation: { sections: [{ heading: "Profil", items: ["Före\tåäö\u2028\u2029\u200b\u202eEfter"] }] } } });
+  });
+
+  it("fails closed when a malformed repository result does not match the requested resource", async () => {
+    const wrongType = record(3, "coverLetter");
+    expect(await prepareDocumentExport({ applicationId: "application-1", documentType: "cv", templateId: "modern", format: "pdf" }, { documentRepository: repository([wrongType]) })).toMatchObject({ ok: false, error: { code: "EXPORT_PREPARATION_FAILED" } });
+    const wrongApplication = record(3);
+    wrongApplication.applicationId = "another-application";
+    expect(await prepareDocumentExport({ applicationId: "application-1", documentType: "cv", templateId: "modern", format: "pdf" }, { documentRepository: repository([wrongApplication]) })).toMatchObject({ ok: false, error: { code: "EXPORT_PREPARATION_FAILED" } });
   });
 });
