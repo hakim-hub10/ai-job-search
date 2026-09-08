@@ -20,8 +20,8 @@ describe("interview overview presentation", () => {
     expect(summarizeInterviewSessions([])).toEqual({ sessions: 0, answered: 0, remaining: 0 });
     expect(html).toContain("Ingen övningsintervju ännu");
     expect(html).toContain("Du har inte startat någon övningsintervju");
-    expect(html).toContain("Intervjuförberedelse är inte tillgänglig ännu");
-    expect(html).not.toMatch(/<button|<form|\/interview\//);
+    expect(html).toContain('href="/applications/A/interview/prepare"');
+    expect(html).not.toMatch(/<button|<form/);
   });
   it("renders job context and one session with Swedish labels and all progress counts", () => {
     const html = render([session("one")]);

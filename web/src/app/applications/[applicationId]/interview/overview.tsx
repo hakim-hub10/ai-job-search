@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { preparationPath } from "@/lib/interview-preparation-presentation";
 import type { InterviewOverview, InterviewReadResult } from "@/lib/interview-data";
 import { formatInterviewLanguage, formatInterviewStatus, formatInterviewType, interviewOverviewError, summarizeInterviewSessions } from "@/lib/interview-presentation";
 import shared from "../../../page.module.css";
@@ -48,7 +49,7 @@ export function InterviewOverviewView({ applicationId, result }: {
             <div className={shared.emptyState}>
               <strong>Ingen övningsintervju ännu</strong>
               <p>Du har inte startat någon övningsintervju för den här ansökan ännu.</p>
-              <p>När intervjuförberedelsen blir tillgänglig kan du förbereda frågor och sedan öva på dina svar.</p>
+              <p>Du kan förbereda frågor och gå igenom exempel från din verifierade profil.</p>
             </div>
           ) : (
             <ul className={styles.sessions}>
@@ -72,8 +73,8 @@ export function InterviewOverviewView({ applicationId, result }: {
         <section className={`${shared.panel} ${styles.next}`} aria-labelledby="preparation-heading">
           <p className={shared.eyebrow}>Nästa steg</p>
           <h2 id="preparation-heading">Förbered intervju</h2>
-          <p className={styles.description}>Intervjuförberedelse är inte tillgänglig ännu. Du kan under tiden gå tillbaka till ansökan och se över jobbannonsen och dina dokument.</p>
-          <Link className={styles.back} href={backPath}>Gå till ansökan →</Link>
+          <p className={styles.description}>Välj intervjutyp och språk. Spara frågor, relevanta krav och exempel från din verifierade profil inför intervjun.</p>
+          <Link className={styles.back} href={preparationPath(applicationId)}>Förbered intervju →</Link>
         </section>
       </div>
     </main>

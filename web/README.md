@@ -60,3 +60,37 @@ and explicit candidate document evidence, but this read layer does not generate 
 Feedback also requires a compatible preparation plan and is not persisted. Evidence
 selection and historical plan compatibility remain decisions for later phases.
 Optional AI remains behind future explicit actions. No interview GUI is added here.
+
+## Interview preparation (Phase 12.3B)
+
+The interview overview links to `/applications/[applicationId]/interview/prepare`.
+An explicit server action creates a preparation and redirects to
+`/applications/[applicationId]/interview/preparations/[preparationId]`.
+Opening or refreshing either page never generates or saves preparation.
+
+Configure private `INTERVIEW_PREPARATION_REPOSITORY` with a trusted file path
+outside public assets, alongside `APPLICATION_REPOSITORY`. Creation also requires
+`COACH_DIR`: the server resolves the application's association, the exact candidate,
+and that candidate's verified profile. No default profile, Base CV edits, tailored
+CV, cover letter, or AI output supplies new evidence. Browser input is limited to
+application ID, one supported interview type, and `sv` or `en`.
+
+The server converts the verified profile with `buildCandidateEvidenceCatalog`,
+passes explicit evidence to `createInterviewPreparationPlan`, and retains the
+requirement context from `buildApplicationDocumentFoundation`. The core immutable
+repository stores the exact plan and evidence snapshot with a random UUID.
+Multiple preparations are allowed; none replaces another or is called "latest".
+Lists follow repository ID order, not creation order. Detail reads resolve only
+stored evidence, even after profile changes; they do not need `COACH_DIR`.
+
+Creation writes are serialized within the web process. The underlying file
+repository still requires a single writer across processes: do not run concurrent
+web workers or CLI writers against the same preparation file. This phase adds no
+session creation, session linkage, provider calls, or answer storage. Runtime
+errors use fixed Swedish messages, and repository paths stay on the server.
+
+The view explains STAR as general coaching and renders question-specific STAR
+prompts only when the saved plan contains them. Phase 5 currently emits those
+prompts for requirement-linked experience evidence. The verified profile schema
+has no experience-to-requirement links, so this conversion does not infer them;
+profile-based preparations can legitimately have an empty `starPrompts` array.
