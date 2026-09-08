@@ -2,6 +2,7 @@ import "server-only";
 import { resolve } from "node:path";
 
 import { createFileApplicationRepository } from "../../../.agents/job-search/cli/src/application-file-repository";
+import type { ApplicationRecord } from "../../../.agents/job-search/cli/src/applications";
 import { createCandidateActivityAnalyticsWorkflow } from "../../../.agents/job-search/cli/src/candidate-activity-analytics-workflow";
 import { createCandidateOutcomeAnalyticsWorkflow } from "../../../.agents/job-search/cli/src/candidate-outcome-analytics-workflow";
 import { createCandidateTimeAnalyticsWorkflow } from "../../../.agents/job-search/cli/src/candidate-time-analytics-workflow";
@@ -32,6 +33,61 @@ function repositories() {
     followUps: createFileCandidateFollowUpRepository(paths.followUps),
     operations: createFileCoachOperationsRepository(paths.operations),
   };
+}
+
+export interface JobSearchDistributionItem {
+  label: string;
+  count: number;
+}
+
+export interface JobSearchAnalyticsReadModel {
+  availability: "available";
+  basis: "APPLICATION_RECORDS";
+  totalJobsRepresented: number;
+  sourceDistribution: JobSearchDistributionItem[];
+  locationDistribution: JobSearchDistributionItem[];
+  titleDistribution: JobSearchDistributionItem[];
+  searchHistory: { availability: "notTracked" };
+  matching: {
+    availability: "available" | "unavailable";
+    matchedRequirements: number;
+    missingRequirements: number;
+    conflictingRequirements: number;
+    unknownRequirements: number;
+  };
+}
+
+function distribution(values: string[]): JobSearchDistributionItem[] {
+  const counts = new Map<string, number>();
+  for (const value of values) counts.set(value, (counts.get(value) ?? 0) + 1);
+  return [...counts.entries()].map(([label, count]) => ({ label, count }))
+    .sort((left, right) => left.label.localeCompare(right.label));
+}
+
+/** Derives only durable application-snapshot job facts; search history is not persisted. */
+export function deriveJobSearchAnalytics(applications: ApplicationRecord[]): JobSearchAnalyticsReadModel {
+  const source = applications.map((application) => application.jobSnapshot.source?.trim() || "Okänd källa");
+  const location = applications.map((application) => application.jobSnapshot.location?.trim() || "Okänd plats");
+  const title = applications.map((application) => application.jobSnapshot.title.trim() || "Okänd roll");
+  const matching = applications.reduce((totals, application) => {
+    const result = application.analysisSnapshot.matchingResult;
+    totals.matched += result.totalMatched;
+    totals.missing += result.totalMissing;
+    totals.conflicting += result.totalConflicting;
+    totals.unknown += result.totalUnknown;
+    return totals;
+  }, { matched: 0, missing: 0, conflicting: 0, unknown: 0 });
+  return { availability: "available", basis: "APPLICATION_RECORDS", totalJobsRepresented: applications.length,
+    sourceDistribution: distribution(source), locationDistribution: distribution(location), titleDistribution: distribution(title),
+    searchHistory: { availability: "notTracked" }, matching: { availability: applications.length > 0 ? "available" : "unavailable", matchedRequirements: matching.matched, missingRequirements: matching.missing, conflictingRequirements: matching.conflicting, unknownRequirements: matching.unknown } };
+}
+
+export async function loadJobSearchAnalytics(): Promise<{ configured: boolean; analytics: JobSearchAnalyticsReadModel | null; error: "UNAVAILABLE" | null }> {
+  const applicationPath = process.env.APPLICATION_REPOSITORY;
+  if (!applicationPath?.trim()) return { configured: false, analytics: null, error: null };
+  const result = await createFileApplicationRepository(resolve(applicationPath)).list();
+  if (!result.ok) return { configured: true, analytics: null, error: "UNAVAILABLE" };
+  return { configured: true, analytics: deriveJobSearchAnalytics(result.value), error: null };
 }
 
 export async function loadCandidateAnalytics(

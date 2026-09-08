@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { loadCoachPortfolioAnalytics } from "@/lib/analytics";
+import { loadCoachPortfolioAnalytics, loadJobSearchAnalytics } from "@/lib/analytics";
 import { loadCoachCandidates } from "@/lib/coach-candidates";
 import styles from "../page.module.css";
 
@@ -55,13 +55,14 @@ export default async function AnalyticsPage({
   const end = query.end ?? "2027-01-01";
   const asOfDate = query.asOf ?? end;
 
-  const [result, candidateResult] = await Promise.all([
+  const [result, candidateResult, jobAnalytics] = await Promise.all([
     loadCoachPortfolioAnalytics(
       toStartTimestamp(start),
       toEndTimestamp(end),
       toStartTimestamp(asOfDate),
     ),
     loadCoachCandidates(),
+    loadJobSearchAnalytics(),
   ]);
 
   return (
@@ -192,6 +193,14 @@ export default async function AnalyticsPage({
               </div>
             </section>
 
+            <section className={styles.panel}>
+              <div className={styles.panelHeader}><div><p className={styles.eyebrow}>Jobbfakta</p><h2>Jobb som finns i ansökningar</h2></div></div>
+              {!jobAnalytics.configured ? <div className={styles.emptyState}><strong>Jobbanalys är inte konfigurerad</strong><p>Ansökningsarkivet kunde inte läsas.</p></div> : jobAnalytics.error ? <div className={styles.emptyState}><strong>Jobbanalys kunde inte läsas</strong><p>Försök igen senare.</p></div> : jobAnalytics.analytics ? <>
+                <p className={styles.subtitle}>Statistiken bygger på jobb som har blivit en del av dina sparade ansökningar. Sökningar som inte ledde till en ansökan sparas inte som historik.</p>
+                <div className={styles.candidateList}><article className={styles.candidateRow}><strong>Jobb representerade</strong><span>{jobAnalytics.analytics.totalJobsRepresented}</span></article><article className={styles.candidateRow}><strong>Sök historik</strong><span>Inte spårad</span></article></div>
+                {jobAnalytics.analytics.totalJobsRepresented > 0 && <div className={styles.candidateList}><article className={styles.candidateRow}><strong>Källor</strong><span>{jobAnalytics.analytics.sourceDistribution.map((item) => `${item.label}: ${item.count}`).join(" · ")}</span></article><article className={styles.candidateRow}><strong>Platser</strong><span>{jobAnalytics.analytics.locationDistribution.map((item) => `${item.label}: ${item.count}`).join(" · ")}</span></article><article className={styles.candidateRow}><strong>Roller</strong><span>{jobAnalytics.analytics.titleDistribution.map((item) => `${item.label}: ${item.count}`).join(" · ")}</span></article><article className={styles.candidateRow}><strong>Matchningsläge</strong><span>Matchade: {jobAnalytics.analytics.matching.matchedRequirements} · Saknade: {jobAnalytics.analytics.matching.missingRequirements} · Motstridiga: {jobAnalytics.analytics.matching.conflictingRequirements} · Okända: {jobAnalytics.analytics.matching.unknownRequirements}</span></article></div>}
+              </> : null}
+            </section>
             {candidateResult.configured &&
             !candidateResult.error &&
             candidateResult.candidates.length > 0 ? (
