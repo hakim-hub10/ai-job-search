@@ -1,3 +1,4 @@
+import "server-only";
 import { resolve } from "node:path";
 
 import { createFileApplicationRepository } from "../../../.agents/job-search/cli/src/application-file-repository";

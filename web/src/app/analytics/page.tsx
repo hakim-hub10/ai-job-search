@@ -156,7 +156,7 @@ export default async function AnalyticsPage({
           <section className={styles.panel}>
             <div className={styles.emptyState}>
               <strong>Analysen kunde inte genereras</strong>
-              <pre>{JSON.stringify(result.error, null, 2)}</pre>
+              <p>Analysunderlaget kunde inte verifieras. Kontrollera den valda perioden och försök igen.</p>
             </div>
           </section>
         ) : result.analytics ? (
