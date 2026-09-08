@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { InterviewOverviewView } from "../app/applications/[applicationId]/interview/overview";
-import type { InterviewOverview, InterviewReadErrorCode, InterviewSessionReadModel } from "./interview-data";
+import type { InterviewHistory, InterviewOverview, InterviewReadErrorCode, InterviewSessionReadModel } from "./interview-data";
 import { applicationInterviewPath, formatInterviewLanguage, formatInterviewStatus, formatInterviewType, summarizeInterviewSessions } from "./interview-presentation";
 
 const session = (id: string, overrides: Partial<InterviewSessionReadModel> = {}): InterviewSessionReadModel => ({
@@ -13,6 +13,11 @@ function render(sessions: InterviewSessionReadModel[], overrides: Partial<Interv
     applicationId: "A", jobTitle: "Supporttekniker", company: "Testbolaget", sessions, ...overrides,
   } }} />);
 }
+const history: InterviewHistory = { applicationId: "A", jobTitle: "Supporttekniker", company: "Testbolaget", sessions: [
+  { ...session("active"), preparationStatus: "linked", preparationId: "prep-A", feedbackAvailable: false },
+  { ...session("done", { status: "completed", currentQuestionIndex: 4, totalQuestions: 4, answeredQuestions: 3, skippedQuestions: 1, remainingQuestions: 0 }), preparationStatus: "linked", preparationId: "prep-B", feedbackAvailable: true },
+  { ...session("legacy", { currentQuestionIndex: 1, totalQuestions: 4, answeredQuestions: 0, skippedQuestions: 1, remainingQuestions: 3 }), preparationStatus: "unlinked", preparationId: null, feedbackAvailable: false },
+] };
 
 describe("interview overview presentation", () => {
   it("renders truthful zero counts and an informative empty state without fake actions", () => {
@@ -81,5 +86,11 @@ describe("interview overview presentation", () => {
     expect(html).toContain("<dl");
     expect(html).toContain('href="/applications/A"');
     expect(html).not.toMatch(/tabindex|onclick|<button/i);
+  });
+  it("renders factual history navigation and safe legacy state without temporal or hiring claims", () => {
+    const html = renderToStaticMarkup(<InterviewOverviewView applicationId="A" result={{ ok: true, value: { applicationId: "A", jobTitle: "Supporttekniker", company: "Testbolaget", sessions: [] } }} history={{ ok: true, value: history }} />);
+    for (const text of ["Tidigare intervjuträningar", "Pågående", "Slutförd", "Fortsätt intervjun", "Öppna intervjun", "Visa träningsfeedback", "Äldre intervjuträning", "Förberedelseinformation saknas", "Besvarade: 3", "Hoppade över: 1"]) expect(html).toContain(text);
+    expect(html).toContain('href="/applications/A/interview/sessions/active"'); expect(html).toContain('href="/applications/A/interview/sessions/done/results"');
+    expect(html).not.toMatch(/Senaste|Nyaste|senaste|latest|recent|best|poäng|ranking|sannolikhet|anställningsbarhet/i);
   });
 });

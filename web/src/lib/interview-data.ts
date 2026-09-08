@@ -6,6 +6,11 @@ import { createFileApplicationRepository } from "../../../.agents/job-search/cli
 import type { ApplicationRepository } from "../../../.agents/job-search/cli/src/application-repository";
 import { createFileInterviewSessionRepository } from "../../../.agents/job-search/cli/src/interview-session-file-repository";
 import type { InterviewSessionRepository } from "../../../.agents/job-search/cli/src/interview-session-repository";
+import { createFileInterviewPreparationRepository } from "../../../.agents/job-search/cli/src/interview-preparation-file-repository";
+import type { InterviewPreparationRepository } from "../../../.agents/job-search/cli/src/interview-preparation-repository";
+import { createFileInterviewSessionPreparationLinkRepository } from "../../../.agents/job-search/cli/src/interview-session-preparation-link-file-repository";
+import type { InterviewSessionPreparationLinkRepository } from "../../../.agents/job-search/cli/src/interview-session-preparation-link-repository";
+import { resolveInterviewSessionPreparation } from "../../../.agents/job-search/cli/src/interview-session-preparation";
 import { isPersistableInterviewSession } from "../../../.agents/job-search/cli/src/interview-session-storage-validation";
 import { getInterviewSessionSummary, type InterviewSession, type InterviewSessionSummary } from "../../../.agents/job-search/cli/src/interview-session";
 
@@ -49,6 +54,18 @@ export interface InterviewOverview extends InterviewApplicationContext {
 export interface InterviewSessionDetail extends InterviewApplicationContext {
   session: InterviewSessionReadModel;
 }
+export interface InterviewHistoryDependencies extends InterviewReadDependencies {
+  preparationRepository: Pick<InterviewPreparationRepository, "getById">;
+  linkRepository: Pick<InterviewSessionPreparationLinkRepository, "getBySessionId">;
+}
+export interface InterviewHistoryEntry extends InterviewSessionReadModel {
+  preparationStatus: "linked" | "unlinked" | "unavailable";
+  preparationId: string | null;
+  feedbackAvailable: boolean;
+}
+export interface InterviewHistory extends InterviewApplicationContext {
+  sessions: InterviewHistoryEntry[];
+}
 
 function failure(code: InterviewReadErrorCode): InterviewReadFailure {
   const messages: Record<InterviewReadErrorCode, string> = {
@@ -75,6 +92,17 @@ function configuredDependencies(): InterviewReadDependencies | null {
     applicationRepository: createFileApplicationRepository(resolve(applicationPath)),
     sessionRepository: createFileInterviewSessionRepository(resolve(sessionPath)),
   };
+}
+function configuredHistoryDependencies(): InterviewHistoryDependencies | null {
+  const applicationPath = process.env.APPLICATION_REPOSITORY;
+  const sessionPath = process.env.INTERVIEW_SESSION_REPOSITORY;
+  const preparationPath = process.env.INTERVIEW_PREPARATION_REPOSITORY;
+  const linkPath = process.env.INTERVIEW_SESSION_PREPARATION_LINK_REPOSITORY;
+  if (![applicationPath, sessionPath, preparationPath, linkPath].every((path) => path?.trim())) return null;
+  const sessionRepository = createFileInterviewSessionRepository(resolve(sessionPath!));
+  const preparationRepository = createFileInterviewPreparationRepository(resolve(preparationPath!));
+  return { applicationRepository: createFileApplicationRepository(resolve(applicationPath!)), sessionRepository,
+    preparationRepository, linkRepository: createFileInterviewSessionPreparationLinkRepository(resolve(linkPath!), { sessionRepository, preparationRepository }) };
 }
 
 function repositoryFailure(code: string): InterviewReadFailure {
@@ -148,6 +176,47 @@ export async function loadInterviewOverview(
   } catch {
     return failure("REPOSITORY_ERROR");
   }
+}
+
+/** Application-scoped factual history. Linkage is explicit; broken context never gets inferred. */
+export async function loadInterviewHistory(
+  applicationId: string,
+  dependencies?: InterviewHistoryDependencies,
+): Promise<InterviewReadResult<InterviewHistory>> {
+  if (!validId(applicationId)) return failure("INVALID_REQUEST");
+  try {
+    const repositories = dependencies ?? configuredHistoryDependencies();
+    if (!repositories) return failure("CONFIGURATION_MISSING");
+    const application = await applicationContext(applicationId, repositories);
+    if (!application.ok) return application;
+    const result = await repositories.sessionRepository.listByApplicationId(applicationId);
+    if (!result.ok) return repositoryFailure(result.error.code);
+    if (!Array.isArray(result.value)) return failure("INVALID_INTERVIEW_DATA");
+    const sessions: InterviewHistoryEntry[] = [];
+    const ids = new Set<string>();
+    for (const value of result.value) {
+      const session = sessionModel(value);
+      if (!session.ok) return session;
+      if (session.value.applicationId !== applicationId || ids.has(session.value.sessionId)) return failure("INVALID_INTERVIEW_DATA");
+      ids.add(session.value.sessionId);
+      const linked = await repositories.linkRepository.getBySessionId(session.value.sessionId);
+      if (!linked.ok && linked.error.code !== "NOT_FOUND") {
+        sessions.push({ ...session.value, preparationStatus: "unavailable", preparationId: null, feedbackAvailable: false });
+        continue;
+      }
+      if (!linked.ok) {
+        sessions.push({ ...session.value, preparationStatus: "unlinked", preparationId: null, feedbackAvailable: false });
+        continue;
+      }
+      const resolved = await resolveInterviewSessionPreparation({ applicationId, sessionId: session.value.sessionId }, repositories);
+      if (!resolved.ok) {
+        sessions.push({ ...session.value, preparationStatus: "unavailable", preparationId: null, feedbackAvailable: false });
+        continue;
+      }
+      sessions.push({ ...session.value, preparationStatus: "linked", preparationId: resolved.value.id, feedbackAvailable: session.value.status === "completed" });
+    }
+    return { ok: true, value: { ...application.value, sessions } };
+  } catch { return failure("REPOSITORY_ERROR"); }
 }
 
 /** Individual selection is by explicit ID and checked against the application. */

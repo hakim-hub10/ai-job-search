@@ -24,6 +24,7 @@
 .sessionHeader h3 { margin-top: 6px; font-size: 16px; line-height: 1.4; }
 .badge { padding: 6px 10px; border-radius: 999px; background: #f2f4f7; color: #344054; font-size: 12px; font-weight: 600; }
 .language { margin-top: 12px; color: #475467; font-size: 13px; }
+.actions { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 14px; }
 .counts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 18px; padding-top: 16px; border-top: 1px solid #eaecf0; }
 .counts dt { color: #667085; font-size: 12px; }
 .counts dd { margin-top: 6px; font-size: 20px; font-weight: 600; }
@@ -36,5 +37,6 @@
   .stat { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
   .stat dd { margin-top: 0; }
   .session { padding: 16px; }
+  .actions { display: grid; gap: 8px; }
   .counts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

@@ -7,11 +7,11 @@ import type { ApplicationRecord } from "../../../.agents/job-search/cli/src/appl
 import type { InterviewSession } from "../../../.agents/job-search/cli/src/interview-session";
 import { startInterviewSession, submitInterviewAnswer, skipCurrentInterviewQuestion } from "../../../.agents/job-search/cli/src/interview-session";
 import type { InterviewPreparationPlan } from "../../../.agents/job-search/cli/src/interview-preparation";
-import type { InterviewReadDependencies } from "./interview-data";
+import type { InterviewHistoryDependencies, InterviewReadDependencies } from "./interview-data";
 
 // Next.js resolves this compile-time marker; Bun runs these tests on the server.
 mock.module("server-only", () => ({}));
-const { loadInterviewOverview, loadInterviewSession } = await import("./interview-data");
+const { loadInterviewHistory, loadInterviewOverview, loadInterviewSession } = await import("./interview-data");
 
 const application = {
   id: "A", jobSnapshot: { title: "Supporttekniker", company: "Testbolaget", description: "PRIVATE_JOB_CONTEXT" },
@@ -54,6 +54,14 @@ function dependencies(sessions: InterviewSession[] = []): InterviewReadDependenc
     },
   };
 }
+function historyDependencies(sessions: InterviewSession[] = [], linked = new Map<string, string>()): InterviewHistoryDependencies {
+  const base = dependencies(sessions);
+  const record = (id: string) => ({ id, applicationId: "A", candidateId: "candidate-A", plan: { ...plan }, evidenceSnapshot: [], requirementContext: [] });
+  return { ...base,
+    preparationRepository: { async getById(id) { const preparationId = [...linked.entries()].find(([, value]) => value === id)?.[1] ?? id; return linked.has(id) || [...linked.values()].includes(id) ? { ok: true, value: record(preparationId) } : { ok: false, error: { code: "NOT_FOUND" as const, message: "PRIVATE_PATH" } }; } },
+    linkRepository: { async getBySessionId(id) { const preparationId = linked.get(id); return preparationId ? { ok: true, value: { sessionId: id, applicationId: "A", preparationRecordId: preparationId } } : { ok: false, error: { code: "NOT_FOUND" as const, message: "PRIVATE_PATH" } }; } },
+  };
+}
 function freeze(value: unknown): void {
   if (!value || typeof value !== "object") return;
   Object.freeze(value);
@@ -61,6 +69,33 @@ function freeze(value: unknown): void {
 }
 
 describe("interview web reads", () => {
+  it("loads empty application history without temporal or latest semantics", async () => {
+    const result = await loadInterviewHistory("A", historyDependencies());
+    expect(result).toEqual({ ok: true, value: { applicationId: "A", jobTitle: "Supporttekniker", company: "Testbolaget", sessions: [] } });
+    expect(JSON.stringify(result)).not.toMatch(/latest|newest|recent|chronolog|createdAt|updatedAt/);
+  });
+  it("represents linked and legacy sessions with factual progress and stable repository order", async () => {
+    const completed = progressed(true); completed.id = "completed"; const active = progressed(false); active.id = "active";
+    const sessions = [completed, initial("legacy"), active]; const linked = new Map([[completed.id, "prep-complete"], [active.id, "prep-active"]]);
+    const result = await loadInterviewHistory("A", historyDependencies(sessions, linked));
+    expect(result).toMatchObject({ ok: true, value: { sessions: [
+      { sessionId: "completed", status: "completed", preparationStatus: "linked", preparationId: "prep-complete", feedbackAvailable: true, answeredQuestions: 1, skippedQuestions: 2 },
+      { sessionId: "legacy", preparationStatus: "unlinked", preparationId: null, feedbackAvailable: false },
+      { sessionId: "active", preparationStatus: "linked", preparationId: "prep-active", feedbackAvailable: false, remainingQuestions: 1 },
+    ] } });
+  });
+  it("excludes foreign sessions and keeps broken linked context entry-safe", async () => {
+    const foreign = initial("foreign", "B"); const local = initial("local"); const deps = historyDependencies([local], new Map());
+    deps.sessionRepository.listByApplicationId = async () => ({ ok: true, value: [local, foreign] });
+    expect(await loadInterviewHistory("A", deps)).toMatchObject({ ok: false, code: "INVALID_INTERVIEW_DATA" });
+    const broken = historyDependencies([local], new Map([[local.id, "missing-preparation"]]))
+    broken.preparationRepository.getById = async () => ({ ok: false, error: { code: "NOT_FOUND" as const, message: "PRIVATE" } });
+    expect(await loadInterviewHistory("A", broken)).toMatchObject({ ok: true, value: { sessions: [{ preparationStatus: "unavailable", feedbackAvailable: false }] } });
+  });
+  it("does not write or invoke AI while reading history", async () => {
+    const session = progressed(); const deps = historyDependencies([session]); const before = JSON.stringify(session); const network = spyOn(globalThis, "fetch");
+    try { const result = await loadInterviewHistory("A", deps); expect(result.ok).toBe(true); expect(JSON.stringify(session)).toBe(before); expect(network).not.toHaveBeenCalled(); } finally { network.mockRestore(); }
+  });
   it("returns an existing application with an empty collection", async () => {
     expect(await loadInterviewOverview("A", dependencies())).toEqual({ ok: true, value: {
       applicationId: "A", jobTitle: "Supporttekniker", company: "Testbolaget", sessions: [],
