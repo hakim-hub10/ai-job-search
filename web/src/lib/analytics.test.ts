@@ -11,8 +11,21 @@ const application = (id: string, source: string, location: string | null, title:
 describe("job search analytics read model", () => {
   it("validates half-open date-query boundaries without changing UTC semantics", () => {
     expect(parseAnalyticsPeriod({ start: "2026-08-01", end: "2026-09-01", asOf: "2026-09-01" })).toEqual({ ok: true, value: { start: "2026-08-01", end: "2026-09-01", asOf: "2026-09-01" } });
+    expect(parseAnalyticsPeriod({ start: "2026-02-28", end: "2026-03-01", asOf: "2026-02-28" })).toEqual({ ok: true, value: { start: "2026-02-28", end: "2026-03-01", asOf: "2026-02-28" } });
+    expect(parseAnalyticsPeriod({ start: "2024-02-29", end: "2024-03-01", asOf: "2024-02-29" })).toEqual({ ok: true, value: { start: "2024-02-29", end: "2024-03-01", asOf: "2024-02-29" } });
     expect(parseAnalyticsPeriod({ start: "2026-09-01", end: "2026-08-01" })).toEqual({ ok: false, code: "INVALID_PERIOD" });
     expect(parseAnalyticsPeriod({ start: "bad", end: "2026-09-01" })).toEqual({ ok: false, code: "INVALID_PERIOD" });
+    expect(parseAnalyticsPeriod({ start: "2026-02-29", end: "2026-03-01" })).toEqual({ ok: false, code: "INVALID_PERIOD" });
+    expect(parseAnalyticsPeriod({ start: "2026-02-31", end: "2026-03-01" })).toEqual({ ok: false, code: "INVALID_PERIOD" });
+    expect(parseAnalyticsPeriod({ start: "2026-04-31", end: "2026-05-01" })).toEqual({ ok: false, code: "INVALID_PERIOD" });
+    expect(parseAnalyticsPeriod({ start: "2026-13-01", end: "2026-13-02" })).toEqual({ ok: false, code: "INVALID_PERIOD" });
+    expect(parseAnalyticsPeriod({ start: "2026-00-01", end: "2026-01-01" })).toEqual({ ok: false, code: "INVALID_PERIOD" });
+  });
+
+  it("rejects repeated query values explicitly instead of coercing them", () => {
+    expect(parseAnalyticsPeriod({ start: ["2026-01-01", "2026-02-01"], end: "2026-03-01", asOf: "2026-02-15" })).toEqual({ ok: false, code: "INVALID_PERIOD" });
+    expect(parseAnalyticsPeriod({ start: "2026-01-01", end: ["2026-03-01", "2026-04-01"], asOf: "2026-02-15" })).toEqual({ ok: false, code: "INVALID_PERIOD" });
+    expect(parseAnalyticsPeriod({ start: "2026-01-01", end: "2026-03-01", asOf: ["2026-02-15", "2026-02-16"] })).toEqual({ ok: false, code: "INVALID_PERIOD" });
   });
   it("distinguishes durable application facts from unavailable search history", () => {
     const result = deriveJobSearchAnalytics([application("b", "jobtech", null, "Supporttekniker"), application("a", "linkedin", "Malmö", "Supporttekniker")]);

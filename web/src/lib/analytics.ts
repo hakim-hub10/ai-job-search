@@ -41,11 +41,51 @@ function repositories() {
     operations: createFileCoachOperationsRepository(paths.operations),
   };
 }
-export interface AnalyticsPeriodQuery { start?: string; end?: string; asOf?: string }
+export interface AnalyticsPeriodQuery { start?: string | string[]; end?: string | string[]; asOf?: string | string[] }
 export interface AnalyticsPeriod { start: string; end: string; asOf: string }
+
+function isStrictDateOnly(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/u.test(value)) {
+    return false;
+  }
+
+  const year = Number(value.slice(0, 4));
+  const month = Number(value.slice(5, 7));
+  const day = Number(value.slice(8, 10));
+
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
+    return false;
+  }
+
+  if (month < 1 || month > 12) {
+    return false;
+  }
+
+  const monthLengths = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  const isLeapYear = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+  const maxDay = month === 2 ? (isLeapYear ? 29 : 28) : monthLengths[month - 1];
+
+  if (day < 1 || day > maxDay) {
+    return false;
+  }
+
+  const normalized = new Date(Date.UTC(year, month - 1, day));
+  return normalized.getUTCFullYear() === year
+    && normalized.getUTCMonth() === month - 1
+    && normalized.getUTCDate() === day;
+}
+
 export function parseAnalyticsPeriod(query: AnalyticsPeriodQuery): { ok: true; value: AnalyticsPeriod } | { ok: false; code: "INVALID_PERIOD" } {
-  const start = query.start ?? "2026-01-01", end = query.end ?? "2027-01-01", asOf = query.asOf ?? end;
-  const validDate = (value: string) => /^\d{4}-\d{2}-\d{2}$/u.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00.000Z`));
+  const values = [query.start, query.end, query.asOf];
+  if (values.some((value) => Array.isArray(value))) {
+    return { ok: false, code: "INVALID_PERIOD" };
+  }
+
+  const start = (query.start ?? "2026-01-01") as string;
+  const end = (query.end ?? "2027-01-01") as string;
+  const asOf = (query.asOf ?? end) as string;
+
+  const validDate = (value: string) => isStrictDateOnly(value);
   if (![start, end, asOf].every(validDate) || start >= end) return { ok: false, code: "INVALID_PERIOD" };
   return { ok: true, value: { start, end, asOf } };
 }
