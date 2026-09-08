@@ -1,11 +1,11 @@
 import { describe, expect, it, mock } from "bun:test";
 import type { ApplicationRecord } from "../../../.agents/job-search/cli/src/applications";
 mock.module("server-only", () => ({}));
-const { deriveInterviewPracticeAnalytics, deriveJobSearchAnalytics } = await import("./analytics");
+const { deriveCandidateRequirementInsights, deriveInterviewPracticeAnalytics, deriveJobSearchAnalytics } = await import("./analytics");
 
 const application = (id: string, source: string, location: string | null, title: string): ApplicationRecord => ({
   id, jobSnapshot: { id: `job-${id}`, source, sourceId: `source-${id}`, title, company: null, location, country: null, url: null, applyUrl: null, date: null, employmentType: null, remote: null, description: null, salary: null, skills: [], seniority: null, category: null },
-  analysisSnapshot: { rank: 1, matchingResult: { jobId: `job-${id}`, jobTitle: title, candidateHeadline: "test", matched: [], missing: [], conflicting: [], unknown: [], totalMatched: 2, totalMissing: 1, totalConflicting: 0, totalUnknown: 1, matchedDimensions: [], missingDimensions: [], conflictingDimensions: [], unknownDimensions: [] }, scoringResult: {} as ApplicationRecord["analysisSnapshot"]["scoringResult"], skillGapResult: {} as ApplicationRecord["analysisSnapshot"]["skillGapResult"], explanation: "test" }, status: "saved", statusHistory: [], notes: [], createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z",
+  analysisSnapshot: { rank: 1, matchingResult: { jobId: `job-${id}`, jobTitle: title, candidateHeadline: "test", matched: [], missing: [], conflicting: [], unknown: [], totalMatched: 2, totalMissing: 1, totalConflicting: 0, totalUnknown: 1, matchedDimensions: [], missingDimensions: [], conflictingDimensions: [], unknownDimensions: [] }, scoringResult: {} as ApplicationRecord["analysisSnapshot"]["scoringResult"], skillGapResult: { jobId: `job-${id}`, jobTitle: title, candidateHeadline: "test", gaps: [], strengths: [], unknowns: [], recommendations: [], totalGaps: 0, criticalGaps: 0, highGaps: 0, summary: "" }, explanation: "test" }, status: "saved", statusHistory: [], notes: [], createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z",
 });
 
 describe("job search analytics read model", () => {
@@ -26,5 +26,26 @@ describe("interview practice analytics read model", () => {
     const result = deriveInterviewPracticeAnalytics([session("active", "inProgress", [{ status: "skipped", questionId: "q1" }]), session("done", "completed", [{ status: "skipped", questionId: "q1" }, { status: "skipped", questionId: "q2" }])], ["linked", "unlinked"]);
     expect(result).toMatchObject({ totalSessions: 2, activeSessions: 1, completedSessions: 1, linkedSessions: 1, unlinkedSessions: 1, answeredQuestions: 0, skippedQuestions: 3, temporalAnalytics: { availability: "notTracked" } });
     expect(result.typeDistribution).toEqual([{ label: "behavioral", count: 2 }]);
+  });
+});
+describe("candidate requirement insights", () => {
+  it("keeps matched, missing, conflicting and unknown separate across canonical requirements", () => {
+    const first = application("a", "jobtech", "Malmö", "Support");
+    const second = application("b", "jobtech", "Malmö", "Support");
+    const evidence = (status: "matched" | "missing" | "conflicting" | "unknown", label: string) => ({ dimension: "technicalSkills" as const, status, detail: "stored", requirementCoverage: { matchedRequirements: [label], missingRequirements: [], coverageRatio: status === "matched" ? 1 : 0 } });
+    first.analysisSnapshot.matchingResult.matched = [evidence("matched", "Microsoft 365")]; first.analysisSnapshot.matchingResult.totalMatched = 1;
+    first.analysisSnapshot.matchingResult.missing = [evidence("missing", "Active Directory")]; first.analysisSnapshot.matchingResult.totalMissing = 1;
+    second.analysisSnapshot.matchingResult.conflicting = [evidence("conflicting", "Microsoft 365")]; second.analysisSnapshot.matchingResult.totalConflicting = 1;
+    second.analysisSnapshot.matchingResult.unknown = [evidence("unknown", "Microsoft 365")]; second.analysisSnapshot.matchingResult.totalUnknown = 1;
+    const result = deriveCandidateRequirementInsights([first, second]);
+    expect(result.requirements.find((item) => item.requirementId === "skill:microsoft 365")).toMatchObject({ applicationsRepresented: 2, matched: 1, missing: 0, conflicting: 1, unknown: 1 });
+    expect(result.requirements.find((item) => item.requirementId === "skill:active directory")).toMatchObject({ applicationsRepresented: 1, matched: 0, missing: 1, conflicting: 0, unknown: 0 });
+  });
+  it("aggregates persisted skill gaps without scores or recommendation synthesis", () => {
+    const first = application("a", "jobtech", "Malmö", "Support");
+    first.analysisSnapshot.skillGapResult.gaps = [{ type: "missing_skill", title: "Missing: Docker", description: "stored", jobRequirement: "Required: Docker", severity: "high", evidence: "stored", requirement: { identity: { key: "skill:docker", original: "Docker", normalized: "docker", category: "skill" }, importance: "required" } }]; first.analysisSnapshot.skillGapResult.totalGaps = 1; first.analysisSnapshot.skillGapResult.highGaps = 1;
+    const result = deriveCandidateRequirementInsights([first]);
+    expect(result.skillGaps).toEqual([{ gapId: "skill:docker", label: "Docker", applicationsRepresented: 1, occurrences: 1, severityDistribution: [{ label: "high", count: 1 }] }]);
+    expect(JSON.stringify(result)).not.toMatch(/score|recommendation|employability|probability/i);
   });
 });

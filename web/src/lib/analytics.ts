@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 
 import { createFileApplicationRepository } from "../../../.agents/job-search/cli/src/application-file-repository";
 import type { ApplicationRecord } from "../../../.agents/job-search/cli/src/applications";
+import { createRequirementIdentity, requirementCategoryForGapType } from "../../../.agents/job-search/cli/src/requirements";
 import { createFileInterviewSessionRepository } from "../../../.agents/job-search/cli/src/interview-session-file-repository";
 import { createFileInterviewPreparationRepository } from "../../../.agents/job-search/cli/src/interview-preparation-file-repository";
 import { createFileInterviewSessionPreparationLinkRepository } from "../../../.agents/job-search/cli/src/interview-session-preparation-link-file-repository";
@@ -75,6 +76,30 @@ export interface InterviewPracticeAnalyticsReadModel {
   typeDistribution: JobSearchDistributionItem[];
   temporalAnalytics: { availability: "notTracked" };
 }
+export interface RequirementInsight {
+  requirementId: string;
+  label: string;
+  applicationsRepresented: number;
+  matched: number;
+  missing: number;
+  conflicting: number;
+  unknown: number;
+}
+export interface SkillGapInsight {
+  gapId: string;
+  label: string;
+  applicationsRepresented: number;
+  occurrences: number;
+  severityDistribution: JobSearchDistributionItem[];
+}
+export interface CandidateRequirementInsightsReadModel {
+  availability: "available";
+  applicationsTotal: number;
+  applicationsWithAnalysis: number;
+  applicationsWithoutAnalysis: number;
+  requirements: RequirementInsight[];
+  skillGaps: SkillGapInsight[];
+}
 
 function distribution(values: string[]): JobSearchDistributionItem[] {
   const counts = new Map<string, number>();
@@ -110,6 +135,70 @@ export function deriveJobSearchAnalytics(applications: ApplicationRecord[]): Job
   return { availability: "available", basis: "APPLICATION_RECORDS", totalJobsRepresented: applications.length,
     sourceDistribution: distribution(source), locationDistribution: distribution(location), titleDistribution: distribution(title),
     searchHistory: { availability: "notTracked" }, matching: { availability: applications.length > 0 ? "available" : "unavailable", matchedRequirements: matching.matched, missingRequirements: matching.missing, conflictingRequirements: matching.conflicting, unknownRequirements: matching.unknown } };
+}
+
+function aggregateApplicationRequirementStates(application: ApplicationRecord, target: Map<string, RequirementInsight>): void {
+  const seen = new Set<string>();
+  for (const evidence of [...application.analysisSnapshot.matchingResult.matched, ...application.analysisSnapshot.matchingResult.missing, ...application.analysisSnapshot.matchingResult.conflicting, ...application.analysisSnapshot.matchingResult.unknown]) {
+    for (const label of evidence.requirementCoverage?.matchedRequirements ?? []) {
+      const identity = createRequirementIdentity("skill", label);
+      const current = target.get(identity.key) ?? { requirementId: identity.key, label: identity.original, applicationsRepresented: 0, matched: 0, missing: 0, conflicting: 0, unknown: 0 };
+      if (!seen.has(identity.key)) { current.applicationsRepresented += 1; seen.add(identity.key); }
+      if (evidence.status === "matched") current.matched += 1;
+      if (evidence.status === "missing") current.missing += 1;
+      if (evidence.status === "conflicting") current.conflicting += 1;
+      if (evidence.status === "unknown") current.unknown += 1;
+      if (identity.original.localeCompare(current.label) < 0) current.label = identity.original;
+      target.set(identity.key, current);
+    }
+    for (const label of evidence.requirementCoverage?.missingRequirements ?? []) {
+      const identity = createRequirementIdentity("skill", label);
+      const current = target.get(identity.key) ?? { requirementId: identity.key, label: identity.original, applicationsRepresented: 0, matched: 0, missing: 0, conflicting: 0, unknown: 0 };
+      if (!seen.has(identity.key)) { current.applicationsRepresented += 1; seen.add(identity.key); }
+      if (evidence.status === "matched") current.matched += 1;
+      if (evidence.status === "missing") current.missing += 1;
+      if (evidence.status === "conflicting") current.conflicting += 1;
+      if (evidence.status === "unknown") current.unknown += 1;
+      if (identity.original.localeCompare(current.label) < 0) current.label = identity.original;
+      target.set(identity.key, current);
+    }
+  }
+}
+
+export function deriveCandidateRequirementInsights(applications: ApplicationRecord[]): CandidateRequirementInsightsReadModel {
+  const requirements = new Map<string, RequirementInsight>();
+  const gaps = new Map<string, { label: string; applications: Set<string>; occurrences: number; severities: Map<string, number> }>();
+  for (const application of applications) {
+    aggregateApplicationRequirementStates(application, requirements);
+    for (const gap of application.analysisSnapshot.skillGapResult.gaps) {
+      const identity = gap.requirement?.identity ?? createRequirementIdentity(requirementCategoryForGapType(gap.type), gap.jobRequirement);
+      const current = gaps.get(identity.key) ?? { label: identity.original, applications: new Set<string>(), occurrences: 0, severities: new Map<string, number>() };
+      current.label = current.label.localeCompare(identity.original) <= 0 ? current.label : identity.original;
+      current.applications.add(application.id); current.occurrences += 1;
+      current.severities.set(gap.severity, (current.severities.get(gap.severity) ?? 0) + 1);
+      gaps.set(identity.key, current);
+    }
+  }
+  return { availability: "available", applicationsTotal: applications.length, applicationsWithAnalysis: applications.length, applicationsWithoutAnalysis: 0,
+    requirements: [...requirements.values()].sort((a, b) => b.applicationsRepresented - a.applicationsRepresented || a.requirementId.localeCompare(b.requirementId)),
+    skillGaps: [...gaps.entries()].map(([gapId, value]) => ({ gapId, label: value.label, applicationsRepresented: value.applications.size, occurrences: value.occurrences, severityDistribution: [...value.severities.entries()].map(([label, count]) => ({ label, count })).sort((a, b) => a.label.localeCompare(b.label)) })).sort((a, b) => b.applicationsRepresented - a.applicationsRepresented || a.gapId.localeCompare(b.gapId)) };
+}
+
+export async function loadCandidateRequirementInsights(candidateId: string): Promise<{ configured: boolean; insights: CandidateRequirementInsightsReadModel | null; error: "NOT_FOUND" | "UNAVAILABLE" | null }> {
+  const repos = repositories();
+  if (!repos) return { configured: false, insights: null, error: null };
+  const candidate = await repos.candidates.getCandidateById(candidateId);
+  if (!candidate.ok) return { configured: true, insights: null, error: candidate.error.code === "NOT_FOUND" ? "NOT_FOUND" : "UNAVAILABLE" };
+  const associations = await repos.associations.listByCandidateId(candidateId);
+  if (!associations.ok) return { configured: true, insights: null, error: "UNAVAILABLE" };
+  const applications: ApplicationRecord[] = [];
+  for (const association of associations.value) {
+    if (association.candidateId !== candidateId) return { configured: true, insights: null, error: "UNAVAILABLE" };
+    const application = await repos.applications.getById(association.applicationId);
+    if (!application.ok) return { configured: true, insights: null, error: "UNAVAILABLE" };
+    applications.push(application.value);
+  }
+  return { configured: true, insights: deriveCandidateRequirementInsights(applications), error: null };
 }
 
 export async function loadJobSearchAnalytics(): Promise<{ configured: boolean; analytics: JobSearchAnalyticsReadModel | null; error: "UNAVAILABLE" | null }> {
