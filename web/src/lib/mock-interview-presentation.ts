@@ -12,6 +12,11 @@ export function mockInterviewError(code: string): string {
     case "UNLINKED_SESSION": return "Det exakta förberedelseunderlaget är inte tillgängligt för den här äldre eller ofullständigt skapade övningsintervjun. Välj en sparad förberedelse och starta en ny mockintervju.";
     case "INVALID_INTERVIEW_DATA": return "Övningsintervjuns underlag kunde inte verifieras.";
     case "SESSION_CREATION_FAILED": return "Mockintervjun kunde inte startas med en verifierad koppling till förberedelsen. En ofullständig övningsintervju kan ha sparats. Försök igen från den sparade förberedelsen.";
+    case "SESSION_ALREADY_COMPLETED": return "Övningsintervjun är redan klar och tar inte emot fler svar.";
+    case "STALE_QUESTION": return "Frågan har ändrats i en annan flik. Läs in övningsintervjun igen innan du svarar.";
+    case "INVALID_ANSWER": return "Skriv ett svar i ett format som kan behandlas.";
+    case "ANSWER_SUBMISSION_FAILED": return "Svaret kunde inte sparas. Ingen progression bekräftades.";
+    case "SKIP_FAILED": return "Frågan kunde inte hoppas över. Ingen progression bekräftades.";
     default: return "Övningsintervjun kunde inte läsas eller sparas. Försök igen senare.";
   }
 }

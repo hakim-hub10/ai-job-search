@@ -5,7 +5,8 @@ import { mockInterviewError } from "@/lib/mock-interview-presentation";
 import { preparationPath } from "@/lib/interview-preparation-presentation";
 import { PreparationQuestion } from "../preparation-question";
 import styles from "../preparation.module.css";
-export function MockInterviewView({ applicationId, result }: { applicationId: string; result: MockInterviewResult<MockInterviewReadModel> }) {
+type Action = (data: FormData) => Promise<void>;
+export function MockInterviewView({ applicationId, result, answerAction, skipAction, answerError, skipError }: { applicationId: string; result: MockInterviewResult<MockInterviewReadModel>; answerAction?: Action; skipAction?: Action; answerError?: string; skipError?: string }) {
   return <main lang="sv" className={styles.page}><div className={styles.content}>
     <Link className={styles.link} href={result.ok || result.code !== "APPLICATION_NOT_FOUND" ? applicationInterviewPath(applicationId) : "/applications"}>← Tillbaka till {result.ok || result.code !== "APPLICATION_NOT_FOUND" ? "intervjuöversikten" : "ansökningar"}</Link>
     {!result.ok ? <><header className={styles.header}><h1>Mockintervjun kunde inte visas</h1></header>
@@ -19,10 +20,24 @@ export function MockInterviewView({ applicationId, result }: { applicationId: st
         <p>Det här är övning inför en intervju. Frågan och underlaget kommer från din valda, sparade förberedelse.</p>
         <Link className={styles.link} href={preparationPath(applicationId, result.value.preparationId)}>Visa den använda förberedelsen →</Link>
       </header>
-      {result.value.session.status === "completed" ? <section className={styles.panel}><h2>Övningsintervjun är slutförd</h2><p>Alla {result.value.session.totalQuestions} frågor har hanterats.</p></section> :
+      {result.value.session.status === "completed" ? <section className={styles.panel}><h2>Övningsintervjun är klar.</h2><p>Alla {result.value.session.totalQuestions} frågor har hanterats.</p></section> :
         <section aria-labelledby="current-heading"><h2 id="current-heading" className={styles.sectionHeading}>Fråga {result.value.session.currentQuestionIndex + 1} av {result.value.session.totalQuestions}</h2>
           {result.value.currentQuestion && <PreparationQuestion q={result.value.currentQuestion} index={result.value.session.currentQuestionIndex} language={result.value.session.language} />}
-          <p>Svar och nästa fråga kommer i nästa steg.</p>
+          {answerError && <p className={styles.error} role="alert">{mockInterviewError(answerError)}</p>}
+          {skipError && <p className={styles.error} role="alert">{mockInterviewError(skipError)}</p>}
+          {answerAction && result.value.currentQuestion && <section className={styles.panel} aria-labelledby="answer-heading">
+            <h2 id="answer-heading">Ditt svar</h2><p id="answer-guidance">Svara konkret, beskriv din egen roll och använd ett verkligt exempel när det passar.</p>
+            <form action={answerAction} className={styles.form}>
+              <input type="hidden" name="applicationId" value={applicationId} /><input type="hidden" name="sessionId" value={result.value.session.sessionId} />
+              <input type="hidden" name="expectedQuestionId" value={result.value.currentQuestion.id} /><input type="hidden" name="format" value="freeText" />
+              <label htmlFor="interview-answer">Skriv ditt svar</label><textarea id="interview-answer" name="text" rows={8} required aria-describedby="answer-guidance" />
+              <button className={styles.submit} type="submit">Skicka svar</button>
+            </form>
+            {skipAction && <form action={skipAction} className={styles.form}>
+              <input type="hidden" name="applicationId" value={applicationId} /><input type="hidden" name="sessionId" value={result.value.session.sessionId} />
+              <input type="hidden" name="expectedQuestionId" value={result.value.currentQuestion.id} /><button className={styles.secondary} type="submit">Hoppa över frågan</button>
+            </form>}
+          </section>}
         </section>}
     </>}
   </div></main>;

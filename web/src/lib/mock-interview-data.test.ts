@@ -13,7 +13,7 @@ import { createFileInterviewSessionRepository } from "../../../.agents/job-searc
 import { createFileInterviewSessionPreparationLinkRepository } from "../../../.agents/job-search/cli/src/interview-session-preparation-link-file-repository";
 import type { MockInterviewResult, MockInterviewStartDependencies } from "./mock-interview-data";
 mock.module("server-only", () => ({}));
-const { startApplicationMockInterview: start, loadApplicationMockInterview: load } = await import("./mock-interview-data");
+const { skipApplicationMockInterviewQuestion: skip, startApplicationMockInterview: start, loadApplicationMockInterview: load, submitApplicationMockInterviewAnswer: submit } = await import("./mock-interview-data");
 const missing = { ok: false as const, error: { code: "NOT_FOUND" as const, message: "SECRET_PATH" } };
 const input = { applicationId: "A", preparationId: "prep-A" };
 function value<T>(r: MockInterviewResult<T>) { if (!r.ok) throw new Error(r.code); return r.value; }
@@ -135,6 +135,48 @@ describe("mock interview data", () => {
     const f = fixture(), r = value(await start(input, f.deps)); const s = f.sessions.get(r.session.sessionId)!;
     s.status = "completed"; s.currentQuestionIndex = s.planQuestionIds.length; s.turns = s.planQuestionIds.map((questionId) => ({ status: "skipped", questionId }));
     const before = structuredClone(s); const read = value(await load("A", s.id, f.deps)); expect(read.currentQuestion).toBeNull(); expect(read.session).toMatchObject({ status: "completed", remainingQuestions: 0 }); expect(f.sessions.get(s.id)).toEqual(before);
+  });
+  it("submits a transient free-text answer through the linked preparation and persists only preparation metadata", async () => {
+    const f = fixture(), started = value(await start(input, f.deps)), beforePreparation = structuredClone(f.preparations.get("prep-A")), beforeLink = structuredClone(f.links.get(started.session.sessionId));
+    const other = preparation("prep-B"); other.plan.questions[0].prompt = "Fråga från en annan förberedelse"; f.preparations.set(other.id, other);
+    const answered = value(await submit({ applicationId: "A", sessionId: started.session.sessionId, expectedQuestionId: "q1", fields: { format: "freeText", text: "Ett verkligt svar som är tillräckligt långt för att passera genom förberedelsen." } }, f.deps));
+    expect(answered.currentQuestion?.id).toBe("q2"); expect(answered.session).toMatchObject({ currentQuestionIndex: 1, answeredQuestions: 1, remainingQuestions: 1 });
+    const stored = f.sessions.get(started.session.sessionId)!; expect(stored.turns[0]).toMatchObject({ status: "submitted", questionId: "q1", answerFormat: "freeText" });
+    expect(JSON.stringify(stored)).not.toContain("Ett verkligt svar"); expect(f.preparations.get("prep-A")).toEqual(beforePreparation); expect(f.links.get(started.session.sessionId)).toEqual(beforeLink);
+  });
+  it("skips questions in authoritative order and completes without fabricated answer data", async () => {
+    const f = fixture(), started = value(await start(input, f.deps));
+    const next = value(await skip({ applicationId: "A", sessionId: started.session.sessionId, expectedQuestionId: "q1" }, f.deps));
+    expect(next.currentQuestion?.id).toBe("q2"); expect(f.sessions.get(started.session.sessionId)!.turns[0]).toEqual({ status: "skipped", questionId: "q1" });
+    const completed = value(await skip({ applicationId: "A", sessionId: started.session.sessionId, expectedQuestionId: "q2" }, f.deps));
+    expect(completed.session.status).toBe("completed"); expect(completed.currentQuestion).toBeNull(); expect(JSON.stringify(f.sessions.get(started.session.sessionId))).not.toMatch(/answer|Ett verkligt svar/i);
+  });
+  it("rejects stale and replayed answer forms before changing the session", async () => {
+    const f = fixture(), started = value(await start(input, f.deps));
+    expect(await submit({ applicationId: "A", sessionId: started.session.sessionId, expectedQuestionId: "q2", fields: { format: "freeText", text: "Gammalt formulär" } }, f.deps)).toMatchObject({ ok: false, code: "STALE_QUESTION" });
+    value(await submit({ applicationId: "A", sessionId: started.session.sessionId, expectedQuestionId: "q1", fields: { format: "freeText", text: "Ett giltigt svar som är tillräckligt långt för att behandlas korrekt." } }, f.deps));
+    expect(await submit({ applicationId: "A", sessionId: started.session.sessionId, expectedQuestionId: "q1", fields: { format: "freeText", text: "Ett gammalt svar" } }, f.deps)).toMatchObject({ ok: false, code: "STALE_QUESTION" });
+    expect(f.sessions.get(started.session.sessionId)!.turns).toHaveLength(1);
+  });
+  it("fails safely when updated session persistence fails", async () => {
+    const f = fixture(), started = value(await start(input, f.deps)), before = structuredClone(f.sessions.get(started.session.sessionId));
+    f.deps.sessionRepository.save = async () => ({ ok: false, error: { code: "WRITE_FAILURE", message: "SECRET" } });
+    expect(await submit({ applicationId: "A", sessionId: started.session.sessionId, expectedQuestionId: "q1", fields: { format: "freeText", text: "Ett svar som inte får rapporteras som sparat." } }, f.deps)).toMatchObject({ ok: false, code: "ANSWER_SUBMISSION_FAILED" });
+    expect(f.sessions.get(started.session.sessionId)).toEqual(before);
+  });
+  it("rejects missing, foreign, unlinked, completed and malformed answer requests safely", async () => {
+    const f = fixture();
+    expect(await submit({ applicationId: "missing", sessionId: "session", expectedQuestionId: "q1", fields: { format: "freeText", text: "Svar" } }, f.deps)).toMatchObject({ ok: false, code: "APPLICATION_NOT_FOUND" });
+    expect(await submit({ applicationId: "A", sessionId: "missing", expectedQuestionId: "q1", fields: { format: "freeText", text: "Svar" } }, f.deps)).toMatchObject({ ok: false, code: "INTERVIEW_SESSION_NOT_FOUND" });
+    const started = value(await start(input, f.deps));
+    f.links.delete(started.session.sessionId);
+    expect(await submit({ applicationId: "A", sessionId: started.session.sessionId, expectedQuestionId: "q1", fields: { format: "freeText", text: "Svar" } }, f.deps)).toMatchObject({ ok: false, code: "UNLINKED_SESSION" });
+    f.links.set(started.session.sessionId, { sessionId: started.session.sessionId, applicationId: "B", preparationRecordId: "prep-A" });
+    expect(await submit({ applicationId: "A", sessionId: started.session.sessionId, expectedQuestionId: "q1", fields: { format: "freeText", text: "Svar" } }, f.deps)).toMatchObject({ ok: false, code: "INVALID_INTERVIEW_DATA" });
+    const second = fixture(), completed = value(await start(input, second.deps));
+    second.sessions.get(completed.session.sessionId)!.status = "completed"; second.sessions.get(completed.session.sessionId)!.currentQuestionIndex = 2; second.sessions.get(completed.session.sessionId)!.turns = [{ status: "skipped", questionId: "q1" }, { status: "skipped", questionId: "q2" }];
+    expect(await submit({ applicationId: "A", sessionId: completed.session.sessionId, expectedQuestionId: "q1", fields: { format: "freeText", text: "Svar" } }, second.deps)).toMatchObject({ ok: false, code: "SESSION_ALREADY_COMPLETED" });
+    expect(await submit({ applicationId: "A", sessionId: completed.session.sessionId, expectedQuestionId: "q1", fields: { format: "unsupported", text: "Svar" } }, second.deps)).toMatchObject({ ok: false, code: "SESSION_ALREADY_COMPLETED" });
   });
   it("returns safe missing and invalid request states", async () => {
     const f = fixture(); expect(await load("A", "missing", f.deps)).toMatchObject({ ok: false, code: "INTERVIEW_SESSION_NOT_FOUND" });

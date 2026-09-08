@@ -12,7 +12,7 @@ const model: MockInterviewReadModel = {
     evidence: [{ id: "e", content: "Hjälpte kollegor med datorproblem.", role: "Tekniker", employer: "Exempelbolaget" }],
     starPrompts: [{ situationPrompt: "Beskriv situationen.", taskPrompt: "Beskriv ansvaret.", actionPrompt: "Beskriv handlingen.", resultPrompt: "Beskriv styrkta resultat.", warnings: ["Hitta inte på resultat."] }] },
 };
-const render = (m = model) => renderToStaticMarkup(<MockInterviewView applicationId="A" result={{ ok: true, value: m }} />);
+const render = (m = model, actions: { answerAction?: (data: FormData) => Promise<void>; skipAction?: (data: FormData) => Promise<void> } = {}) => renderToStaticMarkup(<MockInterviewView applicationId="A" result={{ ok: true, value: m }} {...actions} />);
 describe("mock interview presentation", () => {
   it("renders Swedish practice framing, exact question, status, type, language and progress", () => {
     const html = render(); for (const text of ["Mockintervju", "Övningsintervju", "Supporttekniker", "Testbolaget", "Beteendeinriktad intervju", "Svenska", "Pågående", "Fråga 1 av 2", "Berätta om ett verkligt exempel.", "Vad arbetsgivaren sannolikt vill bedöma", "Förstå ditt arbetssätt."]) expect(html).toContain(text);
@@ -25,12 +25,16 @@ describe("mock interview presentation", () => {
     const m = structuredClone(model); m.currentQuestion!.evidence = []; m.currentQuestion!.starPrompts = [];
     expect(render(m)).toContain("Din verifierade profil innehåller inget tydligt exempel"); expect(render(m)).not.toContain("Strukturera exemplet med STAR");
   });
-  it("has no answer input, skip, feedback, scoring or provider controls", () => {
-    const html = render(); expect(html).not.toMatch(/<textarea|<input|<button|<form|feedback|OpenAI|API_KEY|poäng|godkänd|anställningsbarhet|Hoppa över/i); expect(html).toContain("Svar och nästa fråga kommer i nästa steg.");
+  it("renders the Swedish answer and skip controls without feedback or provider controls", () => {
+    const html = render(undefined, { answerAction: async () => {}, skipAction: async () => {} }); expect(html).toMatch(/<textarea[^>]+name="text"/); expect(html).toContain("Ditt svar"); expect(html).toContain("Skicka svar"); expect(html).toContain("Hoppa över frågan"); expect(html).toContain('name="expectedQuestionId" value="q"'); expect(html).not.toMatch(/feedback|OpenAI|API_KEY|poäng|godkänd|anställningsbarhet/i);
   });
   it("handles completed sessions with a null question", () => {
     const m = structuredClone(model); m.session.status = "completed"; m.session.currentQuestionIndex = 2; m.session.remainingQuestions = 0; m.currentQuestion = null;
-    const html = render(m); expect(html).toContain("Slutförd"); expect(html).toContain("Övningsintervjun är slutförd"); expect(html).not.toContain("Fråga 3"); expect(html).not.toContain("Berätta om");
+    const html = render(m); expect(html).toContain("Slutförd"); expect(html).toContain("Övningsintervjun är klar."); expect(html).not.toContain("Fråga 3"); expect(html).not.toContain("Berätta om"); expect(html).not.toContain("Ditt svar");
+  });
+  it("renders safe stale and persistence errors without answer text", () => {
+    const html = renderToStaticMarkup(<MockInterviewView applicationId="A" result={{ ok: true, value: model }} answerAction={async () => {}} skipAction={async () => {}} answerError="STALE_QUESTION" skipError="SKIP_FAILED" />);
+    expect(html).toContain("Frågan har ändrats i en annan flik"); expect(html).toContain("Ingen progression bekräftades"); expect(html).not.toContain("SECRET");
   });
   it.each(["UNLINKED_SESSION", "INTERVIEW_SESSION_NOT_FOUND", "APPLICATION_NOT_FOUND", "INVALID_INTERVIEW_DATA", "CONFIGURATION_MISSING", "REPOSITORY_ERROR"] as MockInterviewErrorCode[])("renders fixed safe error for %s without question context", (code) => {
     const html = renderToStaticMarkup(<MockInterviewView applicationId="A" result={{ ok: false, code, message: "SECRET /private/path JSON" }} />);
