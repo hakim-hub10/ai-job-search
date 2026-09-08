@@ -94,3 +94,36 @@ prompts only when the saved plan contains them. Phase 5 currently emits those
 prompts for requirement-linked experience evidence. The verified profile schema
 has no experience-to-requirement links, so this conversion does not infer them;
 profile-based preparations can legitimately have an empty `starPrompts` array.
+
+## Mock interview start (Phase 12.4)
+
+A saved preparation now offers **Starta mockintervju**. Its explicit server action
+accepts only `applicationId` and `preparationId`, loads that exact immutable plan,
+and calls the core `startInterviewSession` with a random UUID. Current profiles,
+regeneration, list ordering and "latest" selection never participate.
+
+Set private `APPLICATION_REPOSITORY`, `INTERVIEW_PREPARATION_REPOSITORY`,
+`INTERVIEW_SESSION_REPOSITORY` and `INTERVIEW_SESSION_PREPARATION_LINK_REPOSITORY`
+to trusted storage paths outside public assets. No `COACH_DIR` is required for
+starting or reading a mock interview from an existing preparation.
+
+The web process serializes the entire sequence: save the new session, create its
+immutable link, read back the session, resolve and compare the exact preparation,
+and only then return success and redirect. The session repository is an upsert,
+so the operation checks for UUID collisions before saving. There is no cross-file
+transaction or cross-process lock. Continue to run one writer per store across
+web workers and CLI processes.
+
+If session save, link creation or post-write verification fails, the action
+returns a fixed Swedish error and does not redirect to a success page. It does
+not delete or rewrite historical records. A link-write failure can leave an
+unlinked session; a later verification failure can leave both records persisted.
+Reads refuse missing or invalid linkage and never reconstruct it from question IDs.
+A deliberate retry creates a separate session.
+
+`/applications/[applicationId]/interview/sessions/[sessionId]` reads the durable
+link and uses core `getCurrentInterviewQuestion` and `getInterviewSessionSummary`.
+Only the current question and its stored evidence/context reach the view. It
+handles completed sessions and legacy unlinked sessions explicitly. GET and
+refresh do not write. There is no answer input, question advancement, feedback,
+provider call, browser state storage or application/profile/document mutation.

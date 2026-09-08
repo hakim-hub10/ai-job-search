@@ -81,7 +81,7 @@ function summary(record: InterviewPreparationRecord): PreparationSummary {
     company: record.plan.job.company, language: record.plan.language, interviewType: record.plan.interviewType, questionCount: record.plan.questions.length };
 }
 /** Only referenced career evidence reaches the view; no profile/identity or storage metadata. */
-function detail(record: InterviewPreparationRecord): PreparationDetail {
+export function preparationDetailModel(record: InterviewPreparationRecord): PreparationDetail {
   const contexts = new Map(record.requirementContext.map((c) => [c.requirement.identity.key, c]));
   const evidence = new Map(record.evidenceSnapshot.map((e) => [e.id, e]));
   return { ...summary(record), questions: record.plan.questions.map((q) => ({
@@ -157,7 +157,7 @@ export async function createApplicationInterviewPreparation(input: {
     const saved = await persist(deps.preparationRepository, record);
     if (!saved.ok) return repositoryFailure(saved.error.code);
     if (!isInterviewPreparationRecord(saved.value) || JSON.stringify(saved.value) !== JSON.stringify(record)) return failure("INVALID_PREPARATION_DATA");
-    return { ok: true, value: detail(saved.value) };
+    return { ok: true, value: preparationDetailModel(saved.value) };
   } catch { return failure("REPOSITORY_ERROR"); }
 }
 
@@ -191,6 +191,6 @@ export async function loadApplicationInterviewPreparation(applicationId: string,
     if (!record.ok) return record.error.code === "NOT_FOUND" ? failure("PREPARATION_NOT_FOUND") : repositoryFailure(record.error.code);
     if (!isInterviewPreparationRecord(record.value) || record.value.id !== preparationId) return failure("INVALID_PREPARATION_DATA");
     if (record.value.applicationId !== applicationId) return failure("PREPARATION_NOT_FOUND");
-    return { ok: true, value: detail(record.value) };
+    return { ok: true, value: preparationDetailModel(record.value) };
   } catch { return failure("REPOSITORY_ERROR"); }
 }

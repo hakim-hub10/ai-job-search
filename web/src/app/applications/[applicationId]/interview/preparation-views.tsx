@@ -1,8 +1,11 @@
 import Link from "next/link";
+import { PreparationQuestion } from "./preparation-question";
+import { MockStartSubmit } from "./sessions/start-submit";
+import { mockInterviewError } from "@/lib/mock-interview-presentation";
 import type { ReactNode } from "react";
 import type { PreparationDetail, PreparationList, PreparationResult } from "@/lib/interview-preparation-data";
 import { applicationInterviewPath, formatInterviewLanguage, formatInterviewType } from "@/lib/interview-presentation";
-import { answerGuidance, preparationError, preparationPath, preparationWarning, requirementStatus } from "@/lib/interview-preparation-presentation";
+import { answerGuidance, preparationError, preparationPath, preparationWarning } from "@/lib/interview-preparation-presentation";
 import { PreparationSubmit } from "./prepare/submit";
 import styles from "./preparation.module.css";
 
@@ -53,7 +56,7 @@ export function PreparationCreateView({ applicationId, result, action, error }: 
     </section>
   </Frame>;
 }
-export function PreparationDetailView({ applicationId, result }: { applicationId: string; result: PreparationResult<PreparationDetail> }) {
+export function PreparationDetailView({ applicationId, result, startAction, startError }: { applicationId: string; result: PreparationResult<PreparationDetail>; startAction?: (data: FormData) => Promise<void>; startError?: string }) {
   if (!result.ok) return <Failure applicationId={applicationId} code={result.code} />;
   const p = result.value;
   return <Frame applicationId={applicationId}>
@@ -63,6 +66,16 @@ export function PreparationDetailView({ applicationId, result }: { applicationId
       <p>Frågorna och exemplen kommer från underlaget som sparades när du skapade förberedelsen.</p>
       <Link className={styles.link} href={preparationPath(applicationId)}>Alla förberedelser och skapa en ny →</Link>
     </header>
+    {startAction && <section className={styles.panel} aria-labelledby="mock-start-heading">
+      <h2 id="mock-start-heading">Öva med den här förberedelsen</h2>
+      <p>Starta en mockintervju med de sparade frågorna och exemplen. Varje start skapar en separat övningsintervju.</p>
+      {startError && <p role="alert" className={styles.error}>{mockInterviewError(startError)}</p>}
+      <form action={startAction} className={styles.form}>
+        <input type="hidden" name="applicationId" value={applicationId} />
+        <input type="hidden" name="preparationId" value={p.preparationId} />
+        <MockStartSubmit />
+      </form>
+    </section>}
     <section className={styles.panel} aria-labelledby="guidance-heading"><h2 id="guidance-heading">Bygg ett tydligt svar</h2>
       <p>Det här är intervjucoachning, inte arbetsgivarens bedömningsmall.</p>
       <ul className={styles.list}>{answerGuidance.map((text) => <li key={text}>{text}</li>)}</ul>
@@ -80,24 +93,7 @@ export function PreparationDetailView({ applicationId, result }: { applicationId
       <ul className={styles.list}>{p.warnings.map((w, i) => <li key={i}>{preparationWarning(w.code)}{w.requirementLabel && <> Krav: {w.requirementLabel}.</>}</li>)}</ul>
     </section>}
     <section aria-labelledby="questions-heading"><h2 id="questions-heading" className={styles.sectionHeading}>Dina frågor</h2>
-      {p.questions.map((q, i) => <article className={styles.panel} key={q.id} aria-labelledby={`question-${i}`}>
-        <p className={styles.eyebrow}>Fråga {i + 1}</p><h3 id={`question-${i}`} lang={p.language} className={styles.question}>{q.prompt}</h3>
-        <div className={styles.block}><h4>Vad arbetsgivaren sannolikt vill bedöma</h4><p lang={p.language}>{q.rationale}</p></div>
-        {q.requirements.length > 0 && <div className={styles.block}><h4>Relevant krav eller koppling</h4><ul className={styles.list}>
-          {q.requirements.map((r) => <li key={r.key}><strong>{r.label}</strong> — {r.source === "job" ? requirementStatus(r.status) : "Koppling i din profil, inte ett angivet jobbkrav"}</li>)}
-        </ul></div>}
-        <div className={styles.block}><h4>Erfarenhet du kan använda i svaret</h4>
-          {q.evidence.length > 0 ? <ul className={styles.evidence}>{q.evidence.map((e) => <li key={e.id}>
-            {(e.role || e.employer) && <p className={styles.evidenceContext}>{[e.role, e.employer].filter(Boolean).join(" · ")}</p>}<p>{e.content}</p>
-          </li>)}</ul> : <><p>Din verifierade profil innehåller inget tydligt exempel för den här frågan.</p>
-            <p>Använd ett verkligt exempel om du har ett. Svara ärligt och koppla till överförbar erfarenhet endast där det faktiskt stämmer.</p></>}
-        </div>
-        {q.starPrompts.map((s, index) => <div className={styles.block} key={index}><h4>Strukturera exemplet med STAR</h4>
-          <dl className={styles.star}>{[["Situation", s.situationPrompt], ["Uppgift", s.taskPrompt], ["Handling", s.actionPrompt], ["Resultat", s.resultPrompt]].map(([label, text]) =>
-            <div key={label}><dt>{label}</dt><dd lang={p.language}>{text}</dd></div>)}</dl>
-          {s.warnings.map((warning, j) => <p className={styles.note} key={j} lang={p.language}>{warning}</p>)}
-        </div>)}
-      </article>)}
+      {p.questions.map((q, i) => <PreparationQuestion key={q.id} q={q} language={p.language} index={i} />)}
     </section>
   </Frame>;
 }
