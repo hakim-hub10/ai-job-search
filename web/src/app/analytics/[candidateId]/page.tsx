@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { loadCandidateAnalytics } from "@/lib/analytics";
+import { loadCandidateAnalytics, loadCandidateInterviewPracticeAnalytics } from "@/lib/analytics";
 import { loadCoachCandidates } from "@/lib/coach-candidates";
 import styles from "../../page.module.css";
 
@@ -56,7 +56,7 @@ export default async function CandidateAnalyticsPage({
   const end = query.end ?? "2027-01-01";
   const asOfDate = query.asOf ?? end;
 
-  const [result, candidateResult] = await Promise.all([
+  const [result, candidateResult, interviewPractice] = await Promise.all([
     loadCandidateAnalytics(
       candidateId,
       toTimestamp(start),
@@ -64,6 +64,7 @@ export default async function CandidateAnalyticsPage({
       toTimestamp(asOfDate),
     ),
     loadCoachCandidates(),
+    loadCandidateInterviewPracticeAnalytics(candidateId),
   ]);
 
   const candidate =
@@ -172,6 +173,10 @@ export default async function CandidateAnalyticsPage({
           </section>
         ) : result.outcome && result.activity && result.time ? (
           <>
+            <section className={styles.panel}>
+              <div className={styles.panelHeader}><div><p className={styles.eyebrow}>Intervjuträning</p><h2>Faktiska träningsmått</h2></div></div>
+              {!interviewPractice.configured ? <div className={styles.emptyState}><strong>Intervjuarkivet är inte konfigurerat</strong><p>Intervjuträning kan inte visas ännu.</p></div> : interviewPractice.error ? <div className={styles.emptyState}><strong>Intervjuträningen kunde inte läsas</strong><p>Kontrollera intervjuarkivet och försök igen.</p></div> : interviewPractice.analytics ? <><p className={styles.subtitle}>Måtten beskriver sparad övningsaktivitet. Svarskvalitet, tidsserier och AI-coaching ingår inte.</p><div className={styles.candidateList}><article className={styles.candidateRow}><strong>Träningssessioner</strong><span>{interviewPractice.analytics.totalSessions}</span></article><article className={styles.candidateRow}><strong>Pågående</strong><span>{interviewPractice.analytics.activeSessions}</span></article><article className={styles.candidateRow}><strong>Slutförda</strong><span>{interviewPractice.analytics.completedSessions}</span></article><article className={styles.candidateRow}><strong>Besvarade frågor</strong><span>{interviewPractice.analytics.answeredQuestions}</span></article><article className={styles.candidateRow}><strong>Överhoppade frågor</strong><span>{interviewPractice.analytics.skippedQuestions}</span></article><article className={styles.candidateRow}><strong>Tidsanalys</strong><span>Inte spårad</span></article><article className={styles.candidateRow}><strong>Intervjutyp</strong><span>{interviewPractice.analytics.typeDistribution.map((item) => `${item.label}: ${item.count}`).join(" · ") || "Inga sessioner"}</span></article></div></> : null}
+            </section>
             <section className={styles.panel}>
               <div className={styles.panelHeader}>
                 <div>

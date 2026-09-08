@@ -3,6 +3,12 @@ import { resolve } from "node:path";
 
 import { createFileApplicationRepository } from "../../../.agents/job-search/cli/src/application-file-repository";
 import type { ApplicationRecord } from "../../../.agents/job-search/cli/src/applications";
+import { createFileInterviewSessionRepository } from "../../../.agents/job-search/cli/src/interview-session-file-repository";
+import { createFileInterviewPreparationRepository } from "../../../.agents/job-search/cli/src/interview-preparation-file-repository";
+import { createFileInterviewSessionPreparationLinkRepository } from "../../../.agents/job-search/cli/src/interview-session-preparation-link-file-repository";
+import { resolveInterviewSessionPreparation } from "../../../.agents/job-search/cli/src/interview-session-preparation";
+import { getInterviewSessionSummary, type InterviewSession } from "../../../.agents/job-search/cli/src/interview-session";
+import { isPersistableInterviewSession } from "../../../.agents/job-search/cli/src/interview-session-storage-validation";
 import { createCandidateActivityAnalyticsWorkflow } from "../../../.agents/job-search/cli/src/candidate-activity-analytics-workflow";
 import { createCandidateOutcomeAnalyticsWorkflow } from "../../../.agents/job-search/cli/src/candidate-outcome-analytics-workflow";
 import { createCandidateTimeAnalyticsWorkflow } from "../../../.agents/job-search/cli/src/candidate-time-analytics-workflow";
@@ -56,12 +62,36 @@ export interface JobSearchAnalyticsReadModel {
     unknownRequirements: number;
   };
 }
+export interface InterviewPracticeAnalyticsReadModel {
+  availability: "available";
+  totalSessions: number;
+  activeSessions: number;
+  completedSessions: number;
+  linkedSessions: number;
+  unlinkedSessions: number;
+  unavailableSessions: number;
+  answeredQuestions: number;
+  skippedQuestions: number;
+  typeDistribution: JobSearchDistributionItem[];
+  temporalAnalytics: { availability: "notTracked" };
+}
 
 function distribution(values: string[]): JobSearchDistributionItem[] {
   const counts = new Map<string, number>();
   for (const value of values) counts.set(value, (counts.get(value) ?? 0) + 1);
   return [...counts.entries()].map(([label, count]) => ({ label, count }))
     .sort((left, right) => left.label.localeCompare(right.label));
+}
+export function deriveInterviewPracticeAnalytics(sessions: InterviewSession[], linkage: Array<"linked" | "unlinked" | "unavailable">): InterviewPracticeAnalyticsReadModel {
+  const totals = sessions.reduce((value, session, index) => {
+    const summary = getInterviewSessionSummary(session);
+    if (!summary.ok) return value;
+    value.answered += summary.value.answeredQuestions; value.skipped += summary.value.skippedQuestions;
+    if (summary.value.status === "completed") value.completed += 1; else value.active += 1;
+    const link = linkage[index]; if (link === "linked") value.linked += 1; else if (link === "unlinked") value.unlinked += 1; else value.unavailable += 1;
+    return value;
+  }, { active: 0, completed: 0, linked: 0, unlinked: 0, unavailable: 0, answered: 0, skipped: 0 });
+  return { availability: "available", totalSessions: sessions.length, activeSessions: totals.active, completedSessions: totals.completed, linkedSessions: totals.linked, unlinkedSessions: totals.unlinked, unavailableSessions: totals.unavailable, answeredQuestions: totals.answered, skippedQuestions: totals.skipped, typeDistribution: distribution(sessions.map((session) => session.interviewType)), temporalAnalytics: { availability: "notTracked" } };
 }
 
 /** Derives only durable application-snapshot job facts; search history is not persisted. */
@@ -88,6 +118,31 @@ export async function loadJobSearchAnalytics(): Promise<{ configured: boolean; a
   const result = await createFileApplicationRepository(resolve(applicationPath)).list();
   if (!result.ok) return { configured: true, analytics: null, error: "UNAVAILABLE" };
   return { configured: true, analytics: deriveJobSearchAnalytics(result.value), error: null };
+}
+export async function loadCandidateInterviewPracticeAnalytics(candidateId: string): Promise<{ configured: boolean; analytics: InterviewPracticeAnalyticsReadModel | null; error: "NOT_FOUND" | "UNAVAILABLE" | null }> {
+  const coachDir = process.env.COACH_DIR, applicationPath = process.env.APPLICATION_REPOSITORY, sessionPath = process.env.INTERVIEW_SESSION_REPOSITORY, preparationPath = process.env.INTERVIEW_PREPARATION_REPOSITORY, linkPath = process.env.INTERVIEW_SESSION_PREPARATION_LINK_REPOSITORY;
+  if (![coachDir, applicationPath, sessionPath, preparationPath, linkPath].every((path) => path?.trim())) return { configured: false, analytics: null, error: null };
+  const paths = resolveCoachRepositoryPaths(resolve(coachDir!));
+  const candidates = createFileCoachWorkspaceRepository(paths.candidates);
+  const candidate = await candidates.getCandidateById(candidateId);
+  if (!candidate.ok) return { configured: true, analytics: null, error: candidate.error.code === "NOT_FOUND" ? "NOT_FOUND" : "UNAVAILABLE" };
+  const associations = await createFileCandidateApplicationAssociationRepository(paths.associations).listByCandidateId(candidateId);
+  if (!associations.ok) return { configured: true, analytics: null, error: "UNAVAILABLE" };
+  const sessionsRepository = createFileInterviewSessionRepository(resolve(sessionPath!));
+  const preparationRepository = createFileInterviewPreparationRepository(resolve(preparationPath!));
+  const links = createFileInterviewSessionPreparationLinkRepository(resolve(linkPath!), { sessionRepository: sessionsRepository, preparationRepository });
+  const sessions: InterviewSession[] = [], linkage: Array<"linked" | "unlinked" | "unavailable"> = [];
+  for (const association of associations.value) {
+    const listed = await sessionsRepository.listByApplicationId(association.applicationId);
+    if (!listed.ok) return { configured: true, analytics: null, error: "UNAVAILABLE" };
+    for (const session of listed.value) {
+      if (!isPersistableInterviewSession(session)) return { configured: true, analytics: null, error: "UNAVAILABLE" };
+      sessions.push(session);
+      const resolved = await resolveInterviewSessionPreparation({ applicationId: association.applicationId, sessionId: session.id }, { sessionRepository: sessionsRepository, preparationRepository, linkRepository: links });
+      linkage.push(resolved.ok ? "linked" : resolved.error.code === "UNLINKED_SESSION" ? "unlinked" : "unavailable");
+    }
+  }
+  return { configured: true, analytics: deriveInterviewPracticeAnalytics(sessions, linkage), error: null };
 }
 
 export async function loadCandidateAnalytics(
