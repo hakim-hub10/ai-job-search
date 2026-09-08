@@ -137,6 +137,7 @@ export async function loadCandidateInterviewPracticeAnalytics(candidateId: strin
     if (!listed.ok) return { configured: true, analytics: null, error: "UNAVAILABLE" };
     for (const session of listed.value) {
       if (!isPersistableInterviewSession(session)) return { configured: true, analytics: null, error: "UNAVAILABLE" };
+      if (session.applicationId !== association.applicationId) return { configured: true, analytics: null, error: "UNAVAILABLE" };
       sessions.push(session);
       const resolved = await resolveInterviewSessionPreparation({ applicationId: association.applicationId, sessionId: session.id }, { sessionRepository: sessionsRepository, preparationRepository, linkRepository: links });
       linkage.push(resolved.ok ? "linked" : resolved.error.code === "UNLINKED_SESSION" ? "unlinked" : "unavailable");
