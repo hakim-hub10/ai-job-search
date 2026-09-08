@@ -5,6 +5,7 @@ import { mockInterviewError, mockInterviewResultsPath } from "@/lib/mock-intervi
 import { preparationPath } from "@/lib/interview-preparation-presentation";
 import { PreparationQuestion } from "../preparation-question";
 import { MockInterviewAnswerForm } from "./answer-form";
+import { MockInterviewSkipSubmit } from "./skip-submit";
 import type { AnswerActionState } from "./answer-form";
 import styles from "../preparation.module.css";
 type Action = (data: FormData) => Promise<void>;
@@ -26,14 +27,14 @@ export function MockInterviewView({ applicationId, result, showAnswerForm, answe
       {result.value.session.status === "completed" ? <section className={styles.panel}><h2>Övningsintervjun är klar.</h2><p>Alla {result.value.session.totalQuestions} frågor har hanterats.</p><Link className={styles.link} href={mockInterviewResultsPath(applicationId, result.value.session.sessionId)}>Visa träningsfeedback →</Link></section> :
         <section aria-labelledby="current-heading"><h2 id="current-heading" className={styles.sectionHeading}>Fråga {result.value.session.currentQuestionIndex + 1} av {result.value.session.totalQuestions}</h2>
           {result.value.currentQuestion && <PreparationQuestion q={result.value.currentQuestion} index={result.value.session.currentQuestionIndex} language={result.value.session.language} />}
-          {answerError && <p className={styles.error} role="alert">{mockInterviewError(answerError)}</p>}
-          {skipError && <p className={styles.error} role="alert">{mockInterviewError(skipError)}</p>}
+          {answerError && <p className={styles.error} role="alert" aria-live="assertive">{mockInterviewError(answerError)}</p>}
+          {skipError && <p className={styles.error} role="alert" aria-live="assertive">{mockInterviewError(skipError)}</p>}
           {showAnswerForm && answerAction && result.value.currentQuestion && <section className={styles.panel} aria-labelledby="answer-heading">
             <h2 id="answer-heading">Ditt svar</h2><p id="answer-guidance">Svara konkret, beskriv din egen roll och använd ett verkligt exempel när det passar.</p>
             <MockInterviewAnswerForm applicationId={applicationId} sessionId={result.value.session.sessionId} questionId={result.value.currentQuestion.id} action={answerAction} />
             {skipAction && <form action={skipAction} className={styles.form}>
               <input type="hidden" name="applicationId" value={applicationId} /><input type="hidden" name="sessionId" value={result.value.session.sessionId} />
-              <input type="hidden" name="expectedQuestionId" value={result.value.currentQuestion.id} /><button className={styles.secondary} type="submit">Hoppa över frågan</button>
+              <input type="hidden" name="expectedQuestionId" value={result.value.currentQuestion.id} /><MockInterviewSkipSubmit />
             </form>}
           </section>}
         </section>}

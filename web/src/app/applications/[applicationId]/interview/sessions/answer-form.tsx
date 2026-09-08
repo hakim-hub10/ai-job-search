@@ -20,7 +20,7 @@ export function MockInterviewAnswerForm({ applicationId, sessionId, questionId, 
         <button className={styles.secondary} type="submit" name="mode" value="ai" disabled={pending}>{pending ? "Bearbetar…" : "Få AI-coaching"}</button>
       </fieldset>
     </form>
-    {state && (!state.ok ? <><p className={styles.error} role="alert">{mockInterviewError(state.code)}</p><Link className={styles.link} href={mockInterviewPath(applicationId, sessionId)}>Fortsätt intervjun →</Link></> : <section className={styles.panel} aria-labelledby="ai-heading">
+    {state && (!state.ok ? <><p className={styles.error} role="alert" aria-live="assertive">{mockInterviewError(state.code)}</p><Link className={styles.link} href={mockInterviewPath(applicationId, sessionId)}>Fortsätt intervjun →</Link></> : <section className={styles.panel} aria-labelledby="ai-heading" aria-live="polite">
       <p className={styles.eyebrow}>Rådgivande stöd</p><h3 id="ai-heading">AI-coaching</h3>
       <p>Det här är ett träningsförslag. Granska råden själv innan du använder dem.</p>
       <p>AI-förslaget kräver mänsklig granskning och ändrar inte ditt svar eller intervjun.</p>

@@ -9,14 +9,14 @@
 .panel p + p { margin-top: 8px; }
 .link { display: inline-block; padding: 8px 0; color: #175cd3; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
 .link:focus-visible, .form select:focus-visible, .form textarea:focus-visible, .submit:focus-visible, .secondary:focus-visible { outline: 3px solid #175cd3; outline-offset: 4px; border-radius: 3px; }
-.form { display: grid; gap: 24px; margin-top: 24px; }
+.form { display: grid; gap: 24px; margin-top: 24px; max-width: 760px; }
 .fields { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; }
 .fields > div { display: grid; gap: 8px; min-width: 0; }
 .fields label { font-weight: 600; }
 .fields select { width: 100%; min-width: 0; padding: 12px 8px; border: 1px solid #667085; border-radius: 6px; background: white; color: #17202a; font-size: 16px; }
-.submit { justify-self: start; border: 0; border-radius: 7px; padding: 12px 18px; background: #175cd3; color: white; font: inherit; font-weight: 600; cursor: pointer; }
+.submit { justify-self: start; min-height: 48px; border: 0; border-radius: 7px; padding: 12px 18px; background: #175cd3; color: white; font: inherit; font-weight: 600; cursor: pointer; }
 .submit:disabled { opacity: .65; cursor: wait; }
-.secondary { justify-self: start; border: 1px solid #667085; border-radius: 7px; padding: 11px 17px; background: white; color: #17202a; font: inherit; font-weight: 600; cursor: pointer; }
+.secondary { justify-self: start; min-height: 48px; border: 1px solid #667085; border-radius: 7px; padding: 11px 17px; background: white; color: #17202a; font: inherit; font-weight: 600; cursor: pointer; }
 .form textarea { width: 100%; min-width: 0; resize: vertical; padding: 12px; border: 1px solid #667085; border-radius: 6px; background: white; color: #17202a; font: inherit; line-height: 1.5; }
 .aiConsent { display: grid; gap: 10px; border: 1px solid #d0d5dd; border-radius: 8px; padding: 16px; }
 .aiConsent legend { padding: 0 6px; font-weight: 700; }
