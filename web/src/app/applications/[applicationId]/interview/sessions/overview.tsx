@@ -4,9 +4,12 @@ import { applicationInterviewPath, formatInterviewLanguage, formatInterviewStatu
 import { mockInterviewError, mockInterviewResultsPath } from "@/lib/mock-interview-presentation";
 import { preparationPath } from "@/lib/interview-preparation-presentation";
 import { PreparationQuestion } from "../preparation-question";
+import { MockInterviewAnswerForm } from "./answer-form";
+import type { AnswerActionState } from "./answer-form";
 import styles from "../preparation.module.css";
 type Action = (data: FormData) => Promise<void>;
-export function MockInterviewView({ applicationId, result, answerAction, skipAction, answerError, skipError }: { applicationId: string; result: MockInterviewResult<MockInterviewReadModel>; answerAction?: Action; skipAction?: Action; answerError?: string; skipError?: string }) {
+type AnswerAction = (previousState: unknown, data: FormData) => Promise<AnswerActionState>;
+export function MockInterviewView({ applicationId, result, showAnswerForm, answerAction, skipAction, answerError, skipError }: { applicationId: string; result: MockInterviewResult<MockInterviewReadModel>; showAnswerForm?: boolean; answerAction?: AnswerAction; skipAction?: Action; answerError?: string; skipError?: string }) {
   return <main lang="sv" className={styles.page}><div className={styles.content}>
     <Link className={styles.link} href={result.ok || result.code !== "APPLICATION_NOT_FOUND" ? applicationInterviewPath(applicationId) : "/applications"}>← Tillbaka till {result.ok || result.code !== "APPLICATION_NOT_FOUND" ? "intervjuöversikten" : "ansökningar"}</Link>
     {!result.ok ? <><header className={styles.header}><h1>Mockintervjun kunde inte visas</h1></header>
@@ -25,14 +28,9 @@ export function MockInterviewView({ applicationId, result, answerAction, skipAct
           {result.value.currentQuestion && <PreparationQuestion q={result.value.currentQuestion} index={result.value.session.currentQuestionIndex} language={result.value.session.language} />}
           {answerError && <p className={styles.error} role="alert">{mockInterviewError(answerError)}</p>}
           {skipError && <p className={styles.error} role="alert">{mockInterviewError(skipError)}</p>}
-          {answerAction && result.value.currentQuestion && <section className={styles.panel} aria-labelledby="answer-heading">
+          {showAnswerForm && answerAction && result.value.currentQuestion && <section className={styles.panel} aria-labelledby="answer-heading">
             <h2 id="answer-heading">Ditt svar</h2><p id="answer-guidance">Svara konkret, beskriv din egen roll och använd ett verkligt exempel när det passar.</p>
-            <form action={answerAction} className={styles.form}>
-              <input type="hidden" name="applicationId" value={applicationId} /><input type="hidden" name="sessionId" value={result.value.session.sessionId} />
-              <input type="hidden" name="expectedQuestionId" value={result.value.currentQuestion.id} /><input type="hidden" name="format" value="freeText" />
-              <label htmlFor="interview-answer">Skriv ditt svar</label><textarea id="interview-answer" name="text" rows={8} required aria-describedby="answer-guidance" />
-              <button className={styles.submit} type="submit">Skicka svar</button>
-            </form>
+            <MockInterviewAnswerForm applicationId={applicationId} sessionId={result.value.session.sessionId} questionId={result.value.currentQuestion.id} action={answerAction} />
             {skipAction && <form action={skipAction} className={styles.form}>
               <input type="hidden" name="applicationId" value={applicationId} /><input type="hidden" name="sessionId" value={result.value.session.sessionId} />
               <input type="hidden" name="expectedQuestionId" value={result.value.currentQuestion.id} /><button className={styles.secondary} type="submit">Hoppa över frågan</button>

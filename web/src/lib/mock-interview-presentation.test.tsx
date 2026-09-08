@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { MockInterviewView } from "../app/applications/[applicationId]/interview/sessions/overview";
 import { MockInterviewResultsView } from "../app/applications/[applicationId]/interview/sessions/results-view";
 import { PreparationDetailView } from "../app/applications/[applicationId]/interview/preparation-views";
+import type { AnswerActionState } from "../app/applications/[applicationId]/interview/sessions/answer-form";
 import type { MockInterviewFeedbackReadModel, MockInterviewReadModel, MockInterviewErrorCode } from "./mock-interview-data";
 import { mockInterviewError, mockInterviewPath } from "./mock-interview-presentation";
 import type { PreparationDetail } from "./interview-preparation-data";
@@ -13,7 +14,7 @@ const model: MockInterviewReadModel = {
     evidence: [{ id: "e", content: "Hjälpte kollegor med datorproblem.", role: "Tekniker", employer: "Exempelbolaget" }],
     starPrompts: [{ situationPrompt: "Beskriv situationen.", taskPrompt: "Beskriv ansvaret.", actionPrompt: "Beskriv handlingen.", resultPrompt: "Beskriv styrkta resultat.", warnings: ["Hitta inte på resultat."] }] },
 };
-const render = (m = model, actions: { answerAction?: (data: FormData) => Promise<void>; skipAction?: (data: FormData) => Promise<void> } = {}) => renderToStaticMarkup(<MockInterviewView applicationId="A" result={{ ok: true, value: m }} {...actions} />);
+const render = (m = model, actions: { showAnswerForm?: boolean; answerAction?: (previousState: unknown, data: FormData) => Promise<AnswerActionState>; skipAction?: (data: FormData) => Promise<void> } = {}) => renderToStaticMarkup(<MockInterviewView applicationId="A" result={{ ok: true, value: m }} {...actions} />);
 const feedbackModel: MockInterviewFeedbackReadModel = { application: model.application, preparationId: "prep-A", status: "completed", summary: { ...model.session, status: "completed", currentQuestionIndex: 2, answeredQuestions: 1, skippedQuestions: 1, remainingQuestions: 0 },
   questions: [{ prompt: "Berätta om ett verkligt exempel.", status: "submitted", answerFormat: "freeText", structuralChecks: { hasEvidenceCitation: true, hasQuestionLinkedEvidence: true, star: "notStructured" }, observations: [{ code: "QUESTION_LINKED_EVIDENCE_CITED", category: "evidenceUse", message: "Strukturell förberedelsesignal: frågeanknuten evidens citerades.", questions: ["Berätta om ett verkligt exempel."], requirements: ["Support"], evidence: ["Hjälpte kollegor med datorproblem."] }], strengths: [], cautions: [], priorities: [] },
     { prompt: "Nästa fråga", status: "skipped", observations: [], strengths: [], cautions: [], priorities: [{ code: "PRACTICE_SKIPPED_QUESTION", category: "sessionCoverage", message: "Öva på den överhoppade frågan; den är för närvarande inte övad.", questions: ["Nästa fråga"], requirements: [], evidence: [] }] }],
@@ -31,14 +32,14 @@ describe("mock interview presentation", () => {
     expect(render(m)).toContain("Din verifierade profil innehåller inget tydligt exempel"); expect(render(m)).not.toContain("Strukturera exemplet med STAR");
   });
   it("renders the Swedish answer and skip controls without feedback or provider controls", () => {
-    const html = render(undefined, { answerAction: async () => {}, skipAction: async () => {} }); expect(html).toMatch(/<textarea[^>]+name="text"/); expect(html).toContain("Ditt svar"); expect(html).toContain("Skicka svar"); expect(html).toContain("Hoppa över frågan"); expect(html).toContain('name="expectedQuestionId" value="q"'); expect(html).not.toMatch(/feedback|OpenAI|API_KEY|poäng|godkänd|anställningsbarhet/i);
+    const html = render(undefined, { showAnswerForm: true, answerAction: async () => ({ ok: false, code: "AI_REQUEST_FAILED", message: "safe" }), skipAction: async () => {} }); expect(html).toMatch(/<textarea[^>]+name="text"/); expect(html).toContain("Ditt svar"); expect(html).toContain("Skicka svar"); expect(html).toContain("Hoppa över frågan"); expect(html).toContain("Valfritt AI-stöd"); expect(html).toContain("Få AI-coaching"); expect(html).toContain('name="aiConsent"'); expect(html).not.toMatch(/checked/); expect(html).toContain('name="expectedQuestionId" value="q"'); expect(html).not.toMatch(/feedback|OpenAI|API_KEY|poäng|godkänd|anställningsbarhet/i);
   });
   it("handles completed sessions with a null question", () => {
     const m = structuredClone(model); m.session.status = "completed"; m.session.currentQuestionIndex = 2; m.session.remainingQuestions = 0; m.currentQuestion = null;
     const html = render(m); expect(html).toContain("Slutförd"); expect(html).toContain("Övningsintervjun är klar."); expect(html).not.toContain("Fråga 3"); expect(html).not.toContain("Berätta om"); expect(html).not.toContain("Ditt svar");
   });
   it("renders safe stale and persistence errors without answer text", () => {
-    const html = renderToStaticMarkup(<MockInterviewView applicationId="A" result={{ ok: true, value: model }} answerAction={async () => {}} skipAction={async () => {}} answerError="STALE_QUESTION" skipError="SKIP_FAILED" />);
+    const html = renderToStaticMarkup(<MockInterviewView applicationId="A" result={{ ok: true, value: model }} showAnswerForm answerAction={async () => ({ ok: false, code: "AI_REQUEST_FAILED", message: "safe" })} skipAction={async () => {}} answerError="STALE_QUESTION" skipError="SKIP_FAILED" />);
     expect(html).toContain("Frågan har ändrats i en annan flik"); expect(html).toContain("Ingen progression bekräftades"); expect(html).not.toContain("SECRET");
   });
   it.each(["UNLINKED_SESSION", "INTERVIEW_SESSION_NOT_FOUND", "APPLICATION_NOT_FOUND", "INVALID_INTERVIEW_DATA", "CONFIGURATION_MISSING", "REPOSITORY_ERROR"] as MockInterviewErrorCode[])("renders fixed safe error for %s without question context", (code) => {
