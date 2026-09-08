@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { loadCoachPortfolioAnalytics, loadJobSearchAnalytics } from "@/lib/analytics";
+import { loadCoachPortfolioAnalytics, loadJobSearchAnalytics, parseAnalyticsPeriod } from "@/lib/analytics";
 import { loadCoachCandidates } from "@/lib/coach-candidates";
 import styles from "../page.module.css";
 
@@ -51,9 +51,10 @@ export default async function AnalyticsPage({
 }: AnalyticsPageProps) {
   const query = await searchParams;
 
-  const start = query.start ?? "2026-01-01";
-  const end = query.end ?? "2027-01-01";
-  const asOfDate = query.asOf ?? end;
+  const period = parseAnalyticsPeriod(query);
+  const start = period.ok ? period.value.start : query.start ?? "2026-01-01";
+  const end = period.ok ? period.value.end : query.end ?? "2027-01-01";
+  const asOfDate = period.ok ? period.value.asOf : query.asOf ?? end;
 
   const [result, candidateResult, jobAnalytics] = await Promise.all([
     loadCoachPortfolioAnalytics(
@@ -142,6 +143,7 @@ export default async function AnalyticsPage({
             <button type="submit">Ladda analys</button>
           </form>
         </section>
+        {!period.ok && <section className={styles.panel}><div className={styles.emptyState}><strong>Analysperioden kunde inte användas</strong><p>Ange giltiga datum där startdatumet infaller före slutdatumet.</p></div></section>}
 
         {!result.configured ? (
           <section className={styles.panel}>
@@ -195,6 +197,7 @@ export default async function AnalyticsPage({
 
             <section className={styles.panel}>
               <div className={styles.panelHeader}><div><p className={styles.eyebrow}>Jobbfakta</p><h2>Jobb som finns i ansökningar</h2></div></div>
+              <p className={styles.subtitle}>Tidsfilter gäller inte denna sektion. Uppgifterna bygger på alla sparade ansökningar; sökhistorik spåras inte.</p>
               {!jobAnalytics.configured ? <div className={styles.emptyState}><strong>Jobbanalys är inte konfigurerad</strong><p>Ansökningsarkivet kunde inte läsas.</p></div> : jobAnalytics.error ? <div className={styles.emptyState}><strong>Jobbanalys kunde inte läsas</strong><p>Försök igen senare.</p></div> : jobAnalytics.analytics ? <>
                 <p className={styles.subtitle}>Statistiken bygger på jobb som har blivit en del av dina sparade ansökningar. Sökningar som inte ledde till en ansökan sparas inte som historik.</p>
                 <div className={styles.candidateList}><article className={styles.candidateRow}><strong>Jobb representerade</strong><span>{jobAnalytics.analytics.totalJobsRepresented}</span></article><article className={styles.candidateRow}><strong>Sök historik</strong><span>Inte spårad</span></article></div>

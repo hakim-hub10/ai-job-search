@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { deriveCandidateCareerActions, loadCandidateAnalytics, loadCandidateInterviewPracticeAnalytics, loadCandidateRequirementInsights } from "@/lib/analytics";
+import { deriveCandidateCareerActions, loadCandidateAnalytics, loadCandidateInterviewPracticeAnalytics, loadCandidateRequirementInsights, parseAnalyticsPeriod } from "@/lib/analytics";
 import { loadCoachCandidates } from "@/lib/coach-candidates";
 import styles from "../../page.module.css";
 import { CareerActionList } from "./career-actions";
@@ -53,9 +53,10 @@ export default async function CandidateAnalyticsPage({
   const { candidateId } = await params;
   const query = await searchParams;
 
-  const start = query.start ?? "2026-01-01";
-  const end = query.end ?? "2027-01-01";
-  const asOfDate = query.asOf ?? end;
+  const period = parseAnalyticsPeriod(query);
+  const start = period.ok ? period.value.start : query.start ?? "2026-01-01";
+  const end = period.ok ? period.value.end : query.end ?? "2027-01-01";
+  const asOfDate = period.ok ? period.value.asOf : query.asOf ?? end;
 
   const [result, candidateResult, interviewPractice, requirementInsights] = await Promise.all([
     loadCandidateAnalytics(
@@ -154,6 +155,7 @@ export default async function CandidateAnalyticsPage({
             <button type="submit">Ladda analys</button>
           </form>
         </section>
+        {!period.ok && <section className={styles.panel}><div className={styles.emptyState}><strong>Analysperioden kunde inte användas</strong><p>Ange giltiga datum där startdatumet infaller före slutdatumet.</p></div></section>}
 
         {!result.configured ? (
           <section className={styles.panel}>
@@ -176,11 +178,12 @@ export default async function CandidateAnalyticsPage({
         ) : result.outcome && result.activity && result.time ? (
           <>
             <section className={styles.panel}>
-              <div className={styles.panelHeader}><div><p className={styles.eyebrow}>Intervjuträning</p><h2>Faktiska träningsmått</h2></div></div>
+              <div className={styles.panelHeader}><div><p className={styles.eyebrow}>Intervjuträning</p><h2>Faktiska träningsmått</h2></div></div><p className={styles.subtitle}>Tidsfilter gäller inte intervjuträning eftersom sessionerna saknar tidsstämplar.</p>
               {!interviewPractice.configured ? <div className={styles.emptyState}><strong>Intervjuarkivet är inte konfigurerat</strong><p>Intervjuträning kan inte visas ännu.</p></div> : interviewPractice.error ? <div className={styles.emptyState}><strong>Intervjuträningen kunde inte läsas</strong><p>Kontrollera intervjuarkivet och försök igen.</p></div> : interviewPractice.analytics ? <><p className={styles.subtitle}>Måtten beskriver sparad övningsaktivitet. Svarskvalitet, tidsserier och AI-coaching ingår inte.</p><div className={styles.candidateList}><article className={styles.candidateRow}><strong>Träningssessioner</strong><span>{interviewPractice.analytics.totalSessions}</span></article><article className={styles.candidateRow}><strong>Pågående</strong><span>{interviewPractice.analytics.activeSessions}</span></article><article className={styles.candidateRow}><strong>Slutförda</strong><span>{interviewPractice.analytics.completedSessions}</span></article><article className={styles.candidateRow}><strong>Besvarade frågor</strong><span>{interviewPractice.analytics.answeredQuestions}</span></article><article className={styles.candidateRow}><strong>Överhoppade frågor</strong><span>{interviewPractice.analytics.skippedQuestions}</span></article><article className={styles.candidateRow}><strong>Tidsanalys</strong><span>Inte spårad</span></article><article className={styles.candidateRow}><strong>Intervjutyp</strong><span>{interviewPractice.analytics.typeDistribution.map((item) => `${item.label}: ${item.count}`).join(" · ") || "Inga sessioner"}</span></article></div></> : null}
             </section>
             <section className={styles.panel} aria-labelledby="requirements-heading">
               <div className={styles.panelHeader}><div><p className={styles.eyebrow}>Krav och kompetens</p><h2 id="requirements-heading">Historiska matchningsfakta</h2></div></div>
+              <p className={styles.subtitle}>Tidsfilter gäller inte denna sektion. Kraven och kompetensgapen bygger på alla sparade analyser eftersom analyserna saknar egen tidsstämpel.</p>
               {!requirementInsights.configured ? <div className={styles.emptyState}><strong>Analysarkiven är inte konfigurerade</strong><p>Krav och kompetens kan inte visas ännu.</p></div> : requirementInsights.error ? <div className={styles.emptyState}><strong>Kravanalysen kunde inte läsas</strong><p>Kontrollera analysarkiven och försök igen.</p></div> : requirementInsights.insights && requirementInsights.insights.applicationsTotal === 0 ? <div className={styles.emptyState}><strong>Inga ansökningar finns ännu</strong><p>Sparade matchningsanalyser visas när ansökningar finns.</p></div> : requirementInsights.insights && requirementInsights.insights.applicationsWithAnalysis === 0 ? <div className={styles.emptyState}><strong>Inga sparade matchningsanalyser</strong><p>Ansökningarna saknar beständiga analyser.</p></div> : requirementInsights.insights ? <><p className={styles.subtitle}>Visar {requirementInsights.insights.applicationsWithAnalysis} av {requirementInsights.insights.applicationsTotal} ansökningar med sparad analys. Detta är historiska fakta, inte en bedömning av kandidaten.</p>{requirementInsights.insights.requirements.length > 0 ? <div className={styles.candidateList}><article className={styles.candidateRow}><strong>Krav</strong><span>Matchad · Saknas · Konflikt · Okänd</span></article>{requirementInsights.insights.requirements.map((item) => <article className={styles.candidateRow} key={item.requirementId}><strong>{item.label}</strong><span>{item.matched} · {item.missing} · {item.conflicting} · {item.unknown}</span></article>)}</div> : <p>Inga krav med sparad matchningsinformation hittades.</p>}{requirementInsights.insights.skillGaps.length > 0 && <><h3>Kompetensgap i sparade analyser</h3><div className={styles.candidateList}>{requirementInsights.insights.skillGaps.map((gap) => <article className={styles.candidateRow} key={gap.gapId}><strong>{gap.label}</strong><span>Förekom i {gap.applicationsRepresented} ansökningar · {gap.occurrences} förekomster</span></article>)}</div></>}<h3>Förslag på nästa steg</h3><CareerActionList actions={deriveCandidateCareerActions(requirementInsights.insights)} /></> : null}
             </section>
             <section className={styles.panel}>

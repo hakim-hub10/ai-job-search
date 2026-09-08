@@ -1,7 +1,7 @@
 import { describe, expect, it, mock } from "bun:test";
 import type { ApplicationRecord } from "../../../.agents/job-search/cli/src/applications";
 mock.module("server-only", () => ({}));
-const { deriveCandidateRequirementInsights, deriveInterviewPracticeAnalytics, deriveJobSearchAnalytics, deriveCandidateCareerActions } = await import("./analytics");
+const { deriveCandidateRequirementInsights, deriveInterviewPracticeAnalytics, deriveJobSearchAnalytics, deriveCandidateCareerActions, parseAnalyticsPeriod } = await import("./analytics");
 
 const application = (id: string, source: string, location: string | null, title: string): ApplicationRecord => ({
   id, jobSnapshot: { id: `job-${id}`, source, sourceId: `source-${id}`, title, company: null, location, country: null, url: null, applyUrl: null, date: null, employmentType: null, remote: null, description: null, salary: null, skills: [], seniority: null, category: null },
@@ -9,6 +9,11 @@ const application = (id: string, source: string, location: string | null, title:
 });
 
 describe("job search analytics read model", () => {
+  it("validates half-open date-query boundaries without changing UTC semantics", () => {
+    expect(parseAnalyticsPeriod({ start: "2026-08-01", end: "2026-09-01", asOf: "2026-09-01" })).toEqual({ ok: true, value: { start: "2026-08-01", end: "2026-09-01", asOf: "2026-09-01" } });
+    expect(parseAnalyticsPeriod({ start: "2026-09-01", end: "2026-08-01" })).toEqual({ ok: false, code: "INVALID_PERIOD" });
+    expect(parseAnalyticsPeriod({ start: "bad", end: "2026-09-01" })).toEqual({ ok: false, code: "INVALID_PERIOD" });
+  });
   it("distinguishes durable application facts from unavailable search history", () => {
     const result = deriveJobSearchAnalytics([application("b", "jobtech", null, "Supporttekniker"), application("a", "linkedin", "Malmö", "Supporttekniker")]);
     expect(result).toMatchObject({ availability: "available", basis: "APPLICATION_RECORDS", totalJobsRepresented: 2, searchHistory: { availability: "notTracked" }, matching: { availability: "available", matchedRequirements: 4, missingRequirements: 2, unknownRequirements: 2 } });

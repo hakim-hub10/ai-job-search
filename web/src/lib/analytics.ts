@@ -41,6 +41,14 @@ function repositories() {
     operations: createFileCoachOperationsRepository(paths.operations),
   };
 }
+export interface AnalyticsPeriodQuery { start?: string; end?: string; asOf?: string }
+export interface AnalyticsPeriod { start: string; end: string; asOf: string }
+export function parseAnalyticsPeriod(query: AnalyticsPeriodQuery): { ok: true; value: AnalyticsPeriod } | { ok: false; code: "INVALID_PERIOD" } {
+  const start = query.start ?? "2026-01-01", end = query.end ?? "2027-01-01", asOf = query.asOf ?? end;
+  const validDate = (value: string) => /^\d{4}-\d{2}-\d{2}$/u.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00.000Z`));
+  if (![start, end, asOf].every(validDate) || start >= end) return { ok: false, code: "INVALID_PERIOD" };
+  return { ok: true, value: { start, end, asOf } };
+}
 
 export interface JobSearchDistributionItem {
   label: string;
