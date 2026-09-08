@@ -19,6 +19,7 @@ function progressErrorPath(applicationId: FormDataEntryValue | null, sessionId: 
 export async function submitMockInterviewAnswerAction(previousState: unknown, data: FormData) {
   const applicationId = data.get("applicationId"), sessionId = data.get("sessionId"), expectedQuestionId = data.get("expectedQuestionId");
   const format = data.get("format"), text = data.get("text"), mode = data.get("mode");
+  if (mode !== "deterministic" && mode !== "ai") return { ok: false as const, code: "INVALID_ANSWER" as const, message: "Skriv ett svar i ett format som kan behandlas." };
   if (mode === "ai" && data.get("aiConsent") !== "on") return { ok: false as const, code: "AI_CONSENT_REQUIRED" as const, message: "AI-stöd kräver ett uttryckligt godkännande för just denna åtgärd." };
   const result = await submitApplicationMockInterviewAnswer({ applicationId, sessionId, expectedQuestionId, fields: {
     format, text,

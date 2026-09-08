@@ -64,7 +64,7 @@ export interface MockInterviewStartDependencies extends MockInterviewReadDepende
   linkRepository: InterviewSessionPreparationLinkRepository;
 }
 const failure = (code: MockInterviewErrorCode): { ok: false; code: MockInterviewErrorCode; message: string } => ({ ok: false, code, message: mockInterviewError(code) });
-const validId = (id: unknown): id is string => typeof id === "string" && id.trim().length > 0;
+const validId = (id: unknown): id is string => typeof id === "string" && id.trim().length > 0 && id.length <= 200;
 function storageFailure(code: string) {
   return failure(["INVALID_RECORD", "INVALID_LINK", "CORRUPT_STORAGE", "UNSUPPORTED_SCHEMA_VERSION"].includes(code) ? "INVALID_INTERVIEW_DATA" : "REPOSITORY_ERROR");
 }
@@ -250,12 +250,14 @@ function answerInput(questionId: string, fields: MockInterviewAnswerFields): Int
     : Array.isArray(fields.citedEvidenceIds) && fields.citedEvidenceIds.every((id) => typeof id === "string")
       ? fields.citedEvidenceIds as string[] : null;
   if (citedEvidenceIds === null) return null;
-  if (fields.format === "freeText" && typeof fields.text === "string") {
+  if (fields.format === "freeText" && typeof fields.text === "string" && fields.text.length <= 10000) {
     return { questionId, format: "freeText", text: fields.text,
       ...(citedEvidenceIds ? { citedEvidenceIds } : {}) };
   }
   if (fields.format === "star" && fields.star && typeof fields.star === "object" && !Array.isArray(fields.star)) {
     const star = fields.star as Record<string, unknown>;
+    const fieldsValid = [star.situation, star.task, star.action, star.result].every((value) => value === undefined || typeof value === "string" && value.length <= 4000);
+    if (!fieldsValid) return null;
     return { questionId, format: "star", star: {
       ...(typeof star.situation === "string" ? { situation: star.situation } : {}),
       ...(typeof star.task === "string" ? { task: star.task } : {}),

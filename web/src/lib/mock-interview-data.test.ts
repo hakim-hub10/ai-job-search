@@ -179,6 +179,13 @@ describe("mock interview data", () => {
     expect(await submit({ applicationId: "A", sessionId: completed.session.sessionId, expectedQuestionId: "q1", fields: { format: "freeText", text: "Svar" } }, second.deps)).toMatchObject({ ok: false, code: "SESSION_ALREADY_COMPLETED" });
     expect(await submit({ applicationId: "A", sessionId: completed.session.sessionId, expectedQuestionId: "q1", fields: { format: "unsupported", text: "Svar" } }, second.deps)).toMatchObject({ ok: false, code: "SESSION_ALREADY_COMPLETED" });
   });
+  it("rejects oversized identifiers and answer fields before persistence or provider use", async () => {
+    const f = fixture(), started = value(await start(input, f.deps));
+    expect(await submit({ applicationId: "A", sessionId: started.session.sessionId, expectedQuestionId: "x".repeat(201), fields: { format: "freeText", text: "Svar" } }, f.deps)).toMatchObject({ ok: false, code: "INVALID_REQUEST" });
+    expect(await submit({ applicationId: "A", sessionId: started.session.sessionId, expectedQuestionId: "q1", fields: { format: "freeText", text: "x".repeat(10001) } }, f.deps)).toMatchObject({ ok: false, code: "INVALID_ANSWER" });
+    expect(await submit({ applicationId: "A", sessionId: started.session.sessionId, expectedQuestionId: "q1", fields: { format: "star", star: { situation: "x".repeat(4001) } } }, f.deps)).toMatchObject({ ok: false, code: "INVALID_ANSWER" });
+    expect(f.sessions.get(started.session.sessionId)!.turns).toHaveLength(0);
+  });
   it("derives completed feedback from the exact linked preparation without mutation or raw answers", async () => {
     const f = fixture(), started = value(await start(input, f.deps));
     value(await submit({ applicationId: "A", sessionId: started.session.sessionId, expectedQuestionId: "q1", fields: { format: "freeText", text: "Detta råa svar ska aldrig visas eller rekonstrueras." } }, f.deps));
