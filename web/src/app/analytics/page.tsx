@@ -52,9 +52,9 @@ export default async function AnalyticsPage({
   const query = await searchParams;
 
   const period = parseAnalyticsPeriod(query);
-  const start = period.ok ? period.value.start : query.start ?? "2026-01-01";
-  const end = period.ok ? period.value.end : query.end ?? "2027-01-01";
-  const asOfDate = period.ok ? period.value.asOf : query.asOf ?? end;
+  const start = period.ok ? period.value.start : "2026-01-01";
+  const end = period.ok ? period.value.end : "2027-01-01";
+  const asOfDate = period.ok ? period.value.asOf : end;
 
   const [result, candidateResult, jobAnalytics] = await Promise.all([
     loadCoachPortfolioAnalytics(
@@ -141,6 +141,7 @@ export default async function AnalyticsPage({
             </label>
 
             <button type="submit">Ladda analys</button>
+            <Link href="/analytics">Visa all tillgänglig data</Link>
           </form>
         </section>
         {!period.ok && <section className={styles.panel}><div className={styles.emptyState}><strong>Analysperioden kunde inte användas</strong><p>Ange giltiga datum där startdatumet infaller före slutdatumet.</p></div></section>}
@@ -150,8 +151,7 @@ export default async function AnalyticsPage({
             <div className={styles.emptyState}>
               <strong>Analysarkiven är inte konfigurerade</strong>
               <p>
-                Both COACH_DIR and APPLICATION_REPOSITORY are required to load
-                analys.
+                Ange COACH_DIR och APPLICATION_REPOSITORY för att läsa analysen.
               </p>
             </div>
           </section>
@@ -159,7 +159,7 @@ export default async function AnalyticsPage({
           <section className={styles.panel}>
             <div className={styles.emptyState}>
               <strong>Analysen kunde inte genereras</strong>
-              <p>Analysunderlaget kunde inte verifieras. Kontrollera den valda perioden och försök igen.</p>
+              <p role="alert">Analysunderlaget kunde inte verifieras. Kontrollera den valda perioden och försök igen.</p>
             </div>
           </section>
         ) : result.analytics ? (
@@ -238,7 +238,7 @@ export default async function AnalyticsPage({
               <div className={styles.panelHeader}>
                 <div>
                   <p className={styles.eyebrow}>Ansökningar</p>
-                  <h2>Outcome funnel</h2>
+                  <h2>Ansökningarnas historiska flöde</h2>
                 </div>
               </div>
 
@@ -299,7 +299,7 @@ export default async function AnalyticsPage({
               <div className={styles.panelHeader}>
                 <div>
                   <p className={styles.eyebrow}>Uppföljningar</p>
-                  <h2>Current and historical state</h2>
+                  <h2>Uppföljningsläge</h2>
                 </div>
               </div>
 
@@ -335,7 +335,7 @@ export default async function AnalyticsPage({
               <div className={styles.panelHeader}>
                 <div>
                   <p className={styles.eyebrow}>Jobbcoachaktiviteter</p>
-                  <h2>Activity state</h2>
+                  <h2>Aktivitetsläge</h2>
                 </div>
               </div>
 
@@ -366,7 +366,7 @@ export default async function AnalyticsPage({
               <div className={styles.panelHeader}>
                 <div>
                   <p className={styles.eyebrow}>Tidsmått</p>
-                  <h2>Application milestones</h2>
+                  <h2>Tid till ansökningssteg</h2>
                 </div>
               </div>
 

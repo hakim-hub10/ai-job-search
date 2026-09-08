@@ -275,6 +275,24 @@
   .header {
     flex-direction: column;
   }
+
+  .reportFilters {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .reportFilters label,
+  .reportFilters input,
+  .reportFilters button,
+  .reportFilters a {
+    width: 100%;
+  }
+
+  .candidateRow {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
 }
 
 .candidateList {
@@ -297,6 +315,11 @@
 
 .candidateRow strong {
   font-size: 14px;
+}
+
+.candidateRow > * {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .candidateRow p {
@@ -345,6 +368,21 @@
 
 .reportFilters button {
   min-height: 2.4rem;
+}
+
+.reportFilters a,
+.reportFilters button,
+.reportFilters input {
+  min-height: 44px;
+}
+
+.reportFilters a:focus-visible,
+.reportFilters button:focus-visible,
+.reportFilters input:focus-visible,
+.nav a:focus-visible,
+.candidateRow:focus-visible {
+  outline: 3px solid #98a2b3;
+  outline-offset: 3px;
 }
 
 .jobResult {

@@ -54,9 +54,9 @@ export default async function CandidateAnalyticsPage({
   const query = await searchParams;
 
   const period = parseAnalyticsPeriod(query);
-  const start = period.ok ? period.value.start : query.start ?? "2026-01-01";
-  const end = period.ok ? period.value.end : query.end ?? "2027-01-01";
-  const asOfDate = period.ok ? period.value.asOf : query.asOf ?? end;
+  const start = period.ok ? period.value.start : "2026-01-01";
+  const end = period.ok ? period.value.end : "2027-01-01";
+  const asOfDate = period.ok ? period.value.asOf : end;
 
   const [result, candidateResult, interviewPractice, requirementInsights] = await Promise.all([
     loadCandidateAnalytics(
@@ -153,6 +153,7 @@ export default async function CandidateAnalyticsPage({
             </label>
 
             <button type="submit">Ladda analys</button>
+            <Link href={`/analytics/${encodeURIComponent(candidateId)}`}>Visa all tillgänglig data</Link>
           </form>
         </section>
         {!period.ok && <section className={styles.panel}><div className={styles.emptyState}><strong>Analysperioden kunde inte användas</strong><p>Ange giltiga datum där startdatumet infaller före slutdatumet.</p></div></section>}
@@ -163,8 +164,7 @@ export default async function CandidateAnalyticsPage({
               <strong>Analysarkiven är inte konfigurerade</strong>
 
               <p>
-                Both COACH_DIR and APPLICATION_REPOSITORY are required to load
-                kandidatanalys.
+                Ange COACH_DIR och APPLICATION_REPOSITORY för att läsa kandidatanalys.
               </p>
             </div>
           </section>
@@ -172,7 +172,7 @@ export default async function CandidateAnalyticsPage({
           <section className={styles.panel}>
             <div className={styles.emptyState}>
               <strong>Kandidatanalysen kunde inte genereras</strong>
-              <pre>{JSON.stringify(result.error, null, 2)}</pre>
+              <p role="alert">Kandidatanalysen kunde inte verifieras. Kontrollera vald period och analysarkiv.</p>
             </div>
           </section>
         ) : result.outcome && result.activity && result.time ? (
@@ -190,7 +190,7 @@ export default async function CandidateAnalyticsPage({
               <div className={styles.panelHeader}>
                 <div>
                   <p className={styles.eyebrow}>Ansökningar</p>
-                  <h2>Resultatanalys</h2>
+                  <h2>Ansökningarnas historiska utfall</h2>
                 </div>
               </div>
 
@@ -231,7 +231,7 @@ export default async function CandidateAnalyticsPage({
                 </article>
 
                 <article className={styles.candidateRow}>
-                  <strong>Application → applied</strong>
+                  <strong>Ansökan → ansökt</strong>
                   <span>
                     {formatRate(
                       result.outcome.funnel.applicationToApplied
@@ -285,7 +285,7 @@ export default async function CandidateAnalyticsPage({
                 </article>
 
                 <article className={styles.candidateRow}>
-                  <strong>Completion conversion</strong>
+                  <strong>Slutförandegrad</strong>
                   <span>
                     {formatRate(
                       result.activity.followUps.completion.rate,
@@ -325,7 +325,7 @@ export default async function CandidateAnalyticsPage({
                 </article>
 
                 <article className={styles.candidateRow}>
-                  <strong>Completion conversion</strong>
+                  <strong>Slutförandegrad</strong>
                   <span>
                     {formatRate(
                       result.activity.coachActivities.completion.rate,
@@ -338,7 +338,7 @@ export default async function CandidateAnalyticsPage({
             <section className={styles.panel}>
               <div className={styles.panelHeader}>
                 <div>
-                  <p className={styles.eyebrow}>Historical state</p>
+                  <p className={styles.eyebrow}>Historiskt läge</p>
                   <h2>Per {asOfDate}</h2>
                 </div>
               </div>
@@ -380,7 +380,7 @@ export default async function CandidateAnalyticsPage({
               <div className={styles.panelHeader}>
                 <div>
                   <p className={styles.eyebrow}>Tidsmått</p>
-                  <h2>Application milestones</h2>
+                  <h2>Tid till ansökningssteg</h2>
                 </div>
               </div>
 
