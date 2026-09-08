@@ -11,6 +11,8 @@ import type { InterviewSessionRepository } from "../../../.agents/job-search/cli
 import { isPersistableInterviewSession } from "../../../.agents/job-search/cli/src/interview-session-storage-validation";
 import type { InterviewAnswerInput } from "../../../.agents/job-search/cli/src/interview-answer-preparation";
 import { createInterviewSessionFeedback, type InterviewFeedbackItem, type InterviewSessionFeedback } from "../../../.agents/job-search/cli/src/interview-feedback";
+import { generateInterviewAIProposal, type InterviewAIGenerator, type InterviewAIProposal } from "../../../.agents/job-search/cli/src/interview-ai";
+import { createOpenAIInterviewGenerator } from "../../../.agents/job-search/cli/src/providers/openai-interview-generator";
 import { startInterviewSession, getCurrentInterviewQuestion, getInterviewSessionSummary, submitInterviewAnswer, skipCurrentInterviewQuestion, type InterviewSession } from "../../../.agents/job-search/cli/src/interview-session";
 import { createFileInterviewSessionPreparationLinkRepository } from "../../../.agents/job-search/cli/src/interview-session-preparation-link-file-repository";
 import type { InterviewSessionPreparationLinkRepository } from "../../../.agents/job-search/cli/src/interview-session-preparation-link-repository";
@@ -19,7 +21,7 @@ import { preparationDetailModel, type PreparationDetail } from "./interview-prep
 import type { InterviewSessionReadModel } from "./interview-data";
 import { mockInterviewError } from "./mock-interview-presentation";
 
-export type MockInterviewErrorCode = "CONFIGURATION_MISSING" | "INVALID_REQUEST" | "APPLICATION_NOT_FOUND" | "PREPARATION_NOT_FOUND" | "INTERVIEW_SESSION_NOT_FOUND" | "UNLINKED_SESSION" | "INVALID_INTERVIEW_DATA" | "SESSION_CREATION_FAILED" | "SESSION_ALREADY_COMPLETED" | "STALE_QUESTION" | "INVALID_ANSWER" | "ANSWER_SUBMISSION_FAILED" | "SKIP_FAILED" | "SESSION_INCOMPLETE" | "FEEDBACK_FAILED" | "REPOSITORY_ERROR";
+export type MockInterviewErrorCode = "CONFIGURATION_MISSING" | "INVALID_REQUEST" | "APPLICATION_NOT_FOUND" | "PREPARATION_NOT_FOUND" | "INTERVIEW_SESSION_NOT_FOUND" | "UNLINKED_SESSION" | "INVALID_INTERVIEW_DATA" | "SESSION_CREATION_FAILED" | "SESSION_ALREADY_COMPLETED" | "STALE_QUESTION" | "INVALID_ANSWER" | "ANSWER_SUBMISSION_FAILED" | "SKIP_FAILED" | "SESSION_INCOMPLETE" | "FEEDBACK_FAILED" | "AI_CONSENT_REQUIRED" | "AI_UNAVAILABLE" | "INVALID_AI_REQUEST" | "AI_REQUEST_FAILED" | "INVALID_AI_RESPONSE" | "REPOSITORY_ERROR";
 export type MockInterviewResult<T> = { ok: true; value: T } | { ok: false; code: MockInterviewErrorCode; message: string };
 export interface MockInterviewReadModel {
   application: { applicationId: string; jobTitle: string; company: string | null };
@@ -45,6 +47,11 @@ export interface MockInterviewFeedbackReadModel {
   categoryCoverage: { category: string; answeredQuestions: number; skippedQuestions: number; remainingQuestions: number }[];
   requirementCoverage: { requirement: string; status: string; questionCount: number }[];
   priorities: MockInterviewFeedbackItem[];
+}
+export interface MockInterviewAIReadModel {
+  applicationId: string; sessionId: string; questionId: string;
+  proposal: InterviewAIProposal;
+  requiresHumanReview: true;
 }
 export interface MockInterviewReadDependencies {
   applicationRepository: Pick<ApplicationRepository, "getById">;
@@ -96,6 +103,12 @@ function configured(): MockInterviewStartDependencies | null {
   const dependencies = { applicationRepository: createFileApplicationRepository(resolve(app!)),
     preparationRepository: createFileInterviewPreparationRepository(resolve(prep!)), sessionRepository: createFileInterviewSessionRepository(resolve(session!)) };
   return { ...dependencies, linkRepository: createFileInterviewSessionPreparationLinkRepository(resolve(link!), dependencies) };
+}
+function configuredAIGenerator(): InterviewAIGenerator | null {
+  const apiKey = process.env.OPENAI_API_KEY, model = process.env.INTERVIEW_AI_MODEL;
+  if (!apiKey?.trim() || !model?.trim() || process.env.INTERVIEW_AI_ENABLED !== "true") return null;
+  return createOpenAIInterviewGenerator({ enabled: true, remoteGenerationConsent: true, apiKey, model,
+    maxOutputTokens: Number(process.env.INTERVIEW_AI_MAX_OUTPUT_TOKENS ?? 800), timeoutMs: Number(process.env.INTERVIEW_AI_TIMEOUT_MS ?? 15000) });
 }
 async function applicationExists(id: string, deps: MockInterviewReadDependencies) {
   const result = await deps.applicationRepository.getById(id);
@@ -151,6 +164,31 @@ export async function loadApplicationMockInterviewFeedback(applicationId: string
     if (!feedback.ok) return failure("FEEDBACK_FAILED");
     return { ok: true, value: feedbackModel(resolved.value, stored.value, feedback.value) };
   } catch { return failure("REPOSITORY_ERROR"); }
+}
+export async function requestInterviewAiCoaching(input: {
+  applicationId: unknown; sessionId: unknown; questionId: unknown;
+  answer: InterviewAnswerInput; consent: unknown;
+}, dependencies?: MockInterviewReadDependencies, generator?: InterviewAIGenerator): Promise<MockInterviewResult<MockInterviewAIReadModel>> {
+  if (!validId(input.applicationId) || !validId(input.sessionId) || !validId(input.questionId)) return failure("INVALID_AI_REQUEST");
+  if (input.consent !== true) return failure("AI_CONSENT_REQUIRED");
+  if (!input.answer || typeof input.answer !== "object" || !validId(input.answer.questionId)) return failure("INVALID_AI_REQUEST");
+  const applicationId = input.applicationId, sessionId = input.sessionId, questionId = input.questionId;
+  try {
+    const deps = dependencies ?? configured(); if (!deps) return failure("CONFIGURATION_MISSING");
+    const app = await applicationExists(applicationId, deps); if (!app.ok) return app;
+    const stored = await deps.sessionRepository.getById(sessionId);
+    if (!stored.ok) return stored.error.code === "NOT_FOUND" ? failure("INTERVIEW_SESSION_NOT_FOUND") : storageFailure(stored.error.code);
+    if (!isPersistableInterviewSession(stored.value) || stored.value.id !== sessionId || stored.value.applicationId !== applicationId) return failure("INTERVIEW_SESSION_NOT_FOUND");
+    const resolved = await resolveInterviewSessionPreparation({ applicationId, sessionId }, deps);
+    if (!resolved.ok) return resolved.error.code === "UNLINKED_SESSION" ? failure("UNLINKED_SESSION") : storageFailure(resolved.error.code);
+    if (!isInterviewPreparationRecord(resolved.value) || resolved.value.applicationId !== applicationId) return failure("INVALID_INTERVIEW_DATA");
+    if (input.answer.questionId !== questionId) return failure("INVALID_AI_REQUEST");
+    const selectedGenerator = generator ?? configuredAIGenerator(); if (!selectedGenerator) return failure("AI_UNAVAILABLE");
+    const result = await generateInterviewAIProposal(resolved.value.plan, stored.value, { evidence: structuredClone(resolved.value.evidenceSnapshot) }, input.answer, selectedGenerator);
+    if (!result.ok) return failure("AI_REQUEST_FAILED");
+    if (result.value.proposal.applicationId !== applicationId || result.value.proposal.sessionId !== sessionId || result.value.proposal.questionId !== questionId || result.value.requiresHumanReview !== true) return failure("INVALID_AI_RESPONSE");
+    return { ok: true, value: { applicationId, sessionId, questionId, proposal: result.value.proposal, requiresHumanReview: true } };
+  } catch { return failure("AI_REQUEST_FAILED"); }
 }
 // Serialize the entire two-file sequence in this web process. There is no
 // cross-file transaction or cross-process lock; one writer per store is required.

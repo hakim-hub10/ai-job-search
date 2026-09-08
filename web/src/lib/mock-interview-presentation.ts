@@ -22,6 +22,11 @@ export function mockInterviewError(code: string): string {
     case "SKIP_FAILED": return "Frågan kunde inte hoppas över. Ingen progression bekräftades.";
     case "SESSION_INCOMPLETE": return "Slutför övningsintervjun innan träningsfeedbacken visas.";
     case "FEEDBACK_FAILED": return "Träningsfeedbacken kunde inte tas fram från övningsintervjun.";
+    case "AI_CONSENT_REQUIRED": return "AI-stöd kräver ett uttryckligt godkännande för just denna åtgärd.";
+    case "AI_UNAVAILABLE": return "AI-stöd är inte aktiverat eller tillgängligt.";
+    case "INVALID_AI_REQUEST": return "AI-förfrågan kunde inte verifieras.";
+    case "AI_REQUEST_FAILED": return "AI-stödet kunde inte behandla förfrågan.";
+    case "INVALID_AI_RESPONSE": return "AI-stödet returnerade inget verifierat förslag.";
     default: return "Övningsintervjun kunde inte läsas eller sparas. Försök igen senare.";
   }
 }

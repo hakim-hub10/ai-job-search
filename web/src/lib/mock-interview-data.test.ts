@@ -8,12 +8,13 @@ import type { InterviewSession } from "../../../.agents/job-search/cli/src/inter
 import type { InterviewSessionPreparationLink } from "../../../.agents/job-search/cli/src/interview-session-preparation-link-repository";
 import * as sessionCore from "../../../.agents/job-search/cli/src/interview-session";
 import * as preparationCore from "../../../.agents/job-search/cli/src/interview-preparation";
+import type { InterviewAIRequest } from "../../../.agents/job-search/cli/src/interview-ai";
 import { createFileInterviewPreparationRepository } from "../../../.agents/job-search/cli/src/interview-preparation-file-repository";
 import { createFileInterviewSessionRepository } from "../../../.agents/job-search/cli/src/interview-session-file-repository";
 import { createFileInterviewSessionPreparationLinkRepository } from "../../../.agents/job-search/cli/src/interview-session-preparation-link-file-repository";
 import type { MockInterviewResult, MockInterviewStartDependencies } from "./mock-interview-data";
 mock.module("server-only", () => ({}));
-const { loadApplicationMockInterviewFeedback: loadFeedback, skipApplicationMockInterviewQuestion: skip, startApplicationMockInterview: start, loadApplicationMockInterview: load, submitApplicationMockInterviewAnswer: submit } = await import("./mock-interview-data");
+const { loadApplicationMockInterviewFeedback: loadFeedback, requestInterviewAiCoaching: requestAI, skipApplicationMockInterviewQuestion: skip, startApplicationMockInterview: start, loadApplicationMockInterview: load, submitApplicationMockInterviewAnswer: submit } = await import("./mock-interview-data");
 const missing = { ok: false as const, error: { code: "NOT_FOUND" as const, message: "SECRET_PATH" } };
 const input = { applicationId: "A", preparationId: "prep-A" };
 function value<T>(r: MockInterviewResult<T>) { if (!r.ok) throw new Error(r.code); return r.value; }
@@ -198,6 +199,21 @@ describe("mock interview data", () => {
     expect(await loadFeedback("A", started.session.sessionId, f.deps)).toMatchObject({ ok: false, code: "UNLINKED_SESSION" });
     expect(await loadFeedback("missing", started.session.sessionId, f.deps)).toMatchObject({ ok: false, code: "APPLICATION_NOT_FOUND" });
     expect(await loadFeedback("A", "missing", f.deps)).toMatchObject({ ok: false, code: "INTERVIEW_SESSION_NOT_FOUND" });
+  });
+  it("requires explicit AI consent and sends only authoritative minimized context", async () => {
+    const f = fixture(), started = value(await start(input, f.deps)), answer = { questionId: "q1", format: "freeText" as const, text: "Transient answer that is never persisted." };
+    value(await submit({ applicationId: "A", sessionId: started.session.sessionId, expectedQuestionId: "q1", fields: answer }, f.deps));
+    let calls = 0;
+    const generator = { async generate(request: InterviewAIRequest) { calls += 1; expect(request.applicationId).toBe("A"); expect(request.sessionId).toBe(started.session.sessionId); expect(request.questionId).toBe("q1"); expect(request.jobContext).toEqual({ title: "Supporttekniker", company: "Testbolaget" }); expect(request.question.prompt).toBe("Historisk fråga A"); expect(request.approvedEvidence).toEqual([]); expect(request).not.toHaveProperty("candidateProfile"); return { ok: true as const, value: { applicationId: "A", sessionId: started.session.sessionId, questionId: "q1", language: "sv" as const, feedback: [], followUpQuestions: [], requiresHumanReview: true as const } }; } };
+    expect(await requestAI({ applicationId: "A", sessionId: started.session.sessionId, questionId: "q1", answer, consent: false }, f.deps, generator)).toMatchObject({ ok: false, code: "AI_CONSENT_REQUIRED" }); expect(calls).toBe(0);
+    const before = structuredClone(f.sessions.get(started.session.sessionId)); const result = value(await requestAI({ applicationId: "A", sessionId: started.session.sessionId, questionId: "q1", answer, consent: true }, f.deps, generator));
+    expect(calls).toBe(1); expect(result.requiresHumanReview).toBe(true); expect(JSON.stringify(result)).not.toContain("Transient answer"); expect(f.sessions.get(started.session.sessionId)).toEqual(before);
+  });
+  it("sanitizes provider failures and rejects context mismatch without mutation", async () => {
+    const f = fixture(), started = value(await start(input, f.deps)), answer = { questionId: "q1", format: "freeText" as const, text: "Transient answer." }, before = structuredClone(f.sessions.get(started.session.sessionId));
+    const failed = { async generate() { throw new Error("API_KEY SECRET /private"); } };
+    expect(await requestAI({ applicationId: "A", sessionId: started.session.sessionId, questionId: "q1", answer, consent: true }, f.deps, failed)).toMatchObject({ ok: false, code: "AI_REQUEST_FAILED" });
+    expect(await requestAI({ applicationId: "A", sessionId: started.session.sessionId, questionId: "q2", answer, consent: true }, f.deps, failed)).toMatchObject({ ok: false, code: "INVALID_AI_REQUEST" }); expect(f.sessions.get(started.session.sessionId)).toEqual(before);
   });
   it("returns safe missing and invalid request states", async () => {
     const f = fixture(); expect(await load("A", "missing", f.deps)).toMatchObject({ ok: false, code: "INTERVIEW_SESSION_NOT_FOUND" });
