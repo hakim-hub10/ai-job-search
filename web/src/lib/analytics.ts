@@ -100,6 +100,11 @@ export interface CandidateRequirementInsightsReadModel {
   requirements: RequirementInsight[];
   skillGaps: SkillGapInsight[];
 }
+export type CareerActionKind = "reviewMissingRequirement" | "verifyUnknownRequirement" | "reviewConflictingRequirement" | "reviewSkillGap" | "improveAnalysisCoverage";
+export interface CareerActionInsight {
+  id: string; kind: CareerActionKind; title: string; description: string; evidence: string;
+  applicationsRepresented?: number; requirementId?: string; gapId?: string;
+}
 
 function distribution(values: string[]): JobSearchDistributionItem[] {
   const counts = new Map<string, number>();
@@ -182,6 +187,17 @@ export function deriveCandidateRequirementInsights(applications: ApplicationReco
   return { availability: "available", applicationsTotal: applications.length, applicationsWithAnalysis: applications.length, applicationsWithoutAnalysis: 0,
     requirements: [...requirements.values()].sort((a, b) => b.applicationsRepresented - a.applicationsRepresented || a.requirementId.localeCompare(b.requirementId)),
     skillGaps: [...gaps.entries()].map(([gapId, value]) => ({ gapId, label: value.label, applicationsRepresented: value.applications.size, occurrences: value.occurrences, severityDistribution: [...value.severities.entries()].map(([label, count]) => ({ label, count })).sort((a, b) => a.label.localeCompare(b.label)) })).sort((a, b) => b.applicationsRepresented - a.applicationsRepresented || a.gapId.localeCompare(b.gapId)) };
+}
+export function deriveCandidateCareerActions(insights: CandidateRequirementInsightsReadModel): CareerActionInsight[] {
+  const actions: CareerActionInsight[] = [];
+  for (const requirement of insights.requirements) {
+    if (requirement.missing > 0) actions.push({ id: `review-missing:${requirement.requirementId}`, kind: "reviewMissingRequirement", title: "Granska återkommande krav", description: `Överväg att stärka eller tydliggöra underlaget för ${requirement.label}.`, evidence: `Kravet saknades i ${requirement.missing} sparade analyser.`, applicationsRepresented: requirement.applicationsRepresented, requirementId: requirement.requirementId });
+    if (requirement.unknown > 0) actions.push({ id: `verify-unknown:${requirement.requirementId}`, kind: "verifyUnknownRequirement", title: "Komplettera information", description: `Överväg att verifiera eller komplettera information om ${requirement.label}.`, evidence: `Informationen var okänd i ${requirement.unknown} sparade analyser.`, applicationsRepresented: requirement.applicationsRepresented, requirementId: requirement.requirementId });
+    if (requirement.conflicting > 0) actions.push({ id: `review-conflict:${requirement.requirementId}`, kind: "reviewConflictingRequirement", title: "Granska motstridig information", description: `Överväg att granska den motstridiga informationen om ${requirement.label}.`, evidence: `Kravet hade motstridig status i ${requirement.conflicting} sparade analyser.`, applicationsRepresented: requirement.applicationsRepresented, requirementId: requirement.requirementId });
+  }
+  for (const gap of insights.skillGaps) actions.push({ id: `review-gap:${gap.gapId}`, kind: "reviewSkillGap", title: "Granska ett återkommande kompetensgap", description: `Överväg att granska underlaget för ${gap.label}.`, evidence: `Gapet förekom ${gap.occurrences} gånger i sparade analyser från ${gap.applicationsRepresented} ansökningar.`, applicationsRepresented: gap.applicationsRepresented, gapId: gap.gapId });
+  if (insights.applicationsWithoutAnalysis > 0) actions.push({ id: "analysis-coverage", kind: "improveAnalysisCoverage", title: "Komplettera analysunderlaget", description: "Överväg att skapa analyser för fler sparade ansökningar om du vill ha en mer komplett översikt.", evidence: `${insights.applicationsWithoutAnalysis} av ${insights.applicationsTotal} ansökningar saknar sparad analys.` });
+  return actions;
 }
 
 export async function loadCandidateRequirementInsights(candidateId: string): Promise<{ configured: boolean; insights: CandidateRequirementInsightsReadModel | null; error: "NOT_FOUND" | "UNAVAILABLE" | null }> {

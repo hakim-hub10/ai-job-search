@@ -1,7 +1,7 @@
 import { describe, expect, it, mock } from "bun:test";
 import type { ApplicationRecord } from "../../../.agents/job-search/cli/src/applications";
 mock.module("server-only", () => ({}));
-const { deriveCandidateRequirementInsights, deriveInterviewPracticeAnalytics, deriveJobSearchAnalytics } = await import("./analytics");
+const { deriveCandidateRequirementInsights, deriveInterviewPracticeAnalytics, deriveJobSearchAnalytics, deriveCandidateCareerActions } = await import("./analytics");
 
 const application = (id: string, source: string, location: string | null, title: string): ApplicationRecord => ({
   id, jobSnapshot: { id: `job-${id}`, source, sourceId: `source-${id}`, title, company: null, location, country: null, url: null, applyUrl: null, date: null, employmentType: null, remote: null, description: null, salary: null, skills: [], seniority: null, category: null },
@@ -18,6 +18,17 @@ describe("job search analytics read model", () => {
   });
   it("represents a real empty application set without inventing search facts", () => {
     expect(deriveJobSearchAnalytics([])).toEqual({ availability: "available", basis: "APPLICATION_RECORDS", totalJobsRepresented: 0, sourceDistribution: [], locationDistribution: [], titleDistribution: [], searchHistory: { availability: "notTracked" }, matching: { availability: "unavailable", matchedRequirements: 0, missingRequirements: 0, conflictingRequirements: 0, unknownRequirements: 0 } });
+  });
+  it("derives distinct stable advisory actions for missing, unknown, conflict, gap, and coverage facts", () => {
+    const insights = { availability: "available" as const, applicationsTotal: 3, applicationsWithAnalysis: 2, applicationsWithoutAnalysis: 1, requirements: [
+      { requirementId: "skill:docker", label: "Docker", applicationsRepresented: 2, matched: 0, missing: 1, conflicting: 0, unknown: 1 },
+      { requirementId: "skill:m365", label: "Microsoft 365", applicationsRepresented: 2, matched: 0, missing: 0, conflicting: 1, unknown: 0 },
+    ], skillGaps: [{ gapId: "skill:docker", label: "Docker", applicationsRepresented: 2, occurrences: 2, severityDistribution: [{ label: "high", count: 2 }] }],
+    };
+    const actions = deriveCandidateCareerActions(insights);
+    expect(actions.map((action) => action.kind)).toEqual(["reviewMissingRequirement", "verifyUnknownRequirement", "reviewConflictingRequirement", "reviewSkillGap", "improveAnalysisCoverage"]);
+    expect(actions[0]?.id).toBe("review-missing:skill:docker"); expect(actions[1]?.description).toContain("verifiera"); expect(actions[0]?.description).not.toBe(actions[1]?.description);
+    expect(JSON.stringify(actions)).not.toMatch(/sannolikhet|anställningsbar|måste|hiring|score|recommendation/i);
   });
 });
 describe("interview practice analytics read model", () => {
