@@ -691,3 +691,14 @@ export type {
   InterviewPreparationRepositoryError,
   InterviewPreparationRepositoryResult,
 } from "./interview-preparation-repository"
+
+export { createFileInterviewSessionPreparationLinkRepository } from "./interview-session-preparation-link-file-repository"
+export { resolveInterviewSessionPreparation } from "./interview-session-preparation"
+export type {
+  InterviewSessionPreparationLink,
+  InterviewSessionPreparationLinkRepository,
+  InterviewSessionPreparationDependencies,
+  InterviewSessionPreparationLinkErrorCode,
+  InterviewSessionPreparationLinkError,
+  InterviewSessionPreparationLinkResult,
+} from "./interview-session-preparation-link-repository"
