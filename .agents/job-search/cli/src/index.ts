@@ -682,3 +682,12 @@ export type {
   InterviewSessionRepositoryError,
   InterviewSessionRepositoryResult,
 } from "./interview-session-repository"
+
+export { createFileInterviewPreparationRepository } from "./interview-preparation-file-repository"
+export type {
+  InterviewPreparationRecord,
+  InterviewPreparationRepository,
+  InterviewPreparationRepositoryErrorCode,
+  InterviewPreparationRepositoryError,
+  InterviewPreparationRepositoryResult,
+} from "./interview-preparation-repository"
