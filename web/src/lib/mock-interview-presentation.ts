@@ -2,6 +2,9 @@ import { applicationInterviewPath } from "./interview-presentation";
 export function mockInterviewPath(applicationId: string, sessionId: string) {
   return `${applicationInterviewPath(applicationId)}/sessions/${encodeURIComponent(sessionId)}`;
 }
+export function mockInterviewResultsPath(applicationId: string, sessionId: string) {
+  return `${mockInterviewPath(applicationId, sessionId)}/results`;
+}
 export function mockInterviewError(code: string): string {
   switch (code) {
     case "CONFIGURATION_MISSING": return "Mockintervjun är inte fullständigt konfigurerad.";
@@ -17,6 +20,8 @@ export function mockInterviewError(code: string): string {
     case "INVALID_ANSWER": return "Skriv ett svar i ett format som kan behandlas.";
     case "ANSWER_SUBMISSION_FAILED": return "Svaret kunde inte sparas. Ingen progression bekräftades.";
     case "SKIP_FAILED": return "Frågan kunde inte hoppas över. Ingen progression bekräftades.";
+    case "SESSION_INCOMPLETE": return "Slutför övningsintervjun innan träningsfeedbacken visas.";
+    case "FEEDBACK_FAILED": return "Träningsfeedbacken kunde inte tas fram från övningsintervjun.";
     default: return "Övningsintervjun kunde inte läsas eller sparas. Försök igen senare.";
   }
 }

@@ -1,8 +1,9 @@
 import { describe, expect, it } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MockInterviewView } from "../app/applications/[applicationId]/interview/sessions/overview";
+import { MockInterviewResultsView } from "../app/applications/[applicationId]/interview/sessions/results-view";
 import { PreparationDetailView } from "../app/applications/[applicationId]/interview/preparation-views";
-import type { MockInterviewReadModel, MockInterviewErrorCode } from "./mock-interview-data";
+import type { MockInterviewFeedbackReadModel, MockInterviewReadModel, MockInterviewErrorCode } from "./mock-interview-data";
 import { mockInterviewError, mockInterviewPath } from "./mock-interview-presentation";
 import type { PreparationDetail } from "./interview-preparation-data";
 const model: MockInterviewReadModel = {
@@ -13,6 +14,10 @@ const model: MockInterviewReadModel = {
     starPrompts: [{ situationPrompt: "Beskriv situationen.", taskPrompt: "Beskriv ansvaret.", actionPrompt: "Beskriv handlingen.", resultPrompt: "Beskriv styrkta resultat.", warnings: ["Hitta inte på resultat."] }] },
 };
 const render = (m = model, actions: { answerAction?: (data: FormData) => Promise<void>; skipAction?: (data: FormData) => Promise<void> } = {}) => renderToStaticMarkup(<MockInterviewView applicationId="A" result={{ ok: true, value: m }} {...actions} />);
+const feedbackModel: MockInterviewFeedbackReadModel = { application: model.application, preparationId: "prep-A", status: "completed", summary: { ...model.session, status: "completed", currentQuestionIndex: 2, answeredQuestions: 1, skippedQuestions: 1, remainingQuestions: 0 },
+  questions: [{ prompt: "Berätta om ett verkligt exempel.", status: "submitted", answerFormat: "freeText", structuralChecks: { hasEvidenceCitation: true, hasQuestionLinkedEvidence: true, star: "notStructured" }, observations: [{ code: "QUESTION_LINKED_EVIDENCE_CITED", category: "evidenceUse", message: "Strukturell förberedelsesignal: frågeanknuten evidens citerades.", questions: ["Berätta om ett verkligt exempel."], requirements: ["Support"], evidence: ["Hjälpte kollegor med datorproblem."] }], strengths: [], cautions: [], priorities: [] },
+    { prompt: "Nästa fråga", status: "skipped", observations: [], strengths: [], cautions: [], priorities: [{ code: "PRACTICE_SKIPPED_QUESTION", category: "sessionCoverage", message: "Öva på den överhoppade frågan; den är för närvarande inte övad.", questions: ["Nästa fråga"], requirements: [], evidence: [] }] }],
+  categoryCoverage: [{ category: "behavioral", answeredQuestions: 1, skippedQuestions: 1, remainingQuestions: 0 }], requirementCoverage: [{ requirement: "Support", status: "practiced", questionCount: 1 }], priorities: [{ code: "PRACTICE_SKIPPED_QUESTION", category: "sessionCoverage", message: "Öva på den överhoppade frågan; den är för närvarande inte övad.", questions: ["Nästa fråga"], requirements: [], evidence: [] }] };
 describe("mock interview presentation", () => {
   it("renders Swedish practice framing, exact question, status, type, language and progress", () => {
     const html = render(); for (const text of ["Mockintervju", "Övningsintervju", "Supporttekniker", "Testbolaget", "Beteendeinriktad intervju", "Svenska", "Pågående", "Fråga 1 av 2", "Berätta om ett verkligt exempel.", "Vad arbetsgivaren sannolikt vill bedöma", "Förstå ditt arbetssätt."]) expect(html).toContain(text);
@@ -53,5 +58,14 @@ describe("mock interview presentation", () => {
   });
   it("encodes opaque route IDs and sanitizes unknown error codes", () => {
     const id = "A %2F /?#"; expect(mockInterviewPath(id, id)).toBe(`/applications/${encodeURIComponent(id)}/interview/sessions/${encodeURIComponent(id)}`); expect(mockInterviewError("SECRET")).not.toContain("SECRET");
+  });
+  it("renders deterministic Swedish feedback without semantic quality or hiring claims", () => {
+    const html = renderToStaticMarkup(<MockInterviewResultsView applicationId="A" result={{ ok: true, value: feedbackModel }} />);
+    for (const text of ["Intervjun är klar", "Översikt", "besvarades", "hoppades över", "frågeanknuten evidens citerad", "STAR", "Vad du kan träna mer på", "Själva svarstexten sparas inte"]) expect(html).toContain(text);
+    expect(html).not.toMatch(/Du kommunicerade tydligt|Ditt svar var övertygande|anställningsbarhetsscore|chans att få jobbet|kandidat(?:ranking|kvalitet)|godkänd för rollen|erbjudande väntar/i);
+  });
+  it("renders safe feedback errors without exposing internal details", () => {
+    const html = renderToStaticMarkup(<MockInterviewResultsView applicationId="A" result={{ ok: false, code: "SESSION_INCOMPLETE", message: "SECRET /private" }} />);
+    expect(html).toContain("Slutför övningsintervjun innan träningsfeedbacken visas."); expect(html).not.toContain("SECRET");
   });
 });

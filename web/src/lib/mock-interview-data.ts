@@ -4,13 +4,14 @@ import { isDeepStrictEqual } from "node:util";
 import { createFileApplicationRepository } from "../../../.agents/job-search/cli/src/application-file-repository";
 import type { ApplicationRepository } from "../../../.agents/job-search/cli/src/application-repository";
 import { createFileInterviewPreparationRepository } from "../../../.agents/job-search/cli/src/interview-preparation-file-repository";
-import type { InterviewPreparationRepository } from "../../../.agents/job-search/cli/src/interview-preparation-repository";
+import type { InterviewPreparationRecord, InterviewPreparationRepository } from "../../../.agents/job-search/cli/src/interview-preparation-repository";
 import { isInterviewPreparationRecord } from "../../../.agents/job-search/cli/src/interview-preparation-storage-validation";
 import { createFileInterviewSessionRepository } from "../../../.agents/job-search/cli/src/interview-session-file-repository";
 import type { InterviewSessionRepository } from "../../../.agents/job-search/cli/src/interview-session-repository";
 import { isPersistableInterviewSession } from "../../../.agents/job-search/cli/src/interview-session-storage-validation";
 import type { InterviewAnswerInput } from "../../../.agents/job-search/cli/src/interview-answer-preparation";
-import { startInterviewSession, getCurrentInterviewQuestion, getInterviewSessionSummary, submitInterviewAnswer, skipCurrentInterviewQuestion } from "../../../.agents/job-search/cli/src/interview-session";
+import { createInterviewSessionFeedback, type InterviewFeedbackItem, type InterviewSessionFeedback } from "../../../.agents/job-search/cli/src/interview-feedback";
+import { startInterviewSession, getCurrentInterviewQuestion, getInterviewSessionSummary, submitInterviewAnswer, skipCurrentInterviewQuestion, type InterviewSession } from "../../../.agents/job-search/cli/src/interview-session";
 import { createFileInterviewSessionPreparationLinkRepository } from "../../../.agents/job-search/cli/src/interview-session-preparation-link-file-repository";
 import type { InterviewSessionPreparationLinkRepository } from "../../../.agents/job-search/cli/src/interview-session-preparation-link-repository";
 import { resolveInterviewSessionPreparation } from "../../../.agents/job-search/cli/src/interview-session-preparation";
@@ -18,13 +19,32 @@ import { preparationDetailModel, type PreparationDetail } from "./interview-prep
 import type { InterviewSessionReadModel } from "./interview-data";
 import { mockInterviewError } from "./mock-interview-presentation";
 
-export type MockInterviewErrorCode = "CONFIGURATION_MISSING" | "INVALID_REQUEST" | "APPLICATION_NOT_FOUND" | "PREPARATION_NOT_FOUND" | "INTERVIEW_SESSION_NOT_FOUND" | "UNLINKED_SESSION" | "INVALID_INTERVIEW_DATA" | "SESSION_CREATION_FAILED" | "SESSION_ALREADY_COMPLETED" | "STALE_QUESTION" | "INVALID_ANSWER" | "ANSWER_SUBMISSION_FAILED" | "SKIP_FAILED" | "REPOSITORY_ERROR";
+export type MockInterviewErrorCode = "CONFIGURATION_MISSING" | "INVALID_REQUEST" | "APPLICATION_NOT_FOUND" | "PREPARATION_NOT_FOUND" | "INTERVIEW_SESSION_NOT_FOUND" | "UNLINKED_SESSION" | "INVALID_INTERVIEW_DATA" | "SESSION_CREATION_FAILED" | "SESSION_ALREADY_COMPLETED" | "STALE_QUESTION" | "INVALID_ANSWER" | "ANSWER_SUBMISSION_FAILED" | "SKIP_FAILED" | "SESSION_INCOMPLETE" | "FEEDBACK_FAILED" | "REPOSITORY_ERROR";
 export type MockInterviewResult<T> = { ok: true; value: T } | { ok: false; code: MockInterviewErrorCode; message: string };
 export interface MockInterviewReadModel {
   application: { applicationId: string; jobTitle: string; company: string | null };
   session: InterviewSessionReadModel;
   preparationId: string;
   currentQuestion: PreparationDetail["questions"][number] | null;
+}
+export interface MockInterviewFeedbackItem {
+  code: string; category: string; message: string;
+  questions: string[]; requirements: string[]; evidence: string[];
+}
+export interface MockInterviewQuestionFeedback {
+  prompt: string; status: "submitted" | "skipped"; answerFormat?: "freeText" | "star";
+  structuralChecks?: { hasEvidenceCitation: boolean; hasQuestionLinkedEvidence: boolean; star: string };
+  observations: MockInterviewFeedbackItem[]; strengths: MockInterviewFeedbackItem[]; cautions: MockInterviewFeedbackItem[]; priorities: MockInterviewFeedbackItem[];
+}
+export interface MockInterviewFeedbackReadModel {
+  application: MockInterviewReadModel["application"];
+  preparationId: string;
+  status: "completed";
+  summary: MockInterviewReadModel["session"];
+  questions: MockInterviewQuestionFeedback[];
+  categoryCoverage: { category: string; answeredQuestions: number; skippedQuestions: number; remainingQuestions: number }[];
+  requirementCoverage: { requirement: string; status: string; questionCount: number }[];
+  priorities: MockInterviewFeedbackItem[];
 }
 export interface MockInterviewReadDependencies {
   applicationRepository: Pick<ApplicationRepository, "getById">;
@@ -46,6 +66,28 @@ function transitionFailure(code: string, skip = false) {
   if (code === "ANSWER_NOT_FOR_CURRENT_QUESTION" || code === "QUESTION_ALREADY_ANSWERED") return failure("STALE_QUESTION");
   if (!skip && (code === "INVALID_ANSWER_INPUT" || code === "UNKNOWN_QUESTION_ID" || code === "UNKNOWN_EVIDENCE_ID" || code === "DUPLICATE_EVIDENCE_ID")) return failure("INVALID_ANSWER");
   return failure(skip ? "SKIP_FAILED" : "ANSWER_SUBMISSION_FAILED");
+}
+function feedbackItemModel(item: InterviewFeedbackItem, questionLabels: Map<string, string>, requirementLabels: Map<string, string>, evidenceLabels: Map<string, string>): MockInterviewFeedbackItem {
+  return { code: item.code, category: item.category, message: item.message,
+    questions: item.questionIds.map((id) => questionLabels.get(id) ?? "Fråga kunde inte identifieras"),
+    requirements: item.requirementKeys.map((key) => requirementLabels.get(key) ?? "Kravuppgift saknas"),
+    evidence: item.evidenceIds.map((id) => evidenceLabels.get(id) ?? "Underlag kunde inte identifieras") };
+}
+function feedbackModel(record: InterviewPreparationRecord, session: InterviewSession, feedback: InterviewSessionFeedback): MockInterviewFeedbackReadModel {
+  const detail = preparationDetailModel(record);
+  const questionLabels = new Map(detail.questions.map((question) => [question.id, question.prompt]));
+  const requirementLabels = new Map(record.requirementContext.map((context) => [context.requirement.identity.key, context.requirement.identity.original]));
+  const evidenceLabels = new Map(record.evidenceSnapshot.filter((evidence) => evidence.kind !== "identity").map((evidence) => [evidence.id, evidence.content]));
+  const mapItem = (item: InterviewFeedbackItem) => feedbackItemModel(item, questionLabels, requirementLabels, evidenceLabels);
+  const turns = new Map(session.turns.map((turn) => [turn.questionId, turn]));
+  return { application: { applicationId: record.applicationId, jobTitle: detail.jobTitle, company: detail.company }, preparationId: record.id, status: "completed",
+    summary: { sessionId: session.id, applicationId: session.applicationId, status: "completed", language: session.language, interviewType: session.interviewType,
+      currentQuestionIndex: session.currentQuestionIndex, totalQuestions: feedback.structuralSummary.totalQuestions, answeredQuestions: feedback.structuralSummary.answeredQuestions,
+      skippedQuestions: feedback.structuralSummary.skippedQuestions, remainingQuestions: 0 },
+    questions: feedback.questionFeedback.map((question) => { const turn = turns.get(question.questionId); return { prompt: questionLabels.get(question.questionId) ?? "Fråga kunde inte identifieras", status: question.turnStatus,
+      ...(turn?.status === "submitted" ? { answerFormat: turn.answerFormat, structuralChecks: { hasEvidenceCitation: turn.preparation.structuralChecks.hasEvidenceCitation, hasQuestionLinkedEvidence: turn.preparation.structuralChecks.hasQuestionLinkedEvidence, star: turn.preparation.structuralChecks.star } } : {}),
+      observations: question.observations.map(mapItem), strengths: question.structuralStrengths.map(mapItem), cautions: question.cautions.map(mapItem), priorities: question.improvementPriorities.map(mapItem) }; }),
+    categoryCoverage: feedback.categoryCoverage, requirementCoverage: feedback.requirementPracticeCoverage.map((item) => ({ requirement: requirementLabels.get(item.requirementKey) ?? "Kravuppgift saknas", status: item.status, questionCount: item.questionIds.length })), priorities: feedback.practicePriorities.map(mapItem) };
 }
 function configured(): MockInterviewStartDependencies | null {
   const app = process.env.APPLICATION_REPOSITORY, prep = process.env.INTERVIEW_PREPARATION_REPOSITORY;
@@ -87,6 +129,27 @@ export async function loadApplicationMockInterview(applicationId: string, sessio
         currentQuestionIndex: stored.value.currentQuestionIndex, totalQuestions: s.totalQuestions, answeredQuestions: s.answeredQuestions,
         skippedQuestions: s.skippedQuestions, remainingQuestions: s.remainingQuestions }, currentQuestion: question ?? null,
     } };
+  } catch { return failure("REPOSITORY_ERROR"); }
+}
+export async function loadApplicationMockInterviewFeedback(applicationId: string, sessionId: string, dependencies?: MockInterviewReadDependencies): Promise<MockInterviewResult<MockInterviewFeedbackReadModel>> {
+  if (!validId(applicationId) || !validId(sessionId)) return failure("INVALID_REQUEST");
+  try {
+    const deps = dependencies ?? configured(); if (!deps) return failure("CONFIGURATION_MISSING");
+    const app = await applicationExists(applicationId, deps); if (!app.ok) return app;
+    const stored = await deps.sessionRepository.getById(sessionId);
+    if (!stored.ok) return stored.error.code === "NOT_FOUND" ? failure("INTERVIEW_SESSION_NOT_FOUND") : storageFailure(stored.error.code);
+    if (!isPersistableInterviewSession(stored.value) || stored.value.id !== sessionId || stored.value.applicationId !== applicationId) return failure("INTERVIEW_SESSION_NOT_FOUND");
+    if (stored.value.status !== "completed") return failure("SESSION_INCOMPLETE");
+    const resolved = await resolveInterviewSessionPreparation({ applicationId, sessionId }, deps);
+    if (!resolved.ok) {
+      if (resolved.error.code === "UNLINKED_SESSION") return failure("UNLINKED_SESSION");
+      if (resolved.error.code === "NOT_FOUND") return failure("PREPARATION_NOT_FOUND");
+      return storageFailure(resolved.error.code);
+    }
+    if (!isInterviewPreparationRecord(resolved.value) || resolved.value.applicationId !== applicationId) return failure("INVALID_INTERVIEW_DATA");
+    const feedback = createInterviewSessionFeedback(resolved.value.plan, stored.value);
+    if (!feedback.ok) return failure("FEEDBACK_FAILED");
+    return { ok: true, value: feedbackModel(resolved.value, stored.value, feedback.value) };
   } catch { return failure("REPOSITORY_ERROR"); }
 }
 // Serialize the entire two-file sequence in this web process. There is no

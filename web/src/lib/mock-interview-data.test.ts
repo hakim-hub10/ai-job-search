@@ -13,7 +13,7 @@ import { createFileInterviewSessionRepository } from "../../../.agents/job-searc
 import { createFileInterviewSessionPreparationLinkRepository } from "../../../.agents/job-search/cli/src/interview-session-preparation-link-file-repository";
 import type { MockInterviewResult, MockInterviewStartDependencies } from "./mock-interview-data";
 mock.module("server-only", () => ({}));
-const { skipApplicationMockInterviewQuestion: skip, startApplicationMockInterview: start, loadApplicationMockInterview: load, submitApplicationMockInterviewAnswer: submit } = await import("./mock-interview-data");
+const { loadApplicationMockInterviewFeedback: loadFeedback, skipApplicationMockInterviewQuestion: skip, startApplicationMockInterview: start, loadApplicationMockInterview: load, submitApplicationMockInterviewAnswer: submit } = await import("./mock-interview-data");
 const missing = { ok: false as const, error: { code: "NOT_FOUND" as const, message: "SECRET_PATH" } };
 const input = { applicationId: "A", preparationId: "prep-A" };
 function value<T>(r: MockInterviewResult<T>) { if (!r.ok) throw new Error(r.code); return r.value; }
@@ -177,6 +177,27 @@ describe("mock interview data", () => {
     second.sessions.get(completed.session.sessionId)!.status = "completed"; second.sessions.get(completed.session.sessionId)!.currentQuestionIndex = 2; second.sessions.get(completed.session.sessionId)!.turns = [{ status: "skipped", questionId: "q1" }, { status: "skipped", questionId: "q2" }];
     expect(await submit({ applicationId: "A", sessionId: completed.session.sessionId, expectedQuestionId: "q1", fields: { format: "freeText", text: "Svar" } }, second.deps)).toMatchObject({ ok: false, code: "SESSION_ALREADY_COMPLETED" });
     expect(await submit({ applicationId: "A", sessionId: completed.session.sessionId, expectedQuestionId: "q1", fields: { format: "unsupported", text: "Svar" } }, second.deps)).toMatchObject({ ok: false, code: "SESSION_ALREADY_COMPLETED" });
+  });
+  it("derives completed feedback from the exact linked preparation without mutation or raw answers", async () => {
+    const f = fixture(), started = value(await start(input, f.deps));
+    value(await submit({ applicationId: "A", sessionId: started.session.sessionId, expectedQuestionId: "q1", fields: { format: "freeText", text: "Detta råa svar ska aldrig visas eller rekonstrueras." } }, f.deps));
+    value(await skip({ applicationId: "A", sessionId: started.session.sessionId, expectedQuestionId: "q2" }, f.deps));
+    const other = preparation("prep-B"); other.plan.questions[0].prompt = "En annan historisk fråga"; f.preparations.set(other.id, other);
+    const before = structuredClone({ preparations: [...f.preparations], sessions: [...f.sessions], links: [...f.links] });
+    const result = value(await loadFeedback("A", started.session.sessionId, f.deps));
+    expect(result.application.jobTitle).toBe("Supporttekniker"); expect(result.questions.map((question) => question.prompt)).toEqual(["Historisk fråga A", "Nästa fråga"]);
+    expect(result.questions.map((question) => question.status)).toEqual(["submitted", "skipped"]); expect(result.summary.answeredQuestions).toBe(1); expect(result.summary.skippedQuestions).toBe(1);
+    expect(JSON.stringify(result)).not.toContain("Detta råa svar"); expect(JSON.stringify(result)).not.toMatch(/candidateId|evidenceSnapshot|preparationRecordId/);
+    expect(f.preparations).toEqual(new Map(before.preparations)); expect(f.sessions).toEqual(new Map(before.sessions)); expect(f.links).toEqual(new Map(before.links));
+  });
+  it("requires a completed explicitly linked session and never searches for latest context", async () => {
+    const f = fixture(), started = value(await start(input, f.deps));
+    expect(await loadFeedback("A", started.session.sessionId, f.deps)).toMatchObject({ ok: false, code: "SESSION_INCOMPLETE" });
+    const stored = f.sessions.get(started.session.sessionId)!; stored.status = "completed"; stored.currentQuestionIndex = stored.planQuestionIds.length; stored.turns = stored.planQuestionIds.map((questionId) => ({ status: "skipped" as const, questionId }));
+    f.links.delete(started.session.sessionId);
+    expect(await loadFeedback("A", started.session.sessionId, f.deps)).toMatchObject({ ok: false, code: "UNLINKED_SESSION" });
+    expect(await loadFeedback("missing", started.session.sessionId, f.deps)).toMatchObject({ ok: false, code: "APPLICATION_NOT_FOUND" });
+    expect(await loadFeedback("A", "missing", f.deps)).toMatchObject({ ok: false, code: "INTERVIEW_SESSION_NOT_FOUND" });
   });
   it("returns safe missing and invalid request states", async () => {
     const f = fixture(); expect(await load("A", "missing", f.deps)).toMatchObject({ ok: false, code: "INTERVIEW_SESSION_NOT_FOUND" });

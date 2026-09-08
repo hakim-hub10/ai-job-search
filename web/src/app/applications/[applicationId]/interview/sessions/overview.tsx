@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { MockInterviewReadModel, MockInterviewResult } from "@/lib/mock-interview-data";
 import { applicationInterviewPath, formatInterviewLanguage, formatInterviewStatus, formatInterviewType } from "@/lib/interview-presentation";
-import { mockInterviewError } from "@/lib/mock-interview-presentation";
+import { mockInterviewError, mockInterviewResultsPath } from "@/lib/mock-interview-presentation";
 import { preparationPath } from "@/lib/interview-preparation-presentation";
 import { PreparationQuestion } from "../preparation-question";
 import styles from "../preparation.module.css";
@@ -20,7 +20,7 @@ export function MockInterviewView({ applicationId, result, answerAction, skipAct
         <p>Det här är övning inför en intervju. Frågan och underlaget kommer från din valda, sparade förberedelse.</p>
         <Link className={styles.link} href={preparationPath(applicationId, result.value.preparationId)}>Visa den använda förberedelsen →</Link>
       </header>
-      {result.value.session.status === "completed" ? <section className={styles.panel}><h2>Övningsintervjun är klar.</h2><p>Alla {result.value.session.totalQuestions} frågor har hanterats.</p></section> :
+      {result.value.session.status === "completed" ? <section className={styles.panel}><h2>Övningsintervjun är klar.</h2><p>Alla {result.value.session.totalQuestions} frågor har hanterats.</p><Link className={styles.link} href={mockInterviewResultsPath(applicationId, result.value.session.sessionId)}>Visa träningsfeedback →</Link></section> :
         <section aria-labelledby="current-heading"><h2 id="current-heading" className={styles.sectionHeading}>Fråga {result.value.session.currentQuestionIndex + 1} av {result.value.session.totalQuestions}</h2>
           {result.value.currentQuestion && <PreparationQuestion q={result.value.currentQuestion} index={result.value.session.currentQuestionIndex} language={result.value.session.language} />}
           {answerError && <p className={styles.error} role="alert">{mockInterviewError(answerError)}</p>}
