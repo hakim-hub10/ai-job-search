@@ -1,0 +1,297 @@
+.flow {
+  max-width: 860px;
+  display: grid;
+  gap: 18px;
+}
+
+.progress {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  color: #667085;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.progress span {
+  padding: 8px 12px;
+  border: 1px solid #eaecf0;
+  border-radius: 999px;
+  background: #fff;
+}
+
+.progress .current {
+  border-color: #175cd3;
+  background: #eff8ff;
+  color: #175cd3;
+}
+
+.progress .done {
+  border-color: #abefc6;
+  background: #ecfdf3;
+  color: #067647;
+}
+
+.card,
+.confirm,
+.complete {
+  padding: 28px;
+  border: 1px solid #eaecf0;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+}
+
+.card h2,
+.complete h2 {
+  margin-top: 6px;
+  font-size: 24px;
+  color: #101828;
+}
+
+.card p,
+.complete p {
+  margin-top: 8px;
+  color: #667085;
+  line-height: 1.55;
+}
+
+.cardHeading {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: flex-start;
+}
+
+.uploadForm,
+.addForm {
+  display: grid;
+  gap: 9px;
+  max-width: 560px;
+  margin-top: 24px;
+}
+
+.uploadForm label,
+.addForm label {
+  color: #344054;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.uploadForm input[type="file"],
+.addForm input,
+.addForm select,
+.itemValue input {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  background: #fff;
+  color: #101828;
+  font: inherit;
+}
+
+.uploadForm small {
+  color: #667085;
+}
+
+.flow button,
+.actions a {
+  min-height: 42px;
+  padding: 10px 15px;
+  border: 0;
+  border-radius: 8px;
+  background: #175cd3;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+}
+
+.flow button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.flow button:focus-visible,
+.flow a:focus-visible,
+.flow input:focus-visible,
+.flow select:focus-visible {
+  outline: 3px solid #84caff;
+  outline-offset: 2px;
+}
+
+.secondary {
+  border: 1px solid #d0d5dd;
+  background: #fff;
+  color: #344054;
+}
+
+.groups {
+  display: grid;
+  gap: 20px;
+  margin-top: 26px;
+}
+
+.group {
+  border-top: 1px solid #eaecf0;
+  padding-top: 16px;
+}
+
+.group h3 {
+  margin-bottom: 8px;
+  color: #344054;
+  font-size: 15px;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 13px 0;
+  border-bottom: 1px solid #f2f4f7;
+}
+
+.itemValue {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: #101828;
+}
+
+.itemValue span {
+  display: block;
+}
+
+.itemValue small {
+  display: block;
+  margin-top: 4px;
+  color: #667085;
+  font-size: 12px;
+}
+
+.itemActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 7px;
+}
+
+.itemActions button,
+.addedList button {
+  min-height: 34px;
+  padding: 7px 10px;
+  border: 1px solid #d0d5dd;
+  background: #fff;
+  color: #344054;
+  font-size: 12px;
+}
+
+.itemActions .selected {
+  border-color: #175cd3;
+  background: #eff8ff;
+  color: #175cd3;
+}
+
+.removed .itemValue {
+  color: #98a2b3;
+  text-decoration: line-through;
+}
+
+.addedList {
+  margin-top: 18px;
+}
+
+.empty {
+  margin-top: 24px;
+  padding: 16px;
+  border: 1px dashed #d0d5dd;
+  border-radius: 8px;
+}
+
+.confirm {
+  display: grid;
+  gap: 14px;
+  border-color: #b2ddff;
+  background: #f5fbff;
+}
+
+.confirm p {
+  color: #344054;
+  line-height: 1.5;
+}
+
+.confirmChoice {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  color: #344054;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.confirmChoice input {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.error {
+  margin-top: 14px;
+  padding: 11px 13px;
+  border-radius: 8px;
+  background: #fef3f2;
+  color: #b42318 !important;
+  font-size: 13px;
+}
+
+.complete {
+  max-width: 620px;
+  text-align: center;
+}
+
+.completeMark {
+  display: inline-grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border-radius: 50%;
+  background: #dcfae6;
+  color: #067647;
+  font-size: 25px;
+  font-weight: 800;
+}
+
+.actions {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 24px;
+}
+
+.actions a:last-child {
+  border: 1px solid #d0d5dd;
+  background: #fff;
+  color: #344054;
+}
+
+@media (max-width: 720px) {
+  .card,
+  .confirm,
+  .complete {
+    padding: 20px;
+  }
+
+  .cardHeading,
+  .item {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .itemActions {
+    justify-content: flex-start;
+  }
+}

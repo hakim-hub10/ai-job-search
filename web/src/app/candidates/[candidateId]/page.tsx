@@ -124,6 +124,9 @@ export default async function CandidatePage({
           <Link href="/candidates" className={styles.secondaryButton}>
             Tillbaka till kandidater
           </Link>
+          <Link href={`/candidates/${encodeURIComponent(candidateId)}/onboarding`} className={styles.secondaryButton}>
+            Uppdatera profil från CV
+          </Link>
         </div>
 
         {!result.configured ? (
