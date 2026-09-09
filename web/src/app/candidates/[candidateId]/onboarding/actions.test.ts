@@ -19,15 +19,62 @@ mock.module("../../../../../../.agents/job-search/cli/src/coach-cli-paths", () =
 mock.module("../../../../../../.agents/job-search/cli/src/coach-workspace-file-repository", () => ({
   createFileCoachWorkspaceRepository: () => ({ getCandidateById: async () => ({ ok: true, value: { id: "candidate-a" } }) }),
 }));
+const profile = {
+  headline: "Cloud Engineer",
+  targetRoles: ["Platform Engineer"],
+  locationPreferences: ["Stockholm"],
+  workMode: "hybrid",
+  remotePreference: true,
+  preferredIndustries: ["Technology"],
+  preferredEmploymentType: ["full-time"],
+  skills: { technical: ["Python"], soft: ["Communication"] },
+  workExperience: [{ title: "Engineer", company: "Acme", location: "Sweden" }],
+  education: [{ degree: "Bachelor", field: "Computer Science", institution: "University" }],
+  certifications: ["AWS"],
+  languages: [{ name: "English", level: "C1" }],
+  yearsOfExperience: 4,
+  careerGoals: ["Build systems"],
+  summary: "Existing profile summary",
+  updatedAt: "2026-01-01T00:00:00.000Z",
+};
+let savedProfile = structuredClone(profile);
+let savedBaseCv: Record<string, unknown> | null = {
+  candidateId: "candidate-a",
+  source: "candidateProfile",
+  headline: "Cloud Engineer",
+  summary: "Manual Base CV summary",
+  workExperience: profile.workExperience,
+  education: profile.education,
+  technicalSkills: ["Python"],
+  softSkills: ["Communication"],
+  certifications: ["AWS"],
+  languages: profile.languages,
+  visibility: { headline: true, summary: true, workExperience: true, education: true, technicalSkills: true, softSkills: true, certifications: true, languages: true },
+  createdAt: "2026-01-01T00:00:00.000Z",
+  updatedAt: "2026-01-01T00:00:00.000Z",
+};
+mock.module("../../../../../../.agents/job-search/cli/src/candidate-profile-file-repository", () => ({
+  createFileCandidateProfileRepository: () => ({
+    getProfileByCandidateId: async () => ({ ok: true, value: { candidateId: "candidate-a", profile: structuredClone(savedProfile) } }),
+    saveProfile: async (_candidateId: string, next: typeof profile) => { savedProfile = structuredClone(next); return { ok: true, value: { candidateId: "candidate-a", profile: structuredClone(next) } }; },
+    listProfiles: async () => ({ ok: true, value: [] }),
+  }),
+}));
+mock.module("@/lib/candidate-base-cv-file-repository", () => ({
+  createFileCandidateBaseCvRepository: () => ({
+    getByCandidateId: async () => ({ ok: true, value: structuredClone(savedBaseCv) }),
+    save: async (next: Record<string, unknown>) => { savedBaseCv = structuredClone(next); return { ok: true, value: structuredClone(next) }; },
+  }),
+}));
 mock.module("@/lib/candidate-import-upload", () => ({
-  validateCandidateImportUpload: () => ({ ok: true, value: { id: "import-a", document: { id: "document-a", format: "pdf" } } }),
+  validateCandidateImportUpload: (input: { filename: string }) => ({ ok: true, value: { id: "import-a", document: { id: "document-a", format: input.filename.endsWith(".docx") ? "docx" : "pdf" } } }),
 }));
 mock.module("@/lib/candidate-import-pdf", () => ({
   extractCandidateImportPdf: async () => ({ ok: true, value: { text: "SECRET RAW CV TEXT", trust: "untrusted" } }),
 }));
-mock.module("@/lib/candidate-import-docx", () => ({ extractCandidateImportDocx: async () => ({ ok: false, error: { code: "NO_EXTRACTABLE_TEXT" } }) }));
+mock.module("@/lib/candidate-import-docx", () => ({ extractCandidateImportDocx: async () => ({ ok: true, value: { text: "SECRET RAW CV TEXT", trust: "untrusted" } }) }));
 mock.module("@/lib/candidate-import-claims", () => ({
-  extractCandidateImportClaims: async () => ({ ok: true, value: { claims: [claim] } }),
+  extractCandidateImportClaims: async () => ({ ok: true, value: { claims: [claim, { ...claim, id: "claim-edit", value: "Kubernets" }, { ...claim, id: "claim-reject", value: "Unwanted" }] } }),
 }));
 
 const { uploadCandidateOnboardingAction } = await import("./actions");
@@ -40,10 +87,75 @@ describe("onboarding client data boundary", () => {
     formData.set("cv", new File(["synthetic"], "resume.pdf", { type: "application/pdf" }));
     const result = await uploadCandidateOnboardingAction(formData);
     expect(result.ok).toBe(true);
-    expect(result.ok && "claims" in result ? result.claims : []).toEqual([{ id: "claim-a", kind: "technicalSkill", value: "Kubernetes", source: "cv-text" }]);
+    expect(result.ok && "claims" in result ? result.claims : []).toHaveLength(3);
+    expect(result.ok && "claims" in result ? result.claims[0] : undefined).toEqual({ id: "claim-a", kind: "technicalSkill", value: "Kubernetes", source: "cv-text" });
     const serialized = JSON.stringify(result);
     expect(serialized).not.toContain("SECRET RAW CV TEXT");
     expect(serialized).not.toContain("provenance");
     expect(serialized).not.toContain("snippet");
+  });
+
+  it("uses the same safe claim view for a synthetic DOCX upload", async () => {
+    process.env.COACH_DIR = "/synthetic-coach";
+    const formData = new FormData();
+    formData.set("candidateId", "candidate-a");
+    formData.set("cv", new File(["synthetic"], "resume.docx", { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" }));
+    const result = await uploadCandidateOnboardingAction(formData);
+    expect(result.ok).toBe(true);
+    expect(result.ok && "claims" in result ? result.claims[0] : undefined).toEqual({ id: "claim-a", kind: "technicalSkill", value: "Kubernetes", source: "cv-text" });
+  });
+
+  it("fails closed for a missing session and forged claim IDs", async () => {
+    process.env.COACH_DIR = "/synthetic-coach";
+    const missing = new FormData();
+    missing.set("candidateId", "candidate-a");
+    missing.set("importId", "missing-session");
+    missing.set("documentId", "document-a");
+    missing.set("reviews", "[]");
+    missing.set("added", "[]");
+    const missingResult = await (await import("./actions")).applyCandidateOnboardingAction(missing);
+    expect(missingResult.ok).toBe(false);
+
+    const upload = new FormData();
+    upload.set("candidateId", "candidate-a");
+    upload.set("cv", new File(["synthetic"], "resume.pdf", { type: "application/pdf" }));
+    const uploaded = await uploadCandidateOnboardingAction(upload);
+    expect(uploaded.ok).toBe(true);
+    if (!uploaded.ok || !("claims" in uploaded)) return;
+    const forged = new FormData();
+    forged.set("candidateId", "candidate-a");
+    forged.set("importId", uploaded.importId);
+    forged.set("documentId", uploaded.documentId);
+    forged.set("reviews", JSON.stringify([{ claimId: "forged-claim", decision: "approved", reviewedValue: "Forged provenance" }]));
+    forged.set("added", "[]");
+    const forgedResult = await (await import("./actions")).applyCandidateOnboardingAction(forged);
+    expect(forgedResult.ok).toBe(false);
+  });
+
+  it("completes approve/edit/reject/add through profile and Base CV boundaries", async () => {
+    savedProfile = structuredClone(profile);
+    const upload = new FormData();
+    upload.set("candidateId", "candidate-a");
+    upload.set("cv", new File(["synthetic"], "resume.pdf", { type: "application/pdf" }));
+    const uploaded = await uploadCandidateOnboardingAction(upload);
+    expect(uploaded.ok).toBe(true);
+    if (!uploaded.ok || !("claims" in uploaded)) return;
+    const apply = new FormData();
+    apply.set("candidateId", "candidate-a");
+    apply.set("importId", uploaded.importId);
+    apply.set("documentId", uploaded.documentId);
+    apply.set("reviews", JSON.stringify([
+      { claimId: "claim-a", decision: "approved" },
+      { claimId: "claim-edit", decision: "edited-and-approved", reviewedValue: "Kubernetes 1.30" },
+      { claimId: "claim-reject", decision: "rejected" },
+    ]));
+    apply.set("added", JSON.stringify([{ kind: "softSkill", value: "Empathy", decision: "approved" }]));
+    const result = await (await import("./actions")).applyCandidateOnboardingAction(apply);
+    expect(result).toEqual({ ok: true, complete: true });
+    expect(savedProfile.skills.technical).toEqual(["Python", "Kubernetes", "Kubernetes 1.30"]);
+    expect(savedProfile.skills.technical).not.toContain("Unwanted");
+    expect(savedProfile.skills.soft).toContain("Empathy");
+    expect(savedBaseCv?.summary).toBe("Manual Base CV summary");
+    expect(savedBaseCv?.technicalSkills).toContain("Kubernetes 1.30");
   });
 });

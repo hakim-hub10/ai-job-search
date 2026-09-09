@@ -36,12 +36,29 @@ function toOnboardingClaimView(claim: CandidateImportClaim): OnboardingClaimView
   return { id: claim.id, kind: claim.kind, value: claim.value, source: claim.source };
 }
 
+const CLAIM_SESSION_TTL_MS = 15 * 60 * 1000;
+const MAX_CLAIM_SESSIONS = 100;
+
+// Deliberately process-local for the local single-user app. Sessions expire and
+// are bounded; a process restart simply requires the candidate to upload again.
 const claimSessions = new Map<string, {
   candidateId: string;
   importId: string;
   documentId: string;
   claims: CandidateImportClaim[];
+  createdAt: number;
 }>();
+
+function purgeClaimSessions(now = Date.now()): void {
+  for (const [key, session] of claimSessions) {
+    if (now - session.createdAt > CLAIM_SESSION_TTL_MS) claimSessions.delete(key);
+  }
+  while (claimSessions.size > MAX_CLAIM_SESSIONS) {
+    const oldest = claimSessions.keys().next().value;
+    if (!oldest) break;
+    claimSessions.delete(oldest);
+  }
+}
 
 function text(value: FormDataEntryValue | null): string {
   return typeof value === "string" ? value.trim() : "";
@@ -64,6 +81,7 @@ async function candidateContext(candidateId: string) {
 }
 
 export async function uploadCandidateOnboardingAction(formData: FormData): Promise<OnboardingActionResult> {
+  purgeClaimSessions();
   const candidateId = text(formData.get("candidateId"));
   const file = formData.get("cv");
   const context = await candidateContext(candidateId);
@@ -93,7 +111,9 @@ export async function uploadCandidateOnboardingAction(formData: FormData): Promi
     importId: admission.value.id,
     documentId: admission.value.document.id,
     claims: claims.value.claims,
+    createdAt: Date.now(),
   });
+  purgeClaimSessions();
   return {
     ok: true,
     claims: claims.value.claims.map(toOnboardingClaimView),
@@ -137,6 +157,7 @@ function reconstructReviews(candidateId: string, input: unknown, session: {
 }
 
 export async function applyCandidateOnboardingAction(formData: FormData): Promise<OnboardingActionResult> {
+  purgeClaimSessions();
   const candidateId = text(formData.get("candidateId"));
   const importId = text(formData.get("importId"));
   const documentId = text(formData.get("documentId"));
