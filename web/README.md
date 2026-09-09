@@ -167,3 +167,27 @@ actual bytes rather than trusting this metadata as a durable file reference.
 
 Failures contain fixed codes/messages only. No extraction, external calls,
 profile/Base CV mutation, cookies or browser storage are introduced.
+
+## Bounded PDF Text Extraction (Phase 14.3)
+
+`src/lib/candidate-import-pdf.ts` is a server-only, in-memory continuation of
+the Phase 14.2 admission boundary. It revalidates the supplied upload and
+accepts only an admitted PDF; a DOCX, invalid signature, invalid size, or other
+admission failure is never sent to the PDF parser. The extractor returns text,
+page count, and an explicit `untrusted` marker only. Extraction does not verify
+facts, approve claims, or mutate a CandidateProfile or Base CV.
+
+The implementation uses `pdf-parse` to derive text only. It does not render
+pages, execute embedded JavaScript, follow links, fetch resources, invoke a
+provider, create temporary files, or persist PDF bytes or extracted text. It
+caps admitted input at the Phase 14.2 inclusive 5 MiB limit, rejects documents
+above 20 pages, and rejects normalized text over 100,000 characters. CRLF/CR
+line endings become LF and NUL characters are removed; no career facts are
+rewritten, inferred, translated, or summarized.
+
+Malformed, password-protected, image-only, page-limit, and text-limit inputs
+produce fixed sanitized errors. No OCR is attempted. The parser runs in memory,
+but its API does not offer a hard, safe execution-timeout mechanism; this phase
+therefore makes no timeout guarantee. PDF bytes and extracted text remain
+transient caller/request data. DOCX extraction, persistent import storage,
+claim extraction/review, and onboarding UI remain future work.
