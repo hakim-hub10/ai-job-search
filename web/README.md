@@ -127,3 +127,43 @@ Only the current question and its stored evidence/context reach the view. It
 handles completed sessions and legacy unlinked sessions explicitly. GET and
 refresh do not write. There is no answer input, question advancement, feedback,
 provider call, browser state storage or application/profile/document mutation.
+
+## Candidate CV import admission (Phase 14.2)
+
+`src/lib/candidate-import-upload.ts` is a server-only library boundary, not an
+upload route or onboarding UI. It accepts caller-owned `Uint8Array` bytes and a
+candidate resolved by server code, checks matching candidate IDs, and returns
+only the core `ImportSession`/`ImportedDocument` metadata. Candidate IDs provide
+internal scoping, not authentication or authorization. `getCandidateImport`
+refuses mismatched candidate/document linkage and returns a detached snapshot.
+
+The limit is **5 MiB (5 × 1024 × 1024 bytes)**, inclusive, suitable for ordinary
+text CVs. Empty and larger uploads fail before signature inspection or hashing.
+A future HTTP adapter must separately enforce its request limit before buffering;
+this library cannot undo an allocation already made by its caller.
+
+Admission requires a PDF/DOCX extension, matching declared MIME when supplied,
+and a supported signature. PDF admission checks a versioned `%PDF-` header and
+line ending. DOCX admission checks a ZIP local-file header signature and minimum
+header length only: it does **not** prove a valid DOCX package. Passwords,
+encryption, malformed document internals and DOCX archive/decompression risks
+must be handled before extraction in later phases. No parser executes here.
+
+Filenames are display metadata only; path separators, traversal paths, Windows
+paths, controls and unsafe display characters are rejected. Generated UUIDs
+identify sessions/documents. SHA-256 identifies equal byte content for future
+comparison; it neither establishes trust nor triggers deduplication.
+
+The sole status, `validated`, means admission passed in this request, not that
+facts are verified, approved, or ready in durable storage. Metadata contains IDs,
+candidate/import linkage, display filename, byte size, format, SHA-256,
+validation version and timestamps. There is deliberately **no import store yet**:
+with no retained bytes or extraction, a persisted resumable session would have
+no source to resume. No binary, extracted text, claims, prompts or responses are
+persisted. Bytes are not returned or retained by the validator, and there are no
+temporary files; the caller releases its input after use. Garbage collection is
+not a secure-erasure guarantee. Later extraction must receive and revalidate
+actual bytes rather than trusting this metadata as a durable file reference.
+
+Failures contain fixed codes/messages only. No extraction, external calls,
+profile/Base CV mutation, cookies or browser storage are introduced.
