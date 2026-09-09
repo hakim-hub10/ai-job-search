@@ -11,6 +11,8 @@ export type CandidateImportClaimKind =
   | "language"
   | "headline";
 
+export type CandidateImportClaimSource = "cv-text" | "user";
+
 export interface CandidateImportClaim {
   id: string;
   candidateId: string;
@@ -18,11 +20,11 @@ export interface CandidateImportClaim {
   documentId: string;
   kind: CandidateImportClaimKind;
   value: string;
-  source: string;
+  source: CandidateImportClaimSource;
   status: "proposed";
   provenance: {
     section?: string;
-    snippet: string;
+    snippet?: string;
     line?: number;
   };
 }
