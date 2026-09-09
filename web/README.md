@@ -191,3 +191,25 @@ but its API does not offer a hard, safe execution-timeout mechanism; this phase
 therefore makes no timeout guarantee. PDF bytes and extracted text remain
 transient caller/request data. DOCX extraction, persistent import storage,
 claim extraction/review, and onboarding UI remain future work.
+
+## Bounded DOCX Text Extraction (Phase 14.4)
+
+`src/lib/candidate-import-docx.ts` is a server-only, in-memory continuation of
+Phase 14.2 admission for DOCX files. It revalidates the upload, preflights the
+ZIP central directory before decompression, and returns only transient
+untrusted text. It requires `[Content_Types].xml` and `word/document.xml`.
+
+The extractor rejects unsafe or duplicate entry names, encrypted archives,
+macro/ActiveX/OLE/embedded entries, external relationships, malformed XML, and
+archives over 64 entries, 2 MiB total uncompressed content, 1 MiB per entry, or
+a 100:1 compression ratio. It reads only `word/document.xml`, never writes ZIP
+entries to disk, and does not resolve entities, follow relationships, execute
+content, render documents, fetch resources, or use providers. Extracted text is
+limited to 100,000 characters; CRLF/CR becomes LF, NUL is removed, and outer
+whitespace is trimmed. ZIP metadata and entry content are materialized in
+memory by JSZip after preflight, so the limits bound admission and output but do
+not claim a hard process-memory or execution-time guarantee.
+
+No DOCX bytes, ZIP entries, XML, or extracted text are persisted. This phase
+does not implement claims, approval, CandidateProfile/Base CV mutation, OCR,
+AI extraction, authentication, authorization, or an onboarding UI.
