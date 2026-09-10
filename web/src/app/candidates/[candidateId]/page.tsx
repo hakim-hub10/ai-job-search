@@ -53,7 +53,7 @@ function formatActivityKindLabel(kind: string) {
     case "updateCv":
       return "Uppdatera CV";
     case "coachingMeeting":
-      return "Coachmöte";
+      return "Möte";
     default:
       return kind;
   }
@@ -96,7 +96,7 @@ export default async function CandidatePage({
       <aside className={styles.sidebar}>
         <div>
           <p className={styles.eyebrow}>AI-jobbcoach</p>
-          <h1 className={styles.brand}>Jobbcoachens arbetsyta</h1>
+          <h1 className={styles.brand}>Min arbetsyta</h1>
         </div>
 
         <nav className={styles.nav}>
@@ -114,10 +114,10 @@ export default async function CandidatePage({
       <main className={styles.main}>
         <div className={styles.topbar}>
           <div>
-            <p className={styles.eyebrow}>Jobbcoachens arbetsyta</p>
+            <p className={styles.eyebrow}>Min profil</p>
             <h2>{candidate?.displayName ?? "Kandidatöversikt"}</h2>
             <p className={styles.subtitle}>
-              Operativ data från jobbcoachens befintliga arbetsflöden.
+              Hantera din profil och ditt grund-CV för jobbsökningen.
             </p>
           </div>
 
@@ -131,22 +131,18 @@ export default async function CandidatePage({
 
         {!result.configured ? (
           <section className={styles.panel}>
-            <h3>Jobbcoachens arbetsyta är inte konfigurerad</h3>
-            <p>
-              Ange COACH_DIR innan kandidatdata kan laddas.
-            </p>
+            <h3>Profilen kunde inte laddas just nu</h3>
+            <p>Försök igen senare.</p>
           </section>
         ) : result.error ? (
           <section className={styles.panel}>
             <h3>Kandidatdata kunde inte laddas</h3>
-            <pre className={styles.errorBlock}>
-              {JSON.stringify(result.error, null, 2)}
-            </pre>
+            <p>Försök igen senare.</p>
           </section>
         ) : !candidate ? (
           <section className={styles.panel}>
             <h3>Kandidaten hittades inte</h3>
-            <p>Ingen kandidatpost hittades för {candidateId}.</p>
+            <p>Profilen kunde inte hittas.</p>
           </section>
         ) : (
           <>
@@ -159,7 +155,6 @@ export default async function CandidatePage({
               </div>
 
               <div className={styles.candidateMeta}>
-                <span>ID: {candidate.id}</span>
                 <span>Skapad: {formatDate(candidate.createdAt)}</span>
                 <span>Uppdaterad: {formatDate(candidate.updatedAt)}</span>
               </div>
@@ -178,7 +173,7 @@ export default async function CandidatePage({
               </div>
 
               {!profileResult.configured ? (
-                <p>COACH_DIR krävs för att kandidatprofilen ska kunna sparas.</p>
+                <p>Profilen kan inte sparas just nu. Försök igen senare.</p>
               ) : profileResult.error ? (
                 <section>
                   <h4>Kandidatprofilen kunde inte laddas</h4>
@@ -594,11 +589,9 @@ export default async function CandidatePage({
 
             {!result.applicationRepositoryConfigured ? (
               <section className={styles.panel}>
-                <h3>Ansökningsarkivet är inte konfigurerat</h3>
+                <h3>Ansökningsdata är inte tillgänglig just nu</h3>
                 <p>
-                  Kandidatens metadata är tillgänglig, men operativ ansökningsdata,
-                  data för uppföljningar, mål och aktiviteter kräver
-                  APPLICATION_REPOSITORY.
+                  Dina ansökningar och uppföljningar kan inte visas just nu.
                 </p>
               </section>
             ) : overview ? (
@@ -638,9 +631,7 @@ export default async function CandidatePage({
                   {!followUpResult.configured ? (
                     <p>Arbetsflödet för uppföljningar är inte konfigurerat.</p>
                   ) : followUpResult.error ? (
-                    <pre className={styles.errorBlock}>
-                      {JSON.stringify(followUpResult.error, null, 2)}
-                    </pre>
+                    <p>Uppföljningar kunde inte laddas just nu.</p>
                   ) : (
                     <>
                       <form action={createFollowUpAction}>
@@ -738,7 +729,7 @@ export default async function CandidatePage({
                 <section className={styles.panel}>
                   <div className={styles.sectionHeading}>
                     <div>
-                      <p className={styles.eyebrow}>Jobbcoachens anteckningar</p>
+                      <p className={styles.eyebrow}>Anteckningar</p>
                       <h3>Kandidatens anteckningar</h3>
                     </div>
 
@@ -746,11 +737,9 @@ export default async function CandidatePage({
                   </div>
 
                   {!noteResult.configured ? (
-                    <p>Arbetsflödet för jobbcoachens anteckningar är inte konfigurerat.</p>
+                    <p>Anteckningar kan inte visas just nu.</p>
                   ) : noteResult.error ? (
-                    <pre className={styles.errorBlock}>
-                      {JSON.stringify(noteResult.error, null, 2)}
-                    </pre>
+                    <p>Anteckningar kunde inte laddas just nu.</p>
                   ) : (
                     <>
                       <form action={createNoteAction}>
@@ -1022,7 +1011,7 @@ export default async function CandidatePage({
                                         ? "Gå på intervju"
                                         : activity.kind === "completeCourseStep"
                                           ? "Slutför kurssteg"
-                                          : "Coachmöte"}
+                                          : "Möte"}
                               </strong>
 
                               <div className={styles.candidateMeta}>

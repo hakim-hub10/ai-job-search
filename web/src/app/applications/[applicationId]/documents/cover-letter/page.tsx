@@ -24,7 +24,7 @@ export default async function ApplicationCoverLetterPage({
   const resolution = resolveDocumentTemplate(templateId);
 
   if (!result.ok) {
-    return <main className="documentPage"><Link href={`/applications/${encodeURIComponent(decodedId)}`}>← Tillbaka till ansökan</Link><h1>Personligt brev kunde inte laddas</h1><p>Dokumentet kunde inte läsas från det lokala dokumentarkivet.</p></main>;
+    return <main className="documentPage"><Link href={`/applications/${encodeURIComponent(decodedId)}`}>← Tillbaka till ansökan</Link><h1>Personligt brev kunde inte laddas</h1><p>Dokumentet kunde inte läsas just nu.</p></main>;
   }
   const coverLetter = [...result.documents].filter((document) => document.documentType === "coverLetter").sort((a, b) => b.version - a.version)[0];
   if (!coverLetter) {
