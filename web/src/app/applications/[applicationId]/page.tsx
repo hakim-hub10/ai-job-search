@@ -2,12 +2,10 @@ import Link from "next/link";
 import { applicationInterviewPath } from "@/lib/interview-presentation";
 
 import { loadApplicationDetail } from "@/lib/application-detail";
-import { loadApplicationCandidate } from "@/lib/application-candidate";
 import { loadApplicationDocumentState } from "@/lib/application-documents";
 import { loadCandidateBaseCvState } from "@/lib/candidate-base-cv-state";
 
 import {
-  associateApplicationCandidateAction,
   createCoverLetterAction,
   createTailoredCvAction,
   updateApplicationStatusAction,
@@ -66,7 +64,6 @@ export default async function ApplicationDetailPage({
   if (!owned.ok) return <main style={{ maxWidth: 900, margin: "0 auto", padding: "48px 24px" }}><h1>Ansökan kunde inte laddas</h1><p>Ansökan hittades inte.</p></main>;
 
   const result = await loadApplicationDetail(decodedId);
-  const candidateResult = await loadApplicationCandidate(decodedId);
   const documentResult = await loadApplicationDocumentState(decodedId);
 
   if (!result.configured) {
@@ -89,9 +86,7 @@ export default async function ApplicationDetailPage({
   }
 
   const application = result.application;
-  const baseCvResult = candidateResult.candidate
-    ? await loadCandidateBaseCvState(candidateResult.candidate.id)
-    : null;
+  const baseCvResult = await loadCandidateBaseCvState(owned.value.context.candidate.id);
 
   return (
     <main style={{ maxWidth: 900, margin: "0 auto", padding: "48px 24px" }}>
@@ -170,24 +165,13 @@ export default async function ApplicationDetailPage({
       </section>
 
       <section style={{ marginTop: 40 }}>
-        <h2>Dokument</h2>
+        <h2>Dina dokument</h2>
 
         {!documentResult.ok ? (
           <p>Dokumentstatus kunde inte laddas just nu.</p>
         ) : (
           <>
-            <p>
-              Kandidatprofil: {documentResult.profile
-                ? "Tillgänglig"
-                : documentResult.associationMissing
-                  ? "Kandidatkoppling saknas"
-                  : "Profilinformation saknas"}
-            </p>
-            <p>
-              Dokumentunderlag: {documentResult.profile && !documentResult.associationMissing
-                ? "Redo"
-                : "Saknas"}
-            </p>
+            <p>Skapa och granska dokument som hör till den här ansökan.</p>
             {(["cv", "coverLetter"] as const).map((documentType) => {
               const latest = [...documentResult.documents]
                 .filter((document) => document.documentType === documentType)
@@ -203,11 +187,7 @@ export default async function ApplicationDetailPage({
                     </p>
                     {latest ? (
                       <>
-                        <p>
-                          <Link href={`/applications/${encodeURIComponent(application.id)}/documents/cv`}>
-                            Visa CV
-                          </Link>
-                        </p>
+                        <p><Link href={`/applications/${encodeURIComponent(application.id)}/documents/cv`}>Visa anpassat CV</Link></p>
                         <form action={createTailoredCvAction}>
                           <input type="hidden" name="applicationId" value={application.id} />
                           <button type="submit">Skapa ny version</button>
@@ -237,11 +217,7 @@ export default async function ApplicationDetailPage({
                     </p>
                     {latest ? (
                       <>
-                        <p>
-                          <Link href={`/applications/${encodeURIComponent(application.id)}/documents/cover-letter`}>
-                            Visa personligt brev
-                          </Link>
-                        </p>
+                        <p><Link href={`/applications/${encodeURIComponent(application.id)}/documents/cover-letter`}>Visa personligt brev</Link></p>
                         <form action={createCoverLetterAction}>
                           <input type="hidden" name="applicationId" value={application.id} />
                           <button type="submit">Skapa ny version</button>
@@ -266,61 +242,6 @@ export default async function ApplicationDetailPage({
               );
             })}
           </>
-        )}
-      </section>
-
-      <section style={{ marginTop: 40 }}>
-        <h2>Tilldelad kandidat</h2>
-
-        {!candidateResult.configured ? (
-          <p>Jobbcoachens arbetsyta är inte konfigurerad.</p>
-        ) : candidateResult.error ? (
-          <p>Kandidattilldelningen kunde inte laddas just nu.</p>
-        ) : candidateResult.candidate ? (
-          <div>
-            <strong>{candidateResult.candidate.displayName}</strong>
-            <p>{candidateResult.candidate.id}</p>
-          </div>
-        ) : candidateResult.candidates.length === 0 ? (
-          <p>Inga kandidater är tillgängliga.</p>
-        ) : (
-          <form action={associateApplicationCandidateAction}>
-            <input
-              type="hidden"
-              name="applicationId"
-              value={application.id}
-            />
-
-            <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-              <label htmlFor="candidateId">Kandidat</label>
-              <select
-                id="candidateId"
-                name="candidateId"
-                required
-                defaultValue=""
-                style={{
-                  padding: "10px 12px",
-                  border: "1px solid #ccd2dc",
-                  borderRadius: 8,
-                  font: "inherit",
-                }}
-              >
-                <option value="" disabled>
-                  Välj kandidat
-                </option>
-
-                {candidateResult.candidates.map((candidate) => (
-                  <option key={candidate.id} value={candidate.id}>
-                    {candidate.displayName}
-                  </option>
-                ))}
-              </select>
-
-              <button type="submit">
-                Tilldela kandidat
-              </button>
-            </div>
-          </form>
         )}
       </section>
 
