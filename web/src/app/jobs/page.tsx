@@ -2,7 +2,6 @@ import Link from "next/link";
 
 import { analyzeJobsForCandidate } from "@/lib/candidate-job-matching";
 import { loadCandidateProfileRepository } from "@/lib/candidate-profiles";
-import { loadCoachCandidates } from "@/lib/coach-candidates";
 import { searchWebJobs } from "@/lib/jobs";
 import styles from "../page.module.css";
 import { startApplicationAction } from "./actions";
@@ -12,7 +11,6 @@ export const dynamic = "force-dynamic";
 
 interface JobsPageProps {
   searchParams: Promise<{
-    candidateId?: string;
     query?: string;
     location?: string;
     limit?: string;
@@ -142,7 +140,6 @@ function formatRequirement(requirement: string): string {
 export default async function JobsPage({ searchParams }: JobsPageProps) {
   const params = await searchParams;
 
-  const requestedCandidateId = firstValue(params.candidateId);
   const query = firstValue(params.query);
   const location = firstValue(params.location);
   const limit = parseLimit(params.limit);
@@ -150,12 +147,9 @@ export default async function JobsPage({ searchParams }: JobsPageProps) {
 
   const authorization = configuredAuthorizationDependencies();
   if (!authorization.ok) return <main className={styles.main}><section className={styles.panel}><h1>Jobb kunde inte visas</h1><p>Resursen kunde inte hittas.</p></section></main>;
-  const authorized = authorization.ok ? await getAuthorizedCandidateContext(authorization.value) : null;
-  const candidateId = authorized?.ok ? authorized.value.candidate.id : requestedCandidateId;
-  const candidatesResult = authorized?.ok
-    ? { configured: true as const, error: null, candidates: [authorized.value.candidate] }
-    : await loadCoachCandidates();
-  const selectedCandidate = candidatesResult.candidates.find((candidate) => candidate.id === candidateId);
+  const authorized = await getAuthorizedCandidateContext(authorization.value);
+  if (!authorized.ok) return <main className={styles.main}><section className={styles.panel}><h1>Jobb kunde inte visas</h1><p>Logga in igen eller försök senare.</p></section></main>;
+  const selectedCandidate = authorized.value.candidate;
 
   const hasSearch = query.length > 0 || location.length > 0;
 
@@ -225,8 +219,7 @@ export default async function JobsPage({ searchParams }: JobsPageProps) {
             <p className={styles.eyebrow}>Jobbsökning</p>
             <h1>Hitta jobb</h1>
             <p className={styles.subtitle}>
-              Sök efter relevanta jobb och analysera matchningen mot en vald
-              kandidatprofil.
+              Sök jobb och förstå hur de matchar din profil.
             </p>
           </div>
 
@@ -294,32 +287,6 @@ export default async function JobsPage({ searchParams }: JobsPageProps) {
             <div className={styles.emptyState}>
               <strong>Ansökan kunde inte startas</strong>
               <p>{formatApplicationError(applicationError)}</p>
-            </div>
-          </section>
-        ) : null}
-
-        {!candidatesResult.configured ? (
-          <section className={styles.panel}>
-            <div className={styles.emptyState}>
-              <strong>Jobbcoachens arbetsyta är inte konfigurerad</strong>
-              <p>
-                Jobbsökning fungerar fortfarande, men kandidatmatchning kräver
-                att COACH_DIR är konfigurerad.
-              </p>
-            </div>
-          </section>
-        ) : candidatesResult.error ? (
-          <section className={styles.panel}>
-            <div className={styles.emptyState}>
-              <strong>Kandidaterna kunde inte laddas</strong>
-              <p>Kandidatmatchning är inte tillgänglig just nu.</p>
-            </div>
-          </section>
-        ) : candidateId && !selectedCandidate ? (
-          <section className={styles.panel}>
-            <div className={styles.emptyState}>
-              <strong>Den valda kandidaten finns inte</strong>
-              <p>Välj en kandidat från listan och försök igen.</p>
             </div>
           </section>
         ) : null}
@@ -522,11 +489,6 @@ export default async function JobsPage({ searchParams }: JobsPageProps) {
                           <form action={startApplicationAction}>
                             <input
                               type="hidden"
-                              name="candidateId"
-                              value={candidateId}
-                            />
-                            <input
-                              type="hidden"
                               name="jobId"
                               value={job.id}
                             />
@@ -541,7 +503,7 @@ export default async function JobsPage({ searchParams }: JobsPageProps) {
                               name="limit"
                               value={String(limit)}
                             />
-                            <button type="submit">Starta ansökan</button>
+                            <button type="submit">Skapa ansökan</button>
                           </form>
                           <p>
                             Ansökan skapas i AI Career Agent. Du skickar inget

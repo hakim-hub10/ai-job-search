@@ -10,7 +10,7 @@ import { resolveCoachRepositoryPaths } from "../../../../.agents/job-search/cli/
 import { createFileCoachWorkspaceRepository } from "../../../../.agents/job-search/cli/src/coach-workspace-file-repository";
 import { loadCandidateProfileRepository } from "@/lib/candidate-profiles";
 import { startApplicationFromJob } from "@/lib/application-start";
-import { configuredAuthorizationDependencies, requireOwnedCandidate } from "@/lib/authorization";
+import { configuredAuthorizationDependencies, getAuthorizedCandidateContext } from "@/lib/authorization";
 
 function formText(formData: FormData, name: string): string {
   const value = formData.get(name);
@@ -26,12 +26,10 @@ function parseLimit(value: string): number {
 
 function redirectToJobs(formData: FormData, errorCode: string): never {
   const params = new URLSearchParams();
-  const candidateId = formText(formData, "candidateId");
   const query = formText(formData, "query");
   const location = formText(formData, "location");
   const limit = formText(formData, "limit");
 
-  if (candidateId) params.set("candidateId", candidateId);
   if (query) params.set("query", query);
   if (location) params.set("location", location);
   if (limit) params.set("limit", limit);
@@ -48,18 +46,18 @@ export async function startApplicationAction(formData: FormData) {
     redirectToJobs(formData, "CONFIGURATION_MISSING");
   }
 
-  const candidateId = formText(formData, "candidateId");
   const jobId = formText(formData, "jobId");
   const query = formText(formData, "query");
   const location = formText(formData, "location");
   const limit = parseLimit(formText(formData, "limit"));
 
-  if (!candidateId || !jobId || !limit) {
+  if (!jobId || !limit) {
     redirectToJobs(formData, "INVALID_INPUT");
   }
   const authorization = configuredAuthorizationDependencies();
-  const owned = authorization.ok ? await requireOwnedCandidate(candidateId, authorization.value) : authorization;
+  const owned = authorization.ok ? await getAuthorizedCandidateContext(authorization.value) : authorization;
   if (!owned.ok) redirectToJobs(formData, "FORBIDDEN");
+  const candidateId = owned.value.candidate.id;
 
   const paths = resolveCoachRepositoryPaths(resolve(coachDir));
   const profileContext = loadCandidateProfileRepository();
