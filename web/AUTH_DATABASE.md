@@ -50,3 +50,11 @@ The job-seeker ownership resolver reserves a generated candidate ID in PostgreSQ
 ## Phase 15.3 authentication flow
 
 Email/password registration, login, and logout use Better Auth's official browser client and database-backed sessions. The UI uses fixed internal redirects only; no candidate is created during authentication. Better Auth owns password handling, hashing, session cookies, origin checks, and server-side session invalidation. Email delivery/verification and production-grade login rate limiting are not configured until the later security/UX hardening phases; no fake email sending or custom in-memory brute-force protection is included.
+
+## Phase 15.7 security hardening status
+
+The current auth handler uses Better Auth's supported Next.js integration. Auth mutations are POST-based through the Better Auth client; the framework's origin checks and same-site cookie behavior remain the CSRF boundary, and no custom token system was added. The application does not expose redirect parameters: successful registration/login go to `/`, and logout goes to `/login`.
+
+Better Auth validates sessions server-side through request headers. Missing, expired, malformed, or unavailable sessions fail closed for protected authorization helpers. The application returns only minimal user identity and never stores auth state in browser storage.
+
+No distributed or production-grade brute-force limiter is configured. Login abuse/rate limiting is deferred to the deployment/security closure phase because this local JSON/PostgreSQL setup has no shared limiter infrastructure. Email verification and password reset are also deferred because no outbound mail service is configured; the app does not pretend to send verification mail.
