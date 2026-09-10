@@ -7,8 +7,8 @@ describe("personal home entry boundary", () => {
     expect(source).toContain("getAuthenticatedUser");
     expect(source).toContain("getOrCreateOwnedCandidateForUser");
     expect(source).toContain("loadCandidateProfile");
-    expect(source).toContain("/candidates/${encodeURIComponent(owned.value.id)}/onboarding");
-    expect(source).toContain("/candidates/${encodeURIComponent(owned.value.id)}");
+    expect(source).toContain("/candidates/${encodeURIComponent(candidateId)}/onboarding");
+    expect(source).toContain("/candidates/${encodeURIComponent(candidateId)}");
     expect(source).toContain("/jobs");
     expect(source).toContain("/applications");
     expect(source).not.toContain("loadDashboardData");
