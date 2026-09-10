@@ -13,6 +13,10 @@ const claim = {
 };
 
 mock.module("server-only", () => ({}));
+mock.module("@/lib/authorization", () => ({
+  configuredAuthorizationDependencies: () => ({ ok: true, value: {} }),
+  requireOwnedCandidate: async () => ({ ok: true, value: { user: { id: "user-a", email: "a@example.test" }, candidate: { id: "candidate-a", displayName: "Candidate A" } } }),
+}));
 mock.module("../../../../../../.agents/job-search/cli/src/coach-cli-paths", () => ({
   resolveCoachRepositoryPaths: () => ({ candidates: "synthetic-candidates.json", candidateProfiles: "synthetic-profiles.json" }),
 }));

@@ -10,6 +10,7 @@ import { resolveCoachRepositoryPaths } from "../../../../.agents/job-search/cli/
 import { createFileCoachWorkspaceRepository } from "../../../../.agents/job-search/cli/src/coach-workspace-file-repository";
 import { loadCandidateProfileRepository } from "@/lib/candidate-profiles";
 import { startApplicationFromJob } from "@/lib/application-start";
+import { configuredAuthorizationDependencies, requireOwnedCandidate } from "@/lib/authorization";
 
 function formText(formData: FormData, name: string): string {
   const value = formData.get(name);
@@ -56,6 +57,9 @@ export async function startApplicationAction(formData: FormData) {
   if (!candidateId || !jobId || !limit) {
     redirectToJobs(formData, "INVALID_INPUT");
   }
+  const authorization = configuredAuthorizationDependencies();
+  const owned = authorization.ok ? await requireOwnedCandidate(candidateId, authorization.value) : authorization;
+  if (!owned.ok) redirectToJobs(formData, "FORBIDDEN");
 
   const paths = resolveCoachRepositoryPaths(resolve(coachDir));
   const profileContext = loadCandidateProfileRepository();

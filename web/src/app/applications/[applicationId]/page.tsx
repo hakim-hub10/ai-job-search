@@ -12,6 +12,7 @@ import {
   createTailoredCvAction,
   updateApplicationStatusAction,
 } from "../actions";
+import { configuredAuthorizationDependencies, requireOwnedApplication } from "@/lib/authorization";
 
 export const dynamic = "force-dynamic";
 
@@ -60,6 +61,9 @@ export default async function ApplicationDetailPage({
 }) {
   const { applicationId } = await params;
   const decodedId = decodeURIComponent(applicationId);
+  const authorization = configuredAuthorizationDependencies();
+  const owned = authorization.ok ? await requireOwnedApplication(decodedId, authorization.value) : authorization;
+  if (!owned.ok) return <main style={{ maxWidth: 900, margin: "0 auto", padding: "48px 24px" }}><h1>Ansökan kunde inte laddas</h1><p>Ansökan hittades inte.</p></main>;
 
   const result = await loadApplicationDetail(decodedId);
   const candidateResult = await loadApplicationCandidate(decodedId);

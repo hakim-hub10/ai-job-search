@@ -9,6 +9,10 @@ mock.module("@/lib/candidate-overview", () => ({
     overview: null,
   }),
 }));
+mock.module("@/lib/authorization", () => ({
+  configuredAuthorizationDependencies: () => ({ ok: true, value: {} }),
+  requireOwnedCandidate: async () => ({ ok: true, value: { user: { id: "user-a", email: "a@example.test" }, candidate: { id: "candidate-a", displayName: "Kandidat A" } } }),
+}));
 mock.module("./actions", () => ({
   uploadCandidateOnboardingAction: async () => ({ ok: true, claims: [], importId: "import-a", documentId: "document-a" }),
   applyCandidateOnboardingAction: async () => ({ ok: true, complete: true }),

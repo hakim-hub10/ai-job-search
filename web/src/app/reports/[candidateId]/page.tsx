@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { loadCoachCandidates } from "@/lib/coach-candidates";
 import { loadCandidateActivityReport } from "@/lib/reports";
+import { configuredAuthorizationDependencies, requireOwnedCandidate } from "@/lib/authorization";
 import styles from "../../page.module.css";
 
 export const dynamic = "force-dynamic";
@@ -149,6 +150,9 @@ export default async function CandidateReportPage({
   searchParams,
 }: ReportPageProps) {
   const { candidateId } = await params;
+    const authorization = configuredAuthorizationDependencies();
+    const owned = authorization.ok ? await requireOwnedCandidate(candidateId, authorization.value) : authorization;
+    if (!owned.ok) return <main><h1>Rapporten kunde inte visas</h1></main>;
   const query = await searchParams;
 
   const start = query.start ?? "2026-01-01";

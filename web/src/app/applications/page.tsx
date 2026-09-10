@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { loadApplications } from "@/lib/applications";
+import { configuredAuthorizationDependencies, getAuthorizedCandidateContext } from "@/lib/authorization";
 import styles from "../page.module.css";
 
 export const dynamic = "force-dynamic";
@@ -29,7 +30,10 @@ function formatApplicationStatus(status: string) {
 }
 
 export default async function ApplicationsPage() {
-  const result = await loadApplications();
+  const authorization = configuredAuthorizationDependencies();
+  const context = authorization.ok ? await getAuthorizedCandidateContext(authorization.value) : authorization;
+  if (!context.ok) return <main className={styles.main}><section className={styles.panel}><h1>Ansökningar kunde inte visas</h1><p>Resursen kunde inte hittas.</p></section></main>;
+  const result = await loadApplications(context.value.candidate.id);
 
   return (
     <div className={styles.shell}>

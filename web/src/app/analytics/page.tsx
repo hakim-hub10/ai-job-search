@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { loadCoachPortfolioAnalytics, loadJobSearchAnalytics, parseAnalyticsPeriod } from "@/lib/analytics";
 import { loadCoachCandidates } from "@/lib/coach-candidates";
+import { configuredAuthorizationDependencies, getAuthorizedCandidateContext } from "@/lib/authorization";
 import styles from "../page.module.css";
 
 export const dynamic = "force-dynamic";
@@ -49,6 +50,9 @@ function formatDuration(milliseconds: number | null) {
 export default async function AnalyticsPage({
   searchParams,
 }: AnalyticsPageProps) {
+  const authorization = configuredAuthorizationDependencies();
+  if (!authorization.ok) return <main className={styles.main}><section className={styles.panel}><h1>Analysvyn kunde inte visas</h1><p>Resursen kunde inte hittas.</p></section></main>;
+  if (authorization.ok && (await getAuthorizedCandidateContext(authorization.value)).ok) return <main className={styles.main}><section className={styles.panel}><h1>Analysvyn kunde inte visas</h1><p>Portföljanalys för flera kandidater är inte tillgänglig för jobbsökare.</p></section></main>;
   const query = await searchParams;
 
   const period = parseAnalyticsPeriod(query);

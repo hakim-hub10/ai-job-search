@@ -5,6 +5,7 @@ import {
   readDocumentEditorState,
 } from "@/lib/document-editor";
 import EditorControls from "../editor-controls";
+import { configuredAuthorizationDependencies, requireOwnedApplication } from "@/lib/authorization";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +20,9 @@ export default async function DocumentEditorPage({
 }) {
   const { applicationId, documentType } = await params;
   const decodedId = decodeURIComponent(applicationId);
+  const authorization = configuredAuthorizationDependencies();
+  const owned = authorization.ok ? await requireOwnedApplication(decodedId, authorization.value) : authorization;
+  if (!owned.ok) return <main style={{ maxWidth: 900, margin: "0 auto", padding: "48px 24px" }}><h1>Dokumenteditor</h1><p>Dokumentet kunde inte hittas.</p></main>;
   const internalDocumentType = documentType === "cover-letter" ? "coverLetter" : documentType;
   const dependencies = createConfiguredDocumentEditorDependencies();
   const result = dependencies

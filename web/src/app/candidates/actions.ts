@@ -8,8 +8,12 @@ import { redirect } from "next/navigation";
 import { createCoachCandidateWorkflow } from "../../../../.agents/job-search/cli/src/coach-candidate-workflow";
 import { createFileCoachWorkspaceRepository } from "../../../../.agents/job-search/cli/src/coach-workspace-file-repository";
 import { resolveCoachRepositoryPaths } from "../../../../.agents/job-search/cli/src/coach-cli-paths";
+import { getAuthenticatedUser } from "@/lib/auth-session";
 
 export async function createCandidateAction(formData: FormData) {
+  if (await getAuthenticatedUser()) {
+    throw new Error("Kandidatens arbetsyta skapas genom det personliga onboardingflödet.");
+  }
   const coachDir = process.env.COACH_DIR;
 
   if (!coachDir) {

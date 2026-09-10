@@ -20,6 +20,7 @@ import {
   updateBaseCvAction,
 } from "./base-cv-actions";
 import { loadCandidateNotes } from "@/lib/candidate-notes";
+import { configuredAuthorizationDependencies, requireOwnedCandidate } from "@/lib/authorization";
 import styles from "../../page.module.css";
 
 export const dynamic = "force-dynamic";
@@ -74,6 +75,13 @@ export default async function CandidatePage({
   params,
 }: CandidatePageProps) {
   const { candidateId } = await params;
+  const authorization = configuredAuthorizationDependencies();
+  const owned = authorization.ok
+    ? await requireOwnedCandidate(candidateId, authorization.value)
+    : authorization;
+  if (!owned.ok) {
+    return <main className={styles.main}><section className={styles.panel}><h1>Kandidatöversikten kunde inte visas</h1><p>Resursen kunde inte hittas.</p></section></main>;
+  }
   const result = await loadCandidateOperationalOverview(candidateId);
   const followUpResult = await loadCandidateFollowUps(candidateId);
   const noteResult = await loadCandidateNotes(candidateId);

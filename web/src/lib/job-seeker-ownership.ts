@@ -95,7 +95,7 @@ function createDatabaseOwnershipStore(): CandidateOwnershipStore {
   };
 }
 
-function configuredDependencies(): JobSeekerOwnershipDependencies | JobSeekerOwnershipResult<never> {
+export function configuredJobSeekerOwnershipDependencies(): JobSeekerOwnershipDependencies | JobSeekerOwnershipResult<never> {
   const coachDir = process.env.COACH_DIR?.trim();
   if (!coachDir) return failure("CONFIGURATION_MISSING");
   const paths = resolveCoachRepositoryPaths(resolve(coachDir));
@@ -125,7 +125,7 @@ async function resolveCandidate(ownership: CandidateOwnership, user: Authenticat
 
 export async function getOwnedCandidateForUser(userId: string, dependencies?: JobSeekerOwnershipDependencies): Promise<JobSeekerOwnershipResult<CoachCandidate | null>> {
   if (!validText(userId)) return failure("INVALID_USER_ID");
-  const resolved = dependencies ?? configuredDependencies();
+  const resolved = dependencies ?? configuredJobSeekerOwnershipDependencies();
   if (!("ownershipStore" in resolved)) return resolved;
   const ownership = await resolved.ownershipStore.listByUserId(userId);
   if (!ownership.ok) return ownership;
@@ -138,7 +138,7 @@ export async function getOwnedCandidateForUser(userId: string, dependencies?: Jo
 
 export async function getOrCreateOwnedCandidateForUser(user: AuthenticatedUser, dependencies?: JobSeekerOwnershipDependencies): Promise<JobSeekerOwnershipResult<CoachCandidate>> {
   if (!validText(user.id)) return failure("INVALID_USER_ID");
-  const resolved = dependencies ?? configuredDependencies();
+  const resolved = dependencies ?? configuredJobSeekerOwnershipDependencies();
   if (!("ownershipStore" in resolved)) return resolved;
   const existing = await getOwnedCandidateForUser(user.id, resolved);
   if (!existing.ok) {

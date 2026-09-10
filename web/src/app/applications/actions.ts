@@ -29,6 +29,12 @@ import {
 } from "@/lib/document-editor";
 import { createApplicationWorkflow } from "../../../../.agents/job-search/cli/src/application-workflow";
 import type { ApplicationStatus } from "../../../../.agents/job-search/cli/src/applications";
+import { configuredAuthorizationDependencies, requireOwnedApplication, requireOwnedCandidate } from "@/lib/authorization";
+
+async function authorizeApplication(applicationId: string) {
+  const dependencies = configuredAuthorizationDependencies();
+  return dependencies.ok ? requireOwnedApplication(applicationId, dependencies.value) : dependencies;
+}
 
 const APPLICATION_STATUSES = new Set<ApplicationStatus>([
   "saved",
@@ -60,6 +66,8 @@ export async function updateApplicationStatusAction(formData: FormData) {
   if (!applicationId) {
     throw new Error("Ansökans ID saknas.");
   }
+  const authorized = await authorizeApplication(applicationId);
+  if (!authorized.ok) throw new Error("Ansökan kunde inte hittas.");
 
   if (!APPLICATION_STATUSES.has(status as ApplicationStatus)) {
     throw new Error("Statusen kunde inte användas.");
@@ -109,6 +117,11 @@ export async function associateApplicationCandidateAction(formData: FormData) {
   if (!applicationId || !candidateId) {
     throw new Error("Ansökan och kandidat måste anges.");
   }
+  const candidateAuthorization = configuredAuthorizationDependencies();
+  const ownedCandidate = candidateAuthorization.ok ? await requireOwnedCandidate(candidateId, candidateAuthorization.value) : candidateAuthorization;
+  if (!ownedCandidate.ok) throw new Error("Kandidaten kunde inte kopplas till ansökan.");
+  const authorized = await authorizeApplication(applicationId);
+  if (!authorized.ok) throw new Error("Ansökan kunde inte hittas.");
 
   const { createCoachApplicationWorkflow } =
     await import("../../../../.agents/job-search/cli/src/coach-application-workflow");
@@ -172,6 +185,7 @@ export async function createTailoredCvAction(formData: FormData) {
   const documentRepositoryPath = process.env.APPLICATION_DOCUMENT_REPOSITORY?.trim();
 
   if (!applicationId) throw new Error("Ansökans ID saknas.");
+  if (!(await authorizeApplication(applicationId)).ok) throw new Error("Ansökan kunde inte hittas.");
   if (!coachDir || !applicationRepositoryPath || !documentRepositoryPath) {
     throw new Error("Dokumentvyn är inte fullständigt konfigurerad.");
   }
@@ -221,6 +235,7 @@ export async function createCoverLetterAction(formData: FormData) {
   const documentRepositoryPath = process.env.APPLICATION_DOCUMENT_REPOSITORY?.trim();
 
   if (!applicationId) throw new Error("Ansökans ID saknas.");
+  if (!(await authorizeApplication(applicationId)).ok) throw new Error("Ansökan kunde inte hittas.");
   if (!coachDir || !applicationRepositoryPath || !documentRepositoryPath) {
     throw new Error("Dokumentvyn är inte fullständigt konfigurerad.");
   }
@@ -271,6 +286,7 @@ export async function saveDocumentEditAction(formData: FormData) {
   const dependencies = createConfiguredDocumentEditorDependencies();
 
   if (!dependencies) throw new Error("Dokumentvyn är inte fullständigt konfigurerad.");
+  if (!(await authorizeApplication(applicationId)).ok) throw new Error("Ansökan kunde inte hittas.");
   const result = await saveDocumentEdit(
     { applicationId, documentType, content },
     dependencies,
@@ -296,6 +312,9 @@ export async function requestDocumentAiRewriteAction(formData: FormData) {
   const currentDraft = typeof formData.get("currentDraft") === "string"
     ? String(formData.get("currentDraft"))
     : "";
+  if (!(await authorizeApplication(applicationId)).ok) {
+    return { ok: false as const, code: "FORBIDDEN", message: "Dokumentet kunde inte hittas." };
+  }
   const dependencies = createConfiguredDocumentEditorDependencies();
 
   if (!dependencies) {

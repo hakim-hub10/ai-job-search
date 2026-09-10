@@ -15,6 +15,7 @@ import { applyCandidateImportProfile, previewCandidateImportProfile } from "@/li
 import { applyCandidateBaseCvRefresh, previewCandidateBaseCvRefresh } from "@/lib/candidate-import-base-cv";
 import { createFileCandidateProfileRepository } from "../../../../../../.agents/job-search/cli/src/candidate-profile-file-repository";
 import { createFileCandidateBaseCvRepository } from "@/lib/candidate-base-cv-file-repository";
+import { configuredAuthorizationDependencies, requireOwnedCandidate } from "@/lib/authorization";
 
 export type OnboardingActionResult =
   | { ok: true; claims: OnboardingClaimView[]; importId: string; documentId: string }
@@ -80,10 +81,17 @@ async function candidateContext(candidateId: string) {
   return candidate.ok ? { coachDir, paths } : null;
 }
 
+async function authorizeCandidate(candidateId: string): Promise<boolean> {
+  const dependencies = configuredAuthorizationDependencies();
+  if (!dependencies.ok) return false;
+  return (await requireOwnedCandidate(candidateId, dependencies.value)).ok;
+}
+
 export async function uploadCandidateOnboardingAction(formData: FormData): Promise<OnboardingActionResult> {
   purgeClaimSessions();
   const candidateId = text(formData.get("candidateId"));
   const file = formData.get("cv");
+  if (!(await authorizeCandidate(candidateId))) return failure("FORBIDDEN", "Filen kunde inte läsas.");
   const context = await candidateContext(candidateId);
   if (!context) return failure("CANDIDATE_NOT_FOUND", "Kandidaten kunde inte hittas.");
   if (!(file instanceof File)) return failure("INVALID_FILE", "Välj ett CV att ladda upp.");
@@ -161,6 +169,7 @@ export async function applyCandidateOnboardingAction(formData: FormData): Promis
   const candidateId = text(formData.get("candidateId"));
   const importId = text(formData.get("importId"));
   const documentId = text(formData.get("documentId"));
+  if (!(await authorizeCandidate(candidateId))) return failure("FORBIDDEN", "Uppgifterna kunde inte sparas.");
   const context = await candidateContext(candidateId);
   if (!context || !importId || !documentId) return failure("INVALID_INPUT", "Uppgifterna kunde inte sparas.");
   const session = claimSessions.get(importId);

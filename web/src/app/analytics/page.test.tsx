@@ -5,9 +5,17 @@ let portfolioResult: { configured: boolean; error: null; analytics: unknown } = 
 mock.module("@/lib/analytics", () => ({
   loadCoachPortfolioAnalytics: async () => portfolioResult,
   loadJobSearchAnalytics: async () => ({ configured: true, error: null, analytics: null }),
+  parseAnalyticsPeriod: () => ({ ok: true, value: { start: "2026-01-01", end: "2027-01-01", asOf: "2027-01-01" } }),
 }));
 mock.module("@/lib/coach-candidates", () => ({
   loadCoachCandidates: async () => ({ configured: true, error: null, candidates: [] }),
+}));
+mock.module("@/lib/auth-session", () => ({
+  getAuthenticatedUser: async () => null,
+}));
+mock.module("@/lib/authorization", () => ({
+  configuredAuthorizationDependencies: () => ({ ok: true, value: {} }),
+  getAuthorizedCandidateContext: async () => ({ ok: false, error: { code: "UNAUTHENTICATED", message: "synthetic" } }),
 }));
 const { default: AnalyticsPage } = await import("./page");
 const metric = (numerator: number, denominator: number, rate: number | null) => ({ numerator, denominator, rate });

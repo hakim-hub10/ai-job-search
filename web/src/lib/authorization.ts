@@ -1,5 +1,7 @@
 import "server-only";
 
+import { resolve } from "node:path";
+
 import type { CoachCandidate } from "../../../.agents/job-search/cli/src/coach-workspace";
 import type { CandidateApplicationAssociation } from "../../../.agents/job-search/cli/src/coach-application-association";
 import type { CandidateApplicationAssociationRepository } from "../../../.agents/job-search/cli/src/coach-application-association-repository";
@@ -16,8 +18,16 @@ import type { CandidateProfile } from "../../../.agents/job-search/cli/src/profi
 import type { CandidateProfileRepository } from "../../../.agents/job-search/cli/src/candidate-profile-repository";
 import type { CandidateBaseCv } from "./candidate-base-cv";
 import type { CandidateBaseCvRepository } from "./candidate-base-cv-repository";
-import { getOwnedCandidateForUser, type JobSeekerOwnershipDependencies } from "./job-seeker-ownership";
+import { configuredJobSeekerOwnershipDependencies, getOwnedCandidateForUser, type JobSeekerOwnershipDependencies } from "./job-seeker-ownership";
 import { requireAuthenticatedUser, type AuthenticatedUser } from "./auth-session";
+import { createFileCandidateProfileRepository } from "../../../.agents/job-search/cli/src/candidate-profile-file-repository";
+import { createFileCandidateApplicationAssociationRepository } from "../../../.agents/job-search/cli/src/coach-application-association-file-repository";
+import { createFileApplicationRepository } from "../../../.agents/job-search/cli/src/application-file-repository";
+import { createFileApplicationDocumentRepository } from "../../../.agents/job-search/cli/src/application-document-file-repository";
+import { createFileInterviewPreparationRepository } from "../../../.agents/job-search/cli/src/interview-preparation-file-repository";
+import { createFileInterviewSessionRepository } from "../../../.agents/job-search/cli/src/interview-session-file-repository";
+import { createFileCandidateBaseCvRepository } from "./candidate-base-cv-file-repository";
+import { resolveCoachRepositoryPaths } from "../../../.agents/job-search/cli/src/coach-cli-paths";
 
 export interface AuthorizedCandidateContext {
   user: Pick<AuthenticatedUser, "id" | "email">;
@@ -43,6 +53,31 @@ export interface AuthorizationDependencies {
   sessionRepository?: Pick<InterviewSessionRepository, "getById">;
   profileRepository?: CandidateProfileRepository;
   baseCvRepository?: CandidateBaseCvRepository;
+}
+
+export function configuredAuthorizationDependencies(): AuthorizationResult<AuthorizationDependencies> {
+  const coachDir = process.env.COACH_DIR?.trim();
+  const applicationPath = process.env.APPLICATION_REPOSITORY?.trim();
+  const documentPath = process.env.APPLICATION_DOCUMENT_REPOSITORY?.trim();
+  const preparationPath = process.env.INTERVIEW_PREPARATION_REPOSITORY?.trim();
+  const sessionPath = process.env.INTERVIEW_SESSION_REPOSITORY?.trim();
+  if (!coachDir) return failure("STORAGE_ERROR");
+  const paths = resolveCoachRepositoryPaths(resolve(coachDir));
+  const ownership = configuredJobSeekerOwnershipDependencies();
+  if (!("ownershipStore" in ownership)) return failure("STORAGE_ERROR");
+  return {
+    ok: true,
+    value: {
+      ownership: ownership,
+      ...(applicationPath ? { applicationRepository: createFileApplicationRepository(resolve(applicationPath)) } : {}),
+      ...(applicationPath ? { associationRepository: createFileCandidateApplicationAssociationRepository(paths.associations) } : {}),
+      ...(documentPath ? { documentRepository: createFileApplicationDocumentRepository(resolve(documentPath)) } : {}),
+      ...(preparationPath ? { preparationRepository: createFileInterviewPreparationRepository(resolve(preparationPath)) } : {}),
+      ...(sessionPath ? { sessionRepository: createFileInterviewSessionRepository(resolve(sessionPath)) } : {}),
+      profileRepository: createFileCandidateProfileRepository(paths.candidateProfiles),
+      baseCvRepository: createFileCandidateBaseCvRepository(resolve(coachDir, "candidate-cvs.json")),
+    },
+  };
 }
 
 const messages: Record<AuthorizationErrorCode, string> = {

@@ -2,6 +2,7 @@ import { resolve } from "node:path";
 import { createFileApplicationDocumentRepository } from "../../../../../../../.agents/job-search/cli/src/application-document-file-repository";
 
 import { downloadDocument } from "@/lib/document-download";
+import { configuredAuthorizationDependencies, requireOwnedApplication } from "@/lib/authorization";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +11,9 @@ export async function GET(
   context: { params: Promise<{ applicationId: string }> },
 ): Promise<Response> {
   const { applicationId } = await context.params;
+  const authorization = configuredAuthorizationDependencies();
+  const owned = authorization.ok ? await requireOwnedApplication(applicationId, authorization.value) : authorization;
+  if (!owned.ok) return new Response("Exporten kunde inte genomföras.", { status: 404 });
   const documentRepositoryPath = process.env.APPLICATION_DOCUMENT_REPOSITORY;
   if (!documentRepositoryPath) {
     return new Response("Exporten kunde inte genomföras.", {

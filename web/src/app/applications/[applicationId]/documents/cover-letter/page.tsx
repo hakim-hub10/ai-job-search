@@ -3,6 +3,7 @@ import Link from "next/link";
 import { loadApplicationDocumentState } from "@/lib/application-documents";
 import { resolveDocumentTemplate, toDocumentPresentationModel } from "@/lib/document-presentation";
 import { DocumentPreview } from "../document-preview";
+import { configuredAuthorizationDependencies, requireOwnedApplication } from "@/lib/authorization";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +17,9 @@ export default async function ApplicationCoverLetterPage({
   const { applicationId } = await params;
   const { template: templateId } = await searchParams;
   const decodedId = decodeURIComponent(applicationId);
+  const authorization = configuredAuthorizationDependencies();
+  const owned = authorization.ok ? await requireOwnedApplication(decodedId, authorization.value) : authorization;
+  if (!owned.ok) return <main className="documentPage"><h1>Personligt brev kunde inte laddas</h1></main>;
   const result = await loadApplicationDocumentState(decodedId);
   const resolution = resolveDocumentTemplate(templateId);
 

@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { loadDashboardData } from "@/lib/dashboard";
+import { configuredAuthorizationDependencies, getAuthorizedCandidateContext } from "@/lib/authorization";
 
 import styles from "./page.module.css";
 
@@ -15,6 +16,10 @@ function formatDate(value: string) {
 }
 
 export default async function Home() {
+  const authorization = configuredAuthorizationDependencies();
+  if (!authorization.ok || (await getAuthorizedCandidateContext(authorization.value)).ok) {
+    return <main className={styles.main}><section className={styles.panel}><h1>Översikten är inte tillgänglig</h1><p>Den här portföljvyn kräver en framtida coachbehörighet.</p></section></main>;
+  }
   const data = await loadDashboardData();
 
   const openFollowUps = data.followUps.filter(

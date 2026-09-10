@@ -9,6 +9,7 @@ import { parseCandidateProfile } from "../../../../../.agents/job-search/cli/src
 import { createFileCoachWorkspaceRepository } from "../../../../../.agents/job-search/cli/src/coach-workspace-file-repository";
 import { resolveCoachRepositoryPaths } from "../../../../../.agents/job-search/cli/src/coach-cli-paths";
 import { loadCandidateProfileRepository } from "@/lib/candidate-profiles";
+import { configuredAuthorizationDependencies, requireOwnedCandidate } from "@/lib/authorization";
 
 function text(formData: FormData, name: string): string {
   const value = formData.get(name);
@@ -39,6 +40,10 @@ export async function saveCandidateProfileAction(formData: FormData) {
   if (!candidateId) {
     throw new Error("Candidate ID is required.");
   }
+
+  const authorization = configuredAuthorizationDependencies();
+  const owned = authorization.ok ? await requireOwnedCandidate(candidateId, authorization.value) : authorization;
+  if (!owned.ok) throw new Error("Kandidatprofilen kunde inte sparas.");
 
   const coachDir = process.env.COACH_DIR?.trim();
 

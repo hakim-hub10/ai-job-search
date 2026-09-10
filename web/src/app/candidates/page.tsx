@@ -1,11 +1,18 @@
 import Link from "next/link";
 
 import { loadCoachCandidates } from "@/lib/coach-candidates";
+import { configuredAuthorizationDependencies, getAuthorizedCandidateContext } from "@/lib/authorization";
 import styles from "../page.module.css";
 
 export const dynamic = "force-dynamic";
 
 export default async function CandidatesPage() {
+  const authorization = configuredAuthorizationDependencies();
+  if (!authorization.ok) return <main className={styles.main}><section className={styles.panel}><h1>Kandidater kunde inte visas</h1><p>Resursen kunde inte hittas.</p></section></main>;
+  const context = authorization.ok ? await getAuthorizedCandidateContext(authorization.value) : authorization;
+  if (context.ok) {
+    return <main className={styles.main}><section className={styles.panel}><p className={styles.eyebrow}>Min kandidat</p><h1>{context.value.candidate.displayName}</h1><p>Din kandidatprofil är kopplad till ditt konto.</p><Link href={`/candidates/${encodeURIComponent(context.value.candidate.id)}`}>Öppna min profil</Link></section></main>;
+  }
   const result = await loadCoachCandidates();
 
   return (

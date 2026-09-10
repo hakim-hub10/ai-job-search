@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { loadCoachCandidates } from "@/lib/coach-candidates";
+import { configuredAuthorizationDependencies, getAuthorizedCandidateContext } from "@/lib/authorization";
 import styles from "../page.module.css";
 
 export const dynamic = "force-dynamic";
@@ -16,6 +17,9 @@ function formatDate(value: string) {
 }
 
 export default async function CoachPage() {
+  const authorization = configuredAuthorizationDependencies();
+  if (!authorization.ok) return <main style={{ maxWidth: 900, margin: "0 auto", padding: "48px 24px" }}><h1>Coachvyn är inte tillgänglig</h1></main>;
+  if (authorization.ok && (await getAuthorizedCandidateContext(authorization.value)).ok) return <main style={{ maxWidth: 900, margin: "0 auto", padding: "48px 24px" }}><h1>Coachvyn är inte tillgänglig</h1><p>Coachbehörighet är inte aktiverad för jobbsökarprofiler.</p></main>;
   const result = await loadCoachCandidates();
 
   return (

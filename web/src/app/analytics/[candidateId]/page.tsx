@@ -1,3 +1,4 @@
+import { configuredAuthorizationDependencies, requireOwnedCandidate } from "@/lib/authorization";
 import Link from "next/link";
 
 import { deriveCandidateCareerActions, loadCandidateAnalytics, loadCandidateInterviewPracticeAnalytics, loadCandidateRequirementInsights, parseAnalyticsPeriod } from "@/lib/analytics";
@@ -51,6 +52,9 @@ export default async function CandidateAnalyticsPage({
   searchParams,
 }: CandidateAnalyticsPageProps) {
   const { candidateId } = await params;
+    const authorization = configuredAuthorizationDependencies();
+    const owned = authorization.ok ? await requireOwnedCandidate(candidateId, authorization.value) : authorization;
+    if (!owned.ok) return <main><h1>Analysen kunde inte visas</h1></main>;
   const query = await searchParams;
 
   const period = parseAnalyticsPeriod(query);

@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { createCandidateFollowUpWebWorkflow } from "@/lib/candidate-follow-ups";
+import { configuredAuthorizationDependencies, requireOwnedCandidate } from "@/lib/authorization";
 
 function candidatePath(candidateId: string) {
   return `/candidates/${encodeURIComponent(candidateId)}`;
@@ -18,6 +19,12 @@ function localDateTimeToUtc(value: string) {
   }
 
   return parsed.toISOString();
+}
+
+async function authorizeCandidate(candidateId: string): Promise<void> {
+  const dependencies = configuredAuthorizationDependencies();
+  const result = dependencies.ok ? await requireOwnedCandidate(candidateId, dependencies.value) : dependencies;
+  if (!result.ok) throw new Error("Resursen kunde inte hittas.");
 }
 
 export async function createFollowUpAction(formData: FormData) {
@@ -43,6 +50,7 @@ export async function createFollowUpAction(formData: FormData) {
   if (!dueAt) {
     throw new Error("Follow-up due date is required.");
   }
+  await authorizeCandidate(candidateId);
 
   const workflow = createCandidateFollowUpWebWorkflow();
 
@@ -83,6 +91,7 @@ export async function completeFollowUpAction(formData: FormData) {
   if (!candidateId || !followUpId) {
     throw new Error("Candidate ID and follow-up ID are required.");
   }
+  await authorizeCandidate(candidateId);
 
   const workflow = createCandidateFollowUpWebWorkflow();
 
@@ -139,6 +148,7 @@ export async function createGoalAction(formData: FormData) {
   if (!title) {
     throw new Error("Goal title is required.");
   }
+  await authorizeCandidate(candidateId);
 
   const workflow = createCoachOperationsWebWorkflow();
 
@@ -183,6 +193,7 @@ export async function transitionGoalAction(formData: FormData) {
   if (!candidateId || !goalId || !goalStatuses.has(status)) {
     throw new Error("Candidate ID, goal ID, and valid status are required.");
   }
+  await authorizeCandidate(candidateId);
 
   const workflow = createCoachOperationsWebWorkflow();
 
@@ -241,6 +252,7 @@ export async function createActivityAction(formData: FormData) {
   if (!candidateId || !activityKinds.has(kind)) {
     throw new Error("Candidate ID and valid activity kind are required.");
   }
+  await authorizeCandidate(candidateId);
 
   const workflow = createCoachOperationsWebWorkflow();
 
@@ -299,6 +311,7 @@ export async function transitionActivityAction(formData: FormData) {
       "Candidate ID, activity ID, and valid status are required.",
     );
   }
+  await authorizeCandidate(candidateId);
 
   const workflow = createCoachOperationsWebWorkflow();
 
@@ -338,6 +351,7 @@ export async function createNoteAction(formData: FormData) {
   if (!candidateId || !text) {
     throw new Error("Candidate ID and note text are required.");
   }
+  await authorizeCandidate(candidateId);
 
   const workflow = createCoachOperationsWebWorkflow();
 
@@ -383,6 +397,7 @@ export async function updateNoteAction(formData: FormData) {
       "Candidate ID, note ID, and note text are required.",
     );
   }
+  await authorizeCandidate(candidateId);
 
   const workflow = createCoachOperationsWebWorkflow();
 

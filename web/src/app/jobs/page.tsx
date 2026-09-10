@@ -6,6 +6,7 @@ import { loadCoachCandidates } from "@/lib/coach-candidates";
 import { searchWebJobs } from "@/lib/jobs";
 import styles from "../page.module.css";
 import { startApplicationAction } from "./actions";
+import { configuredAuthorizationDependencies, getAuthorizedCandidateContext } from "@/lib/authorization";
 
 export const dynamic = "force-dynamic";
 
@@ -141,16 +142,20 @@ function formatRequirement(requirement: string): string {
 export default async function JobsPage({ searchParams }: JobsPageProps) {
   const params = await searchParams;
 
-  const candidateId = firstValue(params.candidateId);
+  const requestedCandidateId = firstValue(params.candidateId);
   const query = firstValue(params.query);
   const location = firstValue(params.location);
   const limit = parseLimit(params.limit);
   const applicationError = firstValue(params.applicationError);
 
-  const candidatesResult = await loadCoachCandidates();
-  const selectedCandidate = candidatesResult.candidates.find(
-    (candidate) => candidate.id === candidateId,
-  );
+  const authorization = configuredAuthorizationDependencies();
+  if (!authorization.ok) return <main className={styles.main}><section className={styles.panel}><h1>Jobb kunde inte visas</h1><p>Resursen kunde inte hittas.</p></section></main>;
+  const authorized = authorization.ok ? await getAuthorizedCandidateContext(authorization.value) : null;
+  const candidateId = authorized?.ok ? authorized.value.candidate.id : requestedCandidateId;
+  const candidatesResult = authorized?.ok
+    ? { configured: true as const, error: null, candidates: [authorized.value.candidate] }
+    : await loadCoachCandidates();
+  const selectedCandidate = candidatesResult.candidates.find((candidate) => candidate.id === candidateId);
 
   const hasSearch = query.length > 0 || location.length > 0;
 

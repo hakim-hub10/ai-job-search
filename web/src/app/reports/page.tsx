@@ -1,11 +1,15 @@
 import Link from "next/link";
 
 import { loadCoachCandidates } from "@/lib/coach-candidates";
+import { configuredAuthorizationDependencies, getAuthorizedCandidateContext } from "@/lib/authorization";
 import styles from "../page.module.css";
 
 export const dynamic = "force-dynamic";
 
 export default async function ReportsPage() {
+  const authorization = configuredAuthorizationDependencies();
+  if (!authorization.ok) return <main className={styles.main}><section className={styles.panel}><h1>Rapportvyn kunde inte visas</h1><p>Resursen kunde inte hittas.</p></section></main>;
+  if (authorization.ok && (await getAuthorizedCandidateContext(authorization.value)).ok) return <main className={styles.main}><section className={styles.panel}><h1>Rapportvyn kunde inte visas</h1><p>Portföljrapporter för flera kandidater är inte tillgängliga för jobbsökare.</p></section></main>;
   const result = await loadCoachCandidates();
 
   return (

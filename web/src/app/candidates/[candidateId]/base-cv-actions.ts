@@ -8,6 +8,7 @@ import {
   updateCandidateBaseCv,
 } from "@/lib/candidate-base-cv-state";
 import type { CandidateBaseCvVisibility } from "@/lib/candidate-base-cv";
+import { configuredAuthorizationDependencies, requireOwnedCandidate } from "@/lib/authorization";
 
 function text(formData: FormData, name: string): string {
   const value = formData.get(name);
@@ -44,6 +45,9 @@ function throwForFailure(message: string, error: { code: string }): never {
 
 export async function createBaseCvAction(formData: FormData) {
   const candidateId = text(formData, "candidateId");
+  const authorization = configuredAuthorizationDependencies();
+  const owned = authorization.ok ? await requireOwnedCandidate(candidateId, authorization.value) : authorization;
+  if (!owned.ok) throw new Error("Grund-CV:t kunde inte skapas.");
   const result = await initializeCandidateBaseCv(candidateId);
 
   if (!result.ok) throwForFailure("Grund-CV:t kunde inte skapas.", result);
@@ -54,6 +58,9 @@ export async function createBaseCvAction(formData: FormData) {
 
 export async function updateBaseCvAction(formData: FormData) {
   const candidateId = text(formData, "candidateId");
+  const authorization = configuredAuthorizationDependencies();
+  const owned = authorization.ok ? await requireOwnedCandidate(candidateId, authorization.value) : authorization;
+  if (!owned.ok) throw new Error("Grund-CV:t kunde inte sparas.");
   const result = await updateCandidateBaseCv(candidateId, {
     headline: text(formData, "headline"),
     summary: text(formData, "summary"),

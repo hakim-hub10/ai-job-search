@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { loadCandidateOperationalOverview } from "@/lib/candidate-overview";
+import { configuredAuthorizationDependencies, requireOwnedCandidate } from "@/lib/authorization";
 import OnboardingClient from "./onboarding-client";
 import styles from "../../../page.module.css";
 
@@ -8,6 +9,9 @@ export const dynamic = "force-dynamic";
 
 export default async function CandidateOnboardingPage({ params }: { params: Promise<{ candidateId: string }> }) {
   const { candidateId } = await params;
+  const authorization = configuredAuthorizationDependencies();
+  const owned = authorization.ok ? await requireOwnedCandidate(candidateId, authorization.value) : authorization;
+  if (!owned.ok) return <main className={styles.main}><section className={styles.panel}><h1>Kandidaten kunde inte laddas</h1><p>Resursen kunde inte hittas.</p></section></main>;
   const result = await loadCandidateOperationalOverview(candidateId);
 
   if (!result.configured || result.error || !result.candidate) {
