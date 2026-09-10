@@ -43,6 +43,10 @@ The one-candidate invariant is completed in the next ownership phase by the serv
 
 The current `candidateId` routes remain local preview routes and are not authorized by this phase. Authentication foundation does not claim route protection. Candidate ownership enforcement is Phase 15.4-15.6 work.
 
+## Phase 15.4 ownership runtime
+
+The job-seeker ownership resolver reserves a generated candidate ID in PostgreSQL before creating the minimal legacy JSON candidate record. Database uniqueness constraints make concurrent requests for one user converge on one owner row; losing requests resolve that row rather than creating another candidate. A later request repairs a reserved row whose legacy candidate is missing by creating that exact reserved ID. If JSON candidate creation fails after reservation, the result is an explicit failure and the reservation remains recoverable; this split PostgreSQL/JSON sequence is not a cross-store transaction. Existing unowned legacy candidates are never assigned automatically, and CV names do not affect ownership.
+
 ## Phase 15.3 authentication flow
 
 Email/password registration, login, and logout use Better Auth's official browser client and database-backed sessions. The UI uses fixed internal redirects only; no candidate is created during authentication. Better Auth owns password handling, hashing, session cookies, origin checks, and server-side session invalidation. Email delivery/verification and production-grade login rate limiting are not configured until the later security/UX hardening phases; no fake email sending or custom in-memory brute-force protection is included.
