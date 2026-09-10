@@ -42,7 +42,7 @@ function formatSearchError(
 
 function formatApplicationError(code: string): string {
   const messages: Record<string, string> = {
-    CONFIGURATION_MISSING: "Ansökningsarkivet eller jobbcoachens arbetsyta är inte konfigurerad.",
+    CONFIGURATION_MISSING: "Det finns ett tekniskt problem med att skapa ansökningar just nu.",
     INVALID_INPUT: "Kandidatens eller jobbets information är ogiltig.",
     CANDIDATE_NOT_FOUND: "Den valda kandidaten kunde inte hittas.",
     CANDIDATE_STORAGE_FAILURE: "Kandidatregistret kunde inte läsas.",
@@ -50,7 +50,7 @@ function formatApplicationError(code: string): string {
     PROFILE_STORAGE_FAILURE: "Kandidatprofilen kunde inte läsas.",
     SEARCH_FAILED: "Jobbet kunde inte hämtas igen för att skapa ansökan.",
     JOB_NOT_FOUND: "Det valda jobbet kunde inte hittas i den aktuella sökningen.",
-    APPLICATION_STORAGE_FAILURE: "Ansökningsarkivet kunde inte uppdateras.",
+    APPLICATION_STORAGE_FAILURE: "Din ansökan kunde inte sparas just nu.",
     DUPLICATE_APPLICATION: "Det finns redan en ansökan för det här jobbet och kandidaten.",
     APPLICATION_CREATION_FAILED: "Ansökan kunde inte skapas.",
     APPLICATION_ASSOCIATION_FAILED: "Ansökan skapades, men kunde inte kopplas till kandidaten.",
@@ -194,7 +194,7 @@ export default async function JobsPage({ searchParams }: JobsPageProps) {
           <div className={styles.logoMark}>AC</div>
           <div>
             <strong>AI Career Agent</strong>
-            <span>Sverige – Förhandsversion</span>
+            <span>Sverige</span>
           </div>
         </div>
 
@@ -208,8 +208,8 @@ export default async function JobsPage({ searchParams }: JobsPageProps) {
         </nav>
 
         <div className={styles.sidebarFooter}>
-          <span>Lokal förhandsversion</span>
-          <small>Ingen molnsynkronisering</small>
+          <span>Personlig arbetsyta</span>
+          <small>Din jobbsökning</small>
         </div>
       </aside>
 

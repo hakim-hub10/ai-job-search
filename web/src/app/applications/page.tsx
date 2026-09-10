@@ -42,7 +42,7 @@ export default async function ApplicationsPage() {
           <div className={styles.logoMark}>AC</div>
           <div>
             <strong>AI Career Agent</strong>
-            <span>Förhandsversion Sverige</span>
+            <span>Din arbetsyta</span>
           </div>
         </div>
 
@@ -54,8 +54,8 @@ export default async function ApplicationsPage() {
         </nav>
 
         <div className={styles.sidebarFooter}>
-          <span>Lokal förhandsversion</span>
-          <small>Ingen molnsynkronisering</small>
+          <span>Personlig arbetsyta</span>
+          <small>Din jobbsökning</small>
         </div>
       </aside>
 
@@ -65,31 +65,31 @@ export default async function ApplicationsPage() {
             <p className={styles.eyebrow}>Ansökningsyta</p>
             <h1>Ansökningar</h1>
             <p className={styles.subtitle}>
-              Ansökningar från det lokala ansökningsarkivet.
+              Här ser du dina sparade ansökningar.
             </p>
           </div>
 
           <div className={styles.status}>
             <span className={styles.statusDot} />
-            Lokalt arkiv
+            Dina ansökningar
           </div>
         </header>
 
         {!result.configured ? (
           <section className={styles.panel}>
             <div className={styles.emptyState}>
-              <strong>Ansökningsarkivet är inte konfigurerat</strong>
+              <strong>Ansökningar kan inte visas just nu</strong>
               <p>
-                Ansökningsarkivet behöver konfigureras innan poster kan laddas.
+                Det finns ett tekniskt problem med att hämta dina ansökningar.
               </p>
             </div>
           </section>
         ) : result.error ? (
           <section className={styles.panel}>
             <div className={styles.emptyState}>
-              <strong>Ansökningsarkivet kunde inte laddas</strong>
+              <strong>Dina ansökningar kunde inte laddas</strong>
               <p>
-                Ansökningsarkivet kunde inte läsas just nu.
+                Det gick inte att läsa dina ansökningar just nu.
               </p>
             </div>
           </section>
@@ -98,8 +98,7 @@ export default async function ApplicationsPage() {
             <div className={styles.emptyState}>
               <strong>Inga ansökningar hittades</strong>
               <p>
-                Det konfigurerade ansökningsarkivet innehåller för närvarande inga
-                ansökningsposter.
+                Du har inga sparade ansökningar ännu.
               </p>
             </div>
           </section>

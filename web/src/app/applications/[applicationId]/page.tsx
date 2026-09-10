@@ -70,7 +70,7 @@ export default async function ApplicationDetailPage({
     return (
       <main style={{ maxWidth: 900, margin: "0 auto", padding: "48px 24px" }}>
         <Link href="/applications">← Ansökningar</Link>
-        <h1>Ansökningsarkivet är inte konfigurerat</h1>
+        <h1>Ansökningar kan inte visas just nu</h1>
       </main>
     );
   }
@@ -80,7 +80,7 @@ export default async function ApplicationDetailPage({
       <main style={{ maxWidth: 900, margin: "0 auto", padding: "48px 24px" }}>
         <Link href="/applications">← Ansökningar</Link>
         <h1>Ansökan kunde inte laddas</h1>
-        <p>Ansökan hittades inte i det lokala ansökningsarkivet.</p>
+        <p>Ansökan hittades inte i din lista.</p>
       </main>
     );
   }
@@ -104,10 +104,6 @@ export default async function ApplicationDetailPage({
         {application.jobSnapshot.company ?? "Företag saknas"}
         {" · "}
         {application.jobSnapshot.location ?? "Plats saknas"}
-      </p>
-
-      <p>
-        <strong>ID:</strong> {application.id}
       </p>
 
       <p>
