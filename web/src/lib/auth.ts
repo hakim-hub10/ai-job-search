@@ -10,6 +10,9 @@ function createAuth() {
   return betterAuth({
     database: getAuthDatabase(),
     secret: environment.secret,
+    emailAndPassword: {
+      enabled: true,
+    },
     ...(environment.baseUrl ? { baseURL: environment.baseUrl } : {}),
   });
 }

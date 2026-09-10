@@ -42,3 +42,7 @@ The one-candidate invariant is completed in the next ownership phase by the serv
 `auth-db.ts`, `auth.ts`, and `auth-session.ts` are server-only. The pool is lazy and process-singleton scoped for Next.js development hot reload. The session helper returns only a minimal user projection and never accepts a client-supplied user ID.
 
 The current `candidateId` routes remain local preview routes and are not authorized by this phase. Authentication foundation does not claim route protection. Candidate ownership enforcement is Phase 15.4-15.6 work.
+
+## Phase 15.3 authentication flow
+
+Email/password registration, login, and logout use Better Auth's official browser client and database-backed sessions. The UI uses fixed internal redirects only; no candidate is created during authentication. Better Auth owns password handling, hashing, session cookies, origin checks, and server-side session invalidation. Email delivery/verification and production-grade login rate limiting are not configured until the later security/UX hardening phases; no fake email sending or custom in-memory brute-force protection is included.

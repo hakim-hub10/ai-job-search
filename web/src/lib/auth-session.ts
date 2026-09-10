@@ -22,3 +22,9 @@ export async function getAuthenticatedUser(): Promise<AuthenticatedUser | null> 
     emailVerified: session.user.emailVerified,
   };
 }
+
+export async function requireAuthenticatedUser(): Promise<AuthenticatedUser> {
+  const user = await getAuthenticatedUser();
+  if (!user) throw new Error("Authentication is required.");
+  return user;
+}
