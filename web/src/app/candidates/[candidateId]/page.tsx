@@ -104,17 +104,9 @@ export default async function CandidatePage({
             Översikt
           </Link>
           <Link href="/jobs" className={styles.navItem}>Jobb</Link>
-          <Link href="/candidates" className={`${styles.navItem} ${styles.active}`}>
-            Kandidater
-          </Link>
+          <Link href={`/candidates/${encodeURIComponent(candidateId)}`} className={`${styles.navItem} ${styles.active}`}>Min profil</Link>
           <Link href="/applications" className={styles.navItem}>
             Ansökningar
-          </Link>
-          <Link href="/coach" className={styles.navItem}>
-            Jobbcoach
-          </Link>
-          <Link href="/reports" className={styles.navItem}>
-            Rapporter
           </Link>
         </nav>
       </aside>

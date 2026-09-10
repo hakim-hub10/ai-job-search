@@ -1,229 +1,64 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
-import { loadDashboardData } from "@/lib/dashboard";
-import { configuredAuthorizationDependencies, getAuthorizedCandidateContext } from "@/lib/authorization";
+import { getAuthenticatedUser } from "@/lib/auth-session";
+import { getOrCreateOwnedCandidateForUser } from "@/lib/job-seeker-ownership";
+import { loadCandidateProfile } from "@/lib/candidate-profiles";
 
 import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
 
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat("sv-SE", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: "UTC",
-  }).format(new Date(value));
-}
-
 export default async function Home() {
-  const authorization = configuredAuthorizationDependencies();
-  if (!authorization.ok || (await getAuthorizedCandidateContext(authorization.value)).ok) {
-    return <main className={styles.main}><section className={styles.panel}><h1>Översikten är inte tillgänglig</h1><p>Den här portföljvyn kräver en framtida coachbehörighet.</p></section></main>;
+  let user = null;
+  try {
+    user = await getAuthenticatedUser();
+  } catch {
+    user = null;
   }
-  const data = await loadDashboardData();
+  if (!user) {
+    return <main className={styles.main}><section className={styles.panel}><p className={styles.eyebrow}>AI-jobbcoach</p><h1>Din jobbsökning börjar här</h1><p>Logga in för att fortsätta till din profil och dina jobb.</p><p><Link href="/login">Logga in</Link> · <Link href="/register">Skapa konto</Link></p></section></main>;
+  }
 
-  const openFollowUps = data.followUps.filter(
-    (followUp) => followUp.completedAt === undefined,
-  );
+  const owned = await getOrCreateOwnedCandidateForUser(user);
+  if (!owned.ok) return <main className={styles.main}><section className={styles.panel}><h1>Din profil kunde inte laddas</h1><p>Försök igen senare.</p></section></main>;
+  const profile = await loadCandidateProfile(owned.value.id);
+  if (!profile.profile) redirect(`/candidates/${encodeURIComponent(owned.value.id)}/onboarding`);
 
-  const recentAnsökningar = data.applications.slice(0, 5);
-  const upcomingFollowUps = openFollowUps.slice(0, 5);
-
-  return (
-    <div className={styles.shell}>
+  return <div className={styles.shell}>
       <aside className={styles.sidebar}>
         <div className={styles.brand}>
           <div className={styles.logoMark}>AC</div>
           <div>
             <strong>AI Career Agent</strong>
-            <span>Sverige – Förhandsversion</span>
+            <span>Din jobbsökning</span>
           </div>
         </div>
 
         <nav className={styles.nav}>
-          <Link className={styles.active} href="/">
-            Översikt
-          </Link>
-          <Link href="/jobs">Jobb</Link>
-          <Link href="/candidates">Kandidater</Link>
-          <Link href="/applications">Ansökningar</Link>
-          <Link href="/coach">Jobbcoach</Link>
-          <Link href="/reports">Rapporter</Link>
-          <Link href="/analytics">Analys</Link>
+          <Link className={styles.active} href="/">Översikt</Link>
+          <Link href={`/candidates/${encodeURIComponent(owned.value.id)}`}>Min profil</Link>
+          <Link href="/jobs">Hitta jobb</Link>
+          <Link href="/applications">Mina ansökningar</Link>
         </nav>
 
         <div className={styles.sidebarFooter}>
-          <span>Lokal förhandsversion</span>
-          <small>Ingen molnsynkronisering</small>
+          <span>Personlig arbetsyta</span>
+          <small>Din profil och dina ansökningar</small>
         </div>
       </aside>
 
       <main className={styles.main}>
         <header className={styles.header}>
-          <div>
-            <p className={styles.eyebrow}>Översikt</p>
-            <h1>Översikt</h1>
-            <p className={styles.subtitle}>
-              En lokal förhandsversion av din AI Career Agent-arbetsyta.
-            </p>
-          </div>
+          <div><p className={styles.eyebrow}>Översikt</p><h1>Hej, {user.name || "där"}</h1><p className={styles.subtitle}>Fortsätt med din profil, hitta jobb och följ dina ansökningar.</p></div>
 
-          <div className={styles.status}>
-            <span className={styles.statusDot} />
-            {data.configured && !data.error
-              ? "Local data connected"
-              : "Preview mode"}
-          </div>
+          <Link href={`/candidates/${encodeURIComponent(owned.value.id)}`}>Öppna min profil</Link>
         </header>
 
-        {data.error ? (
-          <section className={styles.panel}>
-            <div className={styles.emptyState}>
-              <strong>Översiktsdata kunde inte laddas</strong>
-              <p>
-                Check the configured local repositories and try again.
-              </p>
-            </div>
-          </section>
-        ) : null}
-
-        <section className={styles.cards}>
-          <article className={styles.card}>
-            <span>Kandidater</span>
-            <strong>{data.configured ? data.candidates.length : "—"}</strong>
-            <small>
-              {data.configured
-                ? "Lokala kandidatposter"
-                : "Jobbcoachens arkiv är inte konfigurerat"}
-            </small>
-          </article>
-
-          <article className={styles.card}>
-            <span>Ansökningar</span>
-            <strong>{data.configured ? data.applications.length : "—"}</strong>
-            <small>
-              {data.configured
-                ? "Lokala ansökningsposter"
-                : "Ansökningsarkivet är inte konfigurerat"}
-            </small>
-          </article>
-
-          <article className={styles.card}>
-            <span>Uppföljningar</span>
-            <strong>{data.configured ? openFollowUps.length : "—"}</strong>
-            <small>
-              {data.configured
-                ? "Öppna uppföljningar"
-                : "Jobbcoachens arkiv är inte konfigurerat"}
-            </small>
-          </article>
-
-          <article className={styles.card}>
-            <span>Rapporter</span>
-            <strong>{data.configured ? data.candidates.length : "—"}</strong>
-            <small>
-              {data.configured
-                ? "Kandidatrapporter tillgängliga"
-                : "Rapportarkiven är inte konfigurerade"}
-            </small>
-          </article>
-        </section>
-
-        <section className={styles.grid}>
-          <article className={styles.panel}>
-            <div className={styles.panelHeader}>
-              <div>
-                <p className={styles.eyebrow}>Ansökningar</p>
-                <h2>Senaste ansökningarna</h2>
-              </div>
-
-              <Link href="/applications">Visa alla</Link>
-            </div>
-
-            {!data.configured ? (
-              <div className={styles.emptyState}>
-                <strong>Ansökningsarkivet är inte konfigurerat</strong>
-                <p>
-                  Configure APPLICATION_REPOSITORY to load application data.
-                </p>
-              </div>
-            ) : recentAnsökningar.length === 0 ? (
-              <div className={styles.emptyState}>
-                <strong>Inga ansökningar ännu</strong>
-                <p>Ansökningar visas här när de finns tillgängliga.</p>
-              </div>
-            ) : (
-              <div>
-                {recentAnsökningar.map((application) => (
-                  <div key={application.id}>
-                    <strong>{application.jobSnapshot.title}</strong>
-                    <p>
-                      {application.jobSnapshot.company ?? "Unknown company"}
-                      {" · "}
-                      {application.status}
-                    </p>
-                    <small>{formatDate(application.updatedAt)}</small>
-                  </div>
-                ))}
-              </div>
-            )}
-          </article>
-
-          <article className={styles.panel}>
-            <div className={styles.panelHeader}>
-              <div>
-                <p className={styles.eyebrow}>Coach</p>
-                <h2>Kommande uppföljningar</h2>
-              </div>
-            </div>
-
-            {!data.configured ? (
-              <div className={styles.emptyState}>
-                <strong>Jobbcoachens arkiv är inte konfigurerat</strong>
-                <p>Konfigurera COACH_DIR för att ladda uppföljningsdata.</p>
-              </div>
-            ) : upcomingFollowUps.length === 0 ? (
-              <div className={styles.emptyState}>
-                <strong>Inga öppna uppföljningar</strong>
-                <p>Kommande uppföljningar för kandidater visas här.</p>
-              </div>
-            ) : (
-              <div>
-                {upcomingFollowUps.map((followUp) => (
-                  <div key={followUp.id}>
-                    <strong>{followUp.candidateId}</strong>
-                    <p>
-                      Due {formatDate(followUp.dueAt)}
-                    </p>
-                    {followUp.applicationId ? (
-                      <small>Application: {followUp.applicationId}</small>
-                    ) : null}
-                  </div>
-                ))}
-              </div>
-            )}
-          </article>
-        </section>
-
         <section className={styles.panel}>
-          <div className={styles.panelHeader}>
-            <div>
-              <p className={styles.eyebrow}>Plattform</p>
-              <h2>Tillgängliga funktioner</h2>
-            </div>
-          </div>
-
-          <div className={styles.capabilities}>
-            <span>Jobbsökning</span>
-            <span>Matchning</span>
-            <span>Ansökningar</span>
-            <span>CV &amp; personligt brev</span>
-            <span>Intervjuförberedelse</span>
-            <span>Jobbcoach</span>
-            <span>Aktivitetsrapportering</span>
-          </div>
+          <div className={styles.panelHeader}><p className={styles.eyebrow}>Nästa steg</p><h2>Välj vad du vill göra nu</h2></div>
+          <div className={styles.capabilities}><Link href={`/candidates/${encodeURIComponent(owned.value.id)}`}>Kontrollera min profil</Link><Link href="/jobs">Hitta jobb</Link><Link href="/applications">Se mina ansökningar</Link></div>
         </section>
       </main>
-    </div>
-  );
+    </div>;
 }

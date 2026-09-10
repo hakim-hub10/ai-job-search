@@ -209,11 +209,8 @@ export default async function JobsPage({ searchParams }: JobsPageProps) {
           <Link className={styles.active} href="/jobs">
             Jobb
           </Link>
-          <Link href="/candidates">Kandidater</Link>
-          <Link href="/applications">Ansökningar</Link>
-          <Link href="/coach">Jobbcoach</Link>
-          <Link href="/reports">Rapporter</Link>
-          <Link href="/analytics">Analys</Link>
+          <Link href="/candidates">Min profil</Link>
+          <Link href="/applications">Mina ansökningar</Link>
         </nav>
 
         <div className={styles.sidebarFooter}>
@@ -255,18 +252,6 @@ export default async function JobsPage({ searchParams }: JobsPageProps) {
                 gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
               }}
             >
-              <label>
-                <span>Kandidat</span>
-                <select defaultValue={candidateId} name="candidateId">
-                  <option value="">Ingen kandidat vald</option>
-                  {candidatesResult.candidates.map((candidate) => (
-                    <option key={candidate.id} value={candidate.id}>
-                      {candidate.displayName}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
               <label>
                 <span>Sökord eller roll</span>
                 <input

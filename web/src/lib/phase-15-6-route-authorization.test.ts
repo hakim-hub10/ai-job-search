@@ -45,7 +45,7 @@ describe("Phase 15.6 real route/action authorization wiring", () => {
     const analytics = await source("analytics/page.tsx");
     const reports = await source("reports/page.tsx");
     const candidateCreation = await source("candidates/actions.ts");
-    expect(home).toContain("getAuthorizedCandidateContext");
+    expect(home).toContain("getOrCreateOwnedCandidateForUser");
     expect(candidates).toContain("getAuthorizedCandidateContext");
     expect(coach).toContain("getAuthorizedCandidateContext");
     expect(analytics).toContain("getAuthorizedCandidateContext");
