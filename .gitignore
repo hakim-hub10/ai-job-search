@@ -41,6 +41,9 @@ linkedin_Profile.pdf
 .env
 .env.*
 
+# Local web runtime repositories contain personal job-search data.
+.local/
+
 # Personal photos and signatures
 *.jpg
 *.jpeg
