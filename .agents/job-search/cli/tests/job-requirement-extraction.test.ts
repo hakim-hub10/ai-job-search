@@ -44,8 +44,18 @@ describe("H8.2 technical requirement extraction", () => {
       skills: ["O365"],
       description: "Experience with Azure AD and Office 365 is required.",
     }))
-    expect(result.extractedSkills).toEqual(["Microsoft Entra ID"])
-    expect(result.job.skills).toEqual(["O365", "Microsoft Entra ID"])
+    expect(result.extractedSkills).toEqual(["Active Directory"])
+    expect(result.job.skills).toEqual(["Microsoft 365", "Active Directory"])
+  })
+
+  it("canonicalizes duplicate source aliases into one requirement", () => {
+    const result = extractTechnicalRequirements(normalizeJob({
+      id: "canonical-aliases",
+      source: "test",
+      title: "Support",
+      skills: ["active-directory", "AD", "Microsoft Entra ID", "M365", "Office 365"],
+    }))
+    expect(result.job.skills).toEqual(["Active Directory", "Microsoft 365"])
   })
 
   it("preserves bounded provenance and required versus preferred importance", () => {

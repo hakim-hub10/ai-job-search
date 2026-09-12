@@ -57,6 +57,21 @@ describe("skill-gap analysis engine", () => {
     expect(kubeGap?.requirement?.importance).toBe("required")
   })
 
+  it("deduplicates equivalent technical aliases before producing skill gaps", () => {
+    const job = normalizeJob({
+      id: "deduped-alias-gap-1",
+      source: "test",
+      title: "Support",
+      skills: ["Active Directory", "active-directory", "AD", "Intune"],
+    })
+    const candidate = normalizeCandidateProfile({
+      ...defaultCandidate,
+      skills: { technical: ["Azure AD"], soft: defaultCandidate.skills.soft },
+    })
+    const result = analyzeSkillGaps(candidate, job, matchProfile(candidate, job))
+    expect(result.gaps.filter((gap) => gap.type === "missing_skill").map((gap) => gap.jobRequirement)).toEqual(["Required: Intune"])
+  })
+
   it("multiple missing technical skills: identifies all gaps", () => {
     const job = normalizeJob({
       id: "multi-gap-1",
@@ -313,6 +328,28 @@ describe("skill-gap analysis engine", () => {
 
     const langGap = result.gaps.find((g) => g.type === "missing_language")
     expect(langGap).toBeUndefined()
+  })
+
+  it("language gaps: recognizes Swedish candidate labels", () => {
+    const job = normalizeJob({
+      id: "language-alias-gap-1",
+      source: "test",
+      title: "Support Engineer",
+      company: "Corp",
+      description: "Engelska och svenska språkkunskaper krävs.",
+      skills: [],
+    })
+    const candidate = normalizeCandidateProfile({
+      ...defaultCandidate,
+      languages: [
+        { name: "Engelska", level: "Flytande" },
+        { name: "Svenska", level: "Flytande" },
+      ],
+    })
+
+    const result = analyzeSkillGaps(candidate, job, matchProfile(candidate, job))
+    expect(result.gaps.filter((gap) => gap.type === "missing_language")).toHaveLength(0)
+    expect(result.strengths.map((strength) => strength.title)).toEqual(expect.arrayContaining(["English", "Swedish"]))
   })
 
   it("certification match: candidate with required certification", () => {

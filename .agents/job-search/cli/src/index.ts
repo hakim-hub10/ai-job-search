@@ -23,6 +23,15 @@ export {
   type JobRequirementExtraction,
   type TechnicalRequirementTerm,
 } from "./job-requirement-extraction"
+export {
+  TECHNICAL_CONCEPTS,
+  SUPPORT_ROLE_CONCEPTS,
+  SOFT_SKILL_CONCEPTS,
+  canonicalConcept,
+  equivalentConcepts,
+  normalizedConceptText,
+  type ConceptDefinition,
+} from "./concept-normalization"
 
 export {
   enrichJobDetails,

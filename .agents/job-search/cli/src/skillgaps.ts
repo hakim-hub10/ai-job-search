@@ -7,6 +7,8 @@ import {
 } from "./requirements"
 import { explicitRequirementSegments } from "./requirement-context"
 import type { ExtractedTechnicalRequirement } from "./job-requirement-extraction"
+import { LANGUAGE_REQUIREMENTS, candidateHasLanguage, jobLanguageEvidenceText, jobRequiresLanguage } from "./language-normalization"
+import { TECHNICAL_CONCEPTS, equivalentConcepts } from "./concept-normalization"
 
 export type GapType = "missing_skill" | "insufficient_skill" | "missing_certification" | "missing_language" | "experience_gap" | "education_gap" | "other"
 export type GapSeverity = "critical" | "high" | "medium" | "low"
@@ -61,14 +63,26 @@ export interface SkillGapAnalysisOptions {
   technicalRequirements?: readonly ExtractedTechnicalRequirement[]
 }
 
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+}
+
+/** Whole-word containment only - a bare substring (e.g. "java" inside "javascript") is not evidence. */
+function containsWholeWord(haystack: string, needle: string): boolean {
+  if (!needle) return false
+  return new RegExp(`(?:^|[^\\p{L}\\p{N}])${escapeRegex(needle)}(?:$|[^\\p{L}\\p{N}])`, "iu").test(haystack)
+}
+
 /**
- * Fuzzy match helper - reused from matching
+ * Fuzzy match helper - kept in sync with matching.ts's fuzzyMatch so the
+ * matching engine and skill-gap analysis never disagree about what counts as
+ * a skill match.
  */
 function fuzzyMatch(str1: string | null, str2: string | null): boolean {
   if (!str1 || !str2) return false
   const s1 = str1.toLowerCase().trim()
   const s2 = str2.toLowerCase().trim()
-  return s1 === s2 || s1.includes(s2) || s2.includes(s1)
+  return s1 === s2 || containsWholeWord(s1, s2) || containsWholeWord(s2, s1)
 }
 
 /**
@@ -76,7 +90,7 @@ function fuzzyMatch(str1: string | null, str2: string | null): boolean {
  */
 function skillsOverlap(candidateSkills: string[], jobSkills: string[]): string[] {
   if (jobSkills.length === 0) return []
-  return candidateSkills.filter((cSkill) => jobSkills.some((jSkill) => fuzzyMatch(cSkill, jSkill)))
+  return candidateSkills.filter((cSkill) => jobSkills.some((jSkill) => equivalentConcepts(cSkill, jSkill, TECHNICAL_CONCEPTS) || fuzzyMatch(cSkill, jSkill)))
 }
 
 /**
@@ -103,13 +117,13 @@ function analyzeTechnicalSkillGaps(
     .find((evidence) => evidence.dimension === "technicalSkills")
   const requirementCoverage = technicalEvidence?.requirementCoverage
   const matchedJobSkills = requirementCoverage?.matchedRequirements
-    ?? jobSkills.filter((jobSkill) => candidateTechSkills.some((candidateSkill) => fuzzyMatch(candidateSkill, jobSkill)))
+    ?? jobSkills.filter((jobSkill) => candidateTechSkills.some((candidateSkill) => equivalentConcepts(candidateSkill, jobSkill, TECHNICAL_CONCEPTS) || fuzzyMatch(candidateSkill, jobSkill)))
   const missingJobSkills = requirementCoverage?.missingRequirements
     ?? jobSkills.filter((jobSkill) => !matchedJobSkills.includes(jobSkill))
 
   // Find matched skills (strengths)
   for (const jobSkill of matchedJobSkills) {
-    const candidateSkill = candidateTechSkills.find((skill) => fuzzyMatch(skill, jobSkill)) ?? jobSkill
+    const candidateSkill = candidateTechSkills.find((skill) => equivalentConcepts(skill, jobSkill, TECHNICAL_CONCEPTS) || fuzzyMatch(skill, jobSkill)) ?? jobSkill
     strengths.push({
       title: candidateSkill,
       description: `Candidate has experience with ${candidateSkill}`,
@@ -277,45 +291,37 @@ function analyzeLanguageGaps(candidate: CandidateProfile, job: NormalizedJob): {
   const gaps: SkillGap[] = []
   const strengths: SkillStrength[] = []
 
-  const description = (job.description ?? "").toLowerCase()
-  const title = (job.title ?? "").toLowerCase()
-  const fullText = `${description} ${title}`.toLowerCase()
+  // Description-only, matching checkLanguages in matching.ts (via the same
+  // jobLanguageEvidenceText helper) - a job title is too weak a signal to
+  // promote a language requirement. Reading from a different text than the
+  // matching dimension would let this gap disagree with the score: a
+  // title-only mention could raise a "high" severity gap here while the
+  // corresponding match dimension stays "unknown", which is exactly the kind
+  // of unexplainable inconsistency that must not happen.
+  const fullText = jobLanguageEvidenceText(job).toLowerCase()
 
   const candidateLanguages = candidate.languages
-  const candidateLanguageNames = candidateLanguages.map((l) => l.name.toLowerCase())
+  const candidateLanguageNames = candidateLanguages.map((language) => language.name)
 
-  // Look for language requirements
-  const languageTests: Record<string, string[]> = {
-    English: ["english", "engelska", "fluent english"],
-    Swedish: ["swedish", "svenska", "fluent swedish"],
-    German: ["german", "deutsch"],
-    French: ["french", "français"],
-    Spanish: ["spanish", "español"],
-  }
-
-  for (const [language, keywords] of Object.entries(languageTests)) {
-    const jobRequiresLanguage = keywords.some((kw) => fullText.includes(kw))
-
-    if (jobRequiresLanguage) {
-      const candidateHasLanguage = candidateLanguageNames.some((l) => l.includes(language.toLowerCase()))
-
-      if (candidateHasLanguage) {
-        const lang = candidateLanguages.find((l) => l.name.toLowerCase().includes(language.toLowerCase()))
+  for (const requirement of LANGUAGE_REQUIREMENTS) {
+    if (jobRequiresLanguage(fullText, requirement)) {
+      if (candidateHasLanguage(candidateLanguageNames, requirement)) {
+        const lang = candidateLanguages.find((language) => candidateHasLanguage([language.name], requirement))
         strengths.push({
-          title: language,
-          description: `Candidate speaks ${language} (${lang?.level || "unknown level"})`,
+          title: requirement.canonical,
+          description: `Candidate speaks ${requirement.canonical} (${lang?.level || "unknown level"})`,
           relevance: `Required by the job`,
-          evidence: `Job requires: ${language}`,
+          evidence: `Job requires: ${requirement.canonical}`,
         })
       } else {
         gaps.push({
           type: "missing_language",
-          title: `Missing: ${language}`,
-          description: `Job requires ${language} language skills, candidate does not list them`,
-          jobRequirement: `Required: ${language}`,
+          title: `Missing: ${requirement.canonical}`,
+          description: `Job requires ${requirement.canonical} language skills, candidate does not list them`,
+          jobRequirement: `Required: ${requirement.canonical}`,
           severity: "high",
-          evidence: `Job description mentions: ${keywords.filter((kw) => fullText.includes(kw)).join(", ")}`,
-          requirement: createRequirementDescriptor("language", language, "required"),
+          evidence: `Job description mentions: ${requirement.aliases.filter((alias) => fullText.includes(alias)).join(", ")}`,
+          requirement: createRequirementDescriptor("language", requirement.canonical, "required"),
         })
       }
     }

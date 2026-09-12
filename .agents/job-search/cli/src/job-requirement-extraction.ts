@@ -1,6 +1,7 @@
 import { classifiedRequirementSegments } from "./requirement-context"
 import type { RequirementImportance } from "./requirements"
 import type { NormalizedJob } from "./types"
+import { TECHNICAL_CONCEPTS, canonicalConcept } from "./concept-normalization"
 
 export interface TechnicalRequirementTerm {
   canonical: string
@@ -47,7 +48,7 @@ export const DEFAULT_TECHNICAL_REQUIREMENT_TERMS: readonly TechnicalRequirementT
   { canonical: "Linux" },
   { canonical: "macOS", aliases: ["Mac OS"] },
   { canonical: "Microsoft 365", aliases: ["Office 365", "M365", "O365"] },
-  { canonical: "Microsoft Entra ID", aliases: ["Entra ID", "Azure AD"] },
+  { canonical: "Active Directory", aliases: ["AD", "Azure AD", "Microsoft Entra ID", "Entra ID", "active-directory"] },
   { canonical: "Networking", aliases: ["network troubleshooting", "network administration"] },
   { canonical: "Power BI", aliases: ["PowerBI"] },
   { canonical: "PowerShell" },
@@ -109,7 +110,10 @@ export function extractTechnicalRequirements(
   job: Readonly<NormalizedJob>,
   terms: readonly TechnicalRequirementTerm[] = DEFAULT_TECHNICAL_REQUIREMENT_TERMS,
 ): JobRequirementExtraction {
-  const existing = [...job.skills]
+  const existing = [...new Map(job.skills.map((skill) => {
+    const canonical = canonicalConcept(skill, TECHNICAL_CONCEPTS)
+    return [canonical.normalize("NFKC").toLocaleLowerCase("en"), canonical]
+  })).values()]
   const extractedSkills: string[] = []
   const requirements: ExtractedTechnicalRequirement[] = []
 

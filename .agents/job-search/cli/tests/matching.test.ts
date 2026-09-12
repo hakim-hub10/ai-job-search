@@ -5,6 +5,7 @@ import {
   type CandidateProfile,
 } from "../src/profile"
 import { matchProfile, type MatchingResult } from "../src/matching"
+import { scoreMatch } from "../src/scoring"
 import { normalizeJob, type NormalizedJob } from "../src/index"
 
 describe("job matching engine", () => {
@@ -183,6 +184,13 @@ describe("job matching engine", () => {
 
   it("remote preference: fully remote job", () => {
     setup()
+    const unrestricted = normalizeJob({ id: "unrestricted-location", source: "test", title: "Platform Engineer", company: "Corp", location: "Stockholm", skills: [] })
+    const openCandidate = { ...defaultCandidate, locationPreferences: [] }
+    const restrictedCandidate = normalizeCandidateProfile({ ...defaultCandidate, locationPreferences: ["Jönköping"] })
+    expect(matchProfile(openCandidate, unrestricted).matchedDimensions).toContain("location")
+    expect(matchProfile(restrictedCandidate, unrestricted).conflictingDimensions).toContain("location")
+    const separateRoles = normalizeCandidateProfile({ ...defaultCandidate, targetRoles: ["IT Support", "IT Coordinator"] })
+    expect(matchProfile(separateRoles, normalizeJob({ id: "role-list", source: "test", title: "IT Coordinator", company: "Corp", skills: [] })).matchedDimensions).toContain("targetRole")
     const remoteJob = normalizeJob({
       id: "remote-1",
       source: "test",
@@ -290,6 +298,23 @@ describe("job matching engine", () => {
     expect(result.matchedDimensions).toContain("yearsOfExperience")
   })
 
+  it("recognizes explicit relevant experience without inventing a seniority level", () => {
+    setup()
+    const candidate = {
+      ...defaultCandidate,
+      workExperience: [{ title: "IT-supporttekniker", company: "Example", location: "Stockholm" }],
+    }
+    const job = normalizeJob({
+      id: "relevant-experience",
+      source: "test",
+      title: "Service Desk Technician",
+      company: "Corp",
+      description: "Relevant erfarenhet inom IT support krävs.",
+      skills: [],
+    })
+    expect(matchProfile(candidate, job).matchedDimensions).toContain("yearsOfExperience")
+  })
+
   it("experience level: junior candidate vs senior job (conflict)", () => {
     setup()
     const seniorJob = normalizeJob({
@@ -376,6 +401,114 @@ describe("job matching engine", () => {
 
     const result = matchProfile(candidate, swedishJob)
     expect(result.conflictingDimensions).toContain("languages")
+  })
+
+  it("languages: recognizes Swedish candidate labels for English and Swedish requirements", () => {
+    setup()
+    const job = normalizeJob({
+      id: "sv-language-alias-1",
+      source: "test",
+      title: "Platform Engineer",
+      company: "Corp",
+      remote: "hybrid",
+      employmentType: "full-time",
+      skills: ["TypeScript"],
+      description: "Engelska och svenska språkkunskaper krävs.",
+    })
+    const candidate = normalizeCandidateProfile({
+      ...defaultCandidate,
+      languages: [
+        { name: "Engelska", level: "Flytande" },
+        { name: "Svenska", level: "Flytande" },
+      ],
+    })
+
+    const result = matchProfile(candidate, job)
+    expect(result.matchedDimensions).toContain("languages")
+    expect(result.conflictingDimensions).not.toContain("languages")
+  })
+
+  it("recognizes equivalent technical aliases and related support-role titles without matching distinct tools", () => {
+    setup()
+    const job = normalizeJob({
+      id: "support-aliases-1",
+      source: "test",
+      title: "Service Desk Technician",
+      company: "Corp",
+      location: "Jönköping",
+      remote: "onsite",
+      employmentType: "full-time",
+      skills: ["Active Directory", "M365", "Intune"],
+    })
+    const candidate = normalizeCandidateProfile({
+      ...defaultCandidate,
+      targetRoles: ["IT-supporttekniker"],
+      skills: { technical: ["AD", "Office 365"], soft: defaultCandidate.skills.soft },
+    })
+
+    const result = matchProfile(candidate, job)
+    expect(result.matchedDimensions).toContain("targetRole")
+    const technical = result.missing.find((evidence) => evidence.dimension === "technicalSkills")
+    expect(technical?.requirementCoverage).toEqual({ matchedRequirements: ["Active Directory", "M365"], missingRequirements: ["Intune"], coverageRatio: 2 / 3 })
+    expect(scoreMatch(result).score).toBeGreaterThan(0)
+  })
+
+  it("recognizes Swedish soft-skill evidence without treating unrelated titles as matches", () => {
+    setup()
+    const candidate = normalizeCandidateProfile({
+      ...defaultCandidate,
+      targetRoles: ["Cloud Engineer"],
+      skills: { technical: defaultCandidate.skills.technical, soft: ["Problemlösning", "Kommunikation"] },
+    })
+    const job = normalizeJob({
+      id: "swedish-soft-skill-1",
+      source: "test",
+      title: "IT Support Technician",
+      company: "Corp",
+      description: "Vi söker en person med god kommunikation och problemlösning.",
+      skills: [],
+    })
+    const result = matchProfile(candidate, job)
+    expect(result.matchedDimensions).toContain("softSkills")
+    expect(result.missingDimensions).toContain("targetRole")
+  })
+
+  it("does not fabricate a targetRole match from a whole-word title fragment", () => {
+    setup()
+    const candidate = normalizeCandidateProfile({
+      ...defaultCandidate,
+      targetRoles: ["Assistant"],
+    })
+    const job = normalizeJob({
+      id: "assistant-nurse-1",
+      source: "test",
+      title: "Assistant Nurse",
+      company: "Hospital",
+      skills: [],
+    })
+    const result = matchProfile(candidate, job)
+    expect(result.matchedDimensions).not.toContain("targetRole")
+    expect(result.missingDimensions).toContain("targetRole")
+  })
+
+  it("does not fabricate a technicalSkills match from a substring of a compound term", () => {
+    setup()
+    const candidate = normalizeCandidateProfile({
+      ...defaultCandidate,
+      skills: { technical: ["Java"], soft: defaultCandidate.skills.soft },
+    })
+    const job = normalizeJob({
+      id: "javascript-1",
+      source: "test",
+      title: "Frontend Developer",
+      company: "Corp",
+      skills: ["JavaScript"],
+    })
+    const result = matchProfile(candidate, job)
+    const technical = result.missing.find((evidence) => evidence.dimension === "technicalSkills")
+    expect(result.matchedDimensions).not.toContain("technicalSkills")
+    expect(technical?.requirementCoverage?.matchedRequirements).toEqual([])
+    expect(technical?.requirementCoverage?.missingRequirements).toEqual(["JavaScript"])
   })
 
   it("empty candidate profile: normalizeCandidateProfile fills in defaults", () => {

@@ -1,5 +1,7 @@
 import type { CandidateProfile } from "./profile"
 import type { NormalizedJob } from "./types"
+import { LANGUAGE_REQUIREMENTS, candidateHasLanguage, jobLanguageEvidenceText, jobRequiresLanguage } from "./language-normalization"
+import { SOFT_SKILL_CONCEPTS, SUPPORT_ROLE_CONCEPTS, TECHNICAL_CONCEPTS, canonicalConcept, conceptAliasInText, equivalentConcepts, normalizedConceptText } from "./concept-normalization"
 
 export type MatchDimension =
   | "targetRole"
@@ -48,19 +50,34 @@ export interface MatchingResult {
   unknownDimensions: MatchDimension[]
 }
 
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+}
+
+/** Whole-word containment only - a bare substring (e.g. "java" inside "javascript") is not evidence. */
+function containsWholeWord(haystack: string, needle: string): boolean {
+  if (!needle) return false
+  return new RegExp(`(?:^|[^\\p{L}\\p{N}])${escapeRegex(needle)}(?:$|[^\\p{L}\\p{N}])`, "iu").test(haystack)
+}
+
 /**
- * Simple fuzzy string matching: case-insensitive substring or normalized comparison
+ * Case-insensitive equality or whole-word containment. Deliberately NOT used
+ * for job-title/role-identity comparisons (see checkTargetRole and
+ * checkYearsOfExperience) - a whole-word title fragment like "Assistant"
+ * inside "Assistant Nurse" is a clean word-boundary match yet still not
+ * evidence that the two roles are the same job, so those callers rely only on
+ * equivalentConcepts (exact or curated-alias equivalence).
  */
-function fuzzyMatch(str1: string | null, str2: string | null, threshold = 0.5): boolean {
+function fuzzyMatch(str1: string | null, str2: string | null): boolean {
   if (!str1 || !str2) return false
   const s1 = str1.toLowerCase().trim()
   const s2 = str2.toLowerCase().trim()
-  return s1 === s2 || s1.includes(s2) || s2.includes(s1)
+  return s1 === s2 || containsWholeWord(s1, s2) || containsWholeWord(s2, s1)
 }
 
 function getRequirementCoverage(candidateSkills: string[], requirements: string[]): RequirementCoverage {
   const matchedRequirements = requirements.filter((requirement) =>
-    candidateSkills.some((candidateSkill) => fuzzyMatch(candidateSkill, requirement)),
+    candidateSkills.some((candidateSkill) => equivalentConcepts(candidateSkill, requirement, TECHNICAL_CONCEPTS) || fuzzyMatch(candidateSkill, requirement)),
   )
   const missingRequirements = requirements.filter((requirement) => !matchedRequirements.includes(requirement))
 
@@ -190,6 +207,14 @@ function checkLocation(candidate: CandidateProfile, job: NormalizedJob): MatchEv
     }
   }
 
+  if (candidate.locationPreferences.length === 0) {
+    return {
+      dimension: "location",
+      status: "matched",
+      detail: "Candidate has no location restriction",
+    }
+  }
+
   // Check if job location matches any candidate preference
   const locationMatch = candidate.locationPreferences.some((pref) => fuzzyMatch(jobLocation, pref.toLowerCase()))
 
@@ -201,6 +226,34 @@ function checkLocation(candidate: CandidateProfile, job: NormalizedJob): MatchEv
     }
   }
 
+  // A country-level preference (e.g. "Sweden") cannot be confirmed or
+  // contradicted by a bare city name such as "Jönköping" - most sources
+  // normalize `location` to a city without the country. Comparing against
+  // the job's explicit `country` field avoids fabricating a conflict every
+  // time a candidate states a country rather than listing every city; a real
+  // country mismatch still falls through to the conflict below.
+  const countryPreferenceKeys = candidate.locationPreferences.flatMap((pref) => {
+    const key = countryKeyFor(pref)
+    return key ? [key] : []
+  })
+  if (countryPreferenceKeys.length > 0) {
+    const jobCountryKey = countryKeyFor(job.country)
+    if (!jobCountryKey) {
+      return {
+        dimension: "location",
+        status: "unknown",
+        detail: "Job does not state a country to compare against candidate's country-level location preference",
+      }
+    }
+    if (countryPreferenceKeys.includes(jobCountryKey)) {
+      return {
+        dimension: "location",
+        status: "matched",
+        detail: `Job is located in ${job.country}, matching candidate's country-level preference`,
+      }
+    }
+  }
+
   return {
     dimension: "location",
     status: "conflicting",
@@ -208,13 +261,46 @@ function checkLocation(candidate: CandidateProfile, job: NormalizedJob): MatchEv
   }
 }
 
+/** Country name aliases recognized as a country-level location preference. */
+const COUNTRY_NAME_ALIASES: Record<string, readonly string[]> = {
+  sweden: ["sweden", "sverige"],
+  denmark: ["denmark", "danmark"],
+  norway: ["norway", "norge"],
+  finland: ["finland", "suomi"],
+}
+
+/** Exact-match only: a multi-part value like "Jönköping, Sweden" is a city preference, not a country-level one. */
+function countryKeyFor(value: string | null | undefined): string | null {
+  if (!value) return null
+  const normalized = value.toLowerCase().trim()
+  for (const [key, aliases] of Object.entries(COUNTRY_NAME_ALIASES)) {
+    if (aliases.includes(normalized)) return key
+  }
+  return null
+}
+
 /**
  * Check target role / job title
  */
 function checkTargetRole(candidate: CandidateProfile, job: NormalizedJob): MatchEvidence {
-  const jobTitle = job.title.toLowerCase().trim()
+  if (candidate.targetRoles.length === 0) {
+    return {
+      dimension: "targetRole",
+      status: "unknown",
+      detail: "Candidate has not specified target roles",
+    }
+  }
 
-  const roleMatch = candidate.targetRoles.some((role) => fuzzyMatch(jobTitle, role.toLowerCase()))
+  // Canonical concept equivalence, plus bounded containment of a *recognized*
+  // concept's own phrase (see conceptAliasInText) - e.g. "IT Support" inside
+  // "English IT Support Technician". Deliberately NOT generic fuzzyMatch: a
+  // whole-word overlap on unrecognized free text (e.g. a candidate's
+  // "Assistant" target role against a job titled "Assistant Nurse") is not
+  // evidence the roles are equivalent and must never fabricate a "matched"
+  // targetRole.
+  const roleMatch = candidate.targetRoles.some((role) =>
+    equivalentConcepts(role, job.title, SUPPORT_ROLE_CONCEPTS) || conceptAliasInText(role, job.title, SUPPORT_ROLE_CONCEPTS),
+  )
 
   if (roleMatch) {
     return {
@@ -285,19 +371,19 @@ function checkSoftSkills(candidate: CandidateProfile, job: NormalizedJob): Match
     }
   }
 
-  const description = job.description.toLowerCase()
-  const softSkillKeywords = {
-    communication: ["communication", "present", "speak", "write", "articulate"],
-    "problem solving": ["problem solving", "analytical", "creative", "innovative"],
-    collaboration: ["teamwork", "collaborate", "team player", "cross-functional"],
-    ownership: ["ownership", "drive", "initiative", "self-directed", "autonomous"],
-    leadership: ["lead", "manage", "mentor", "guidance"],
+  const description = normalizedConceptText(job.description)
+  const softSkillKeywords: Record<string, readonly string[]> = {
+    communication: ["communication", "present", "speak", "write", "articulate", "kommunikation"],
+    "problem solving": ["problem solving", "analytical", "creative", "innovative", "problemlösning", "problemlosning"],
+    collaboration: ["teamwork", "collaborate", "team player", "cross functional", "samarbete"],
+    ownership: ["ownership", "drive", "initiative", "self directed", "autonomous", "ansvarstagande"],
+    leadership: ["lead", "manage", "mentor", "guidance", "ledarskap"],
   }
 
   const matchedSoftSkills: string[] = []
 
   for (const [skill, keywords] of Object.entries(softSkillKeywords)) {
-    if (candidate.skills.soft.some((s) => s.toLowerCase().includes(skill))) {
+    if (candidate.skills.soft.some((candidateSkill) => canonicalConcept(candidateSkill, SOFT_SKILL_CONCEPTS) === skill || normalizedConceptText(candidateSkill).includes(skill))) {
       if (keywords.some((kw) => description.includes(kw))) {
         matchedSoftSkills.push(skill)
       }
@@ -326,6 +412,22 @@ function checkYearsOfExperience(candidate: CandidateProfile, job: NormalizedJob)
   const jobSeniority = job.seniority?.toLowerCase().trim() ?? null
 
   if (!jobSeniority) {
+    const description = normalizedConceptText(job.description ?? "")
+    const explicitlyRequiresExperience = /\b(?:experience|erfarenhet)\b/u.test(description)
+    // Canonical concept equivalence only - a bare substring overlap (e.g. a
+    // candidate's "Assistant" title against a job titled "Assistant Nurse")
+    // is not evidence of relevant experience and must never fabricate a
+    // "matched" score for this dimension.
+    const hasRelevantExperience = candidate.workExperience.some((experience) =>
+      equivalentConcepts(experience.title, job.title, SUPPORT_ROLE_CONCEPTS),
+    )
+    if (explicitlyRequiresExperience && hasRelevantExperience) {
+      return {
+        dimension: "yearsOfExperience",
+        status: "matched",
+        detail: "Candidate has structured experience relevant to the job title",
+      }
+    }
     return {
       dimension: "yearsOfExperience",
       status: "unknown",
@@ -404,25 +506,17 @@ function checkCertifications(candidate: CandidateProfile, job: NormalizedJob): M
  * Check languages (if listed in job description or can be inferred)
  */
 function checkLanguages(candidate: CandidateProfile, job: NormalizedJob): MatchEvidence {
-  const description = (job.description ?? "").toLowerCase()
-  const title = (job.title ?? "").toLowerCase()
-  const fullText = `${description} ${title}`.toLowerCase()
+  // Description-only (see jobLanguageEvidenceText): a job title is too weak a
+  // signal to promote a language requirement, and analyzeSkillGaps reads
+  // from the same function so this dimension and the language gap it may
+  // produce never disagree about what counts as evidence.
+  const fullText = jobLanguageEvidenceText(job).toLowerCase()
 
-  const candidateLanguages = candidate.languages.map((l) => l.name.toLowerCase())
-
-  // Look for language requirements in job
-  const hasEnglishReq = fullText.includes("english") || fullText.includes("engelska")
-  const hasSwedishReq = fullText.includes("swedish") || fullText.includes("svenska")
-
-  const matchedLanguages: string[] = []
-
-  if (hasEnglishReq && candidateLanguages.some((l) => l.includes("english"))) {
-    matchedLanguages.push("English")
-  }
-
-  if (hasSwedishReq && candidateLanguages.some((l) => l.includes("swedish"))) {
-    matchedLanguages.push("Swedish")
-  }
+  const candidateLanguages = candidate.languages.map((language) => language.name)
+  const requiredLanguages = LANGUAGE_REQUIREMENTS.filter((requirement) => jobRequiresLanguage(fullText, requirement))
+  const matchedLanguages = requiredLanguages
+    .filter((requirement) => candidateHasLanguage(candidateLanguages, requirement))
+    .map((requirement) => requirement.canonical)
 
   if (matchedLanguages.length > 0) {
     return {
@@ -432,7 +526,7 @@ function checkLanguages(candidate: CandidateProfile, job: NormalizedJob): MatchE
     }
   }
 
-  if (hasEnglishReq || hasSwedishReq) {
+  if (requiredLanguages.length > 0) {
     return {
       dimension: "languages",
       status: "conflicting",
@@ -456,6 +550,14 @@ function checkPreferredIndustries(candidate: CandidateProfile, job: NormalizedJo
       dimension: "preferredIndustries",
       status: "unknown",
       detail: "Job does not specify industry category",
+    }
+  }
+
+  if (candidate.preferredIndustries.length === 0) {
+    return {
+      dimension: "preferredIndustries",
+      status: "unknown",
+      detail: "Candidate has no industry restriction",
     }
   }
 

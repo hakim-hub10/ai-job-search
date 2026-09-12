@@ -60,6 +60,34 @@ function analyzeCoverage(count: number) {
 }
 
 describe("partial technical requirement coverage", () => {
+  it("scores a strong bilingual support profile positively while retaining one genuine gap", () => {
+    const candidate = {
+      ...createDefaultCandidateProfile(),
+      targetRoles: ["IT-supporttekniker", "IT Coordinator"],
+      locationPreferences: [],
+      skills: { technical: ["AD", "Office 365", "Windows", "DNS"], soft: ["Kommunikation", "Problemlösning"] },
+      workExperience: [{ title: "IT Support Technician", company: "Example", location: "Stockholm" }],
+      languages: [{ name: "Svenska", level: "Flytande" }, { name: "Engelska", level: "Flytande" }],
+    }
+    const job = normalizeJob({
+      id: "strong-support-aliases",
+      source: "test",
+      title: "Service Desk Technician",
+      company: "Corp",
+      location: "Stockholm",
+      remote: "onsite",
+      employmentType: "full-time",
+      skills: ["Active Directory", "M365", "Windows", "Intune"],
+      description: "Erfarenhet inom IT support krävs. Kommunikation och problemlösning är viktiga. Svenska och engelska krävs.",
+    })
+    const matching = matchProfile(candidate, job)
+    const score = scoreMatch(matching)
+    const gaps = analyzeSkillGaps(candidate, job, matching)
+    expect(matching.matchedDimensions).toEqual(expect.arrayContaining(["targetRole", "location", "languages", "softSkills", "yearsOfExperience"]))
+    expect(score.score).toBeGreaterThan(0)
+    expect(gaps.gaps.filter((gap) => gap.type === "missing_skill").map((gap) => gap.jobRequirement)).toEqual(["Required: Intune"])
+  })
+
   it.each(coverageCases)("represents %d of 4 known requirements deterministically", (count, status, ratio, points, missingCount) => {
     const result = analyzeCoverage(count)
 
