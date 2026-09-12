@@ -13,7 +13,7 @@ import { extractCandidateImportPdf } from "@/lib/candidate-import-pdf";
 import { validateCandidateImportUpload } from "@/lib/candidate-import-upload";
 import { reviewCandidateImportClaim, createUserAddedCandidateImportClaim, candidateImportClaimFingerprint, type ReviewedCandidateImportClaim } from "@/lib/candidate-import-review";
 import { applyCandidateImportProfile, previewCandidateImportProfile } from "@/lib/candidate-import-profile";
-import { applyCandidateBaseCvRefresh, previewCandidateBaseCvRefresh } from "@/lib/candidate-import-base-cv";
+import { synchronizeCandidateBaseCv } from "@/lib/candidate-base-cv";
 import { parseProfileEvidence, profileCompletionIssues } from "@/lib/profile-evidence";
 import { createFileCandidateProfileRepository } from "../../../../../../.agents/job-search/cli/src/candidate-profile-file-repository";
 import { createFileCandidateBaseCvRepository } from "@/lib/candidate-base-cv-file-repository";
@@ -257,10 +257,10 @@ export async function applyCandidateOnboardingAction(formData: FormData): Promis
   }
   const currentBase = await baseCvRepository.getByCandidateId(candidateId);
   if (!currentBase.ok && currentBase.error.code !== "NOT_FOUND") return failure("BASE_CV_READ_FAILED", "CV:t kunde inte läsas.");
-  const basePreview = previewCandidateBaseCvRefresh({ candidateId, profile: updatedProfile.value.profile, baseCv: currentBase.ok ? currentBase.value : null, creationTimestamp: new Date().toISOString() });
-  if (!basePreview.ok) return failure(basePreview.error.code, "CV:t kunde inte förhandsgranskas.");
-  const baseApply = await applyCandidateBaseCvRefresh({ candidateId, preview: basePreview.value, confirmConflictPaths: confirmHeadline ? ["headline"] : [], profileRepository, baseCvRepository });
-  if (!baseApply.ok) return failure(baseApply.error.code, "Profilen sparades, men CV:t kunde inte uppdateras ännu.");
+  const nextBase = synchronizeCandidateBaseCv(candidateId, updatedProfile.value.profile, previousProfile, currentBase.ok ? currentBase.value : null, new Date().toISOString());
+  if (!nextBase.ok) return failure(nextBase.error.code, "CV:t kunde inte uppdateras.");
+  const baseSaved = await baseCvRepository.save(nextBase.value);
+  if (!baseSaved.ok) return failure("BASE_CV_SAVE_FAILED", "Profilen sparades, men CV:t kunde inte uppdateras ännu.");
   const needsCompletion = profileCompletionIssues(updatedProfile.value.profile).length > 0;
   return { ok: true, complete: true, ...(needsCompletion ? { needsCompletion: true } : {}) };
 }

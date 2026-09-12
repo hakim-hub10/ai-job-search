@@ -1,4 +1,5 @@
 import Link from "next/link";
+import StructuredProfileFields from "@/components/structured-profile-fields";
 
 import { loadCandidateOperationalOverview } from "@/lib/candidate-overview";
 import { loadCandidateFollowUps } from "@/lib/candidate-follow-ups";
@@ -181,6 +182,7 @@ export default async function CandidatePage({
                 </section>
               ) : (
                 <form
+                  id="profile-editor"
                   action={saveCandidateProfileAction}
                   className={styles.profileForm}
                 >
@@ -402,6 +404,8 @@ export default async function CandidatePage({
                   </label>
                   </div>
 
+                  <StructuredProfileFields profile={profileResult.profile} />
+                  <p>När du sparar uppdateras erfarenhet, utbildning och kompetenser i ditt grund-CV. Anpassad rubrik, sammanfattning och synlighet i grund-CV:t bevaras.</p>
                   <div className={styles.profileActions}>
                     <button
                       type="submit"
@@ -527,10 +531,25 @@ export default async function CandidatePage({
                         </p>
                       </section>
                     ) : null}
+
+                    {baseCvResult.baseCv.visibility.projects &&
+                    (baseCvResult.baseCv.projects?.length ?? 0) > 0 ? (
+                      <section>
+                        <h4>Projekt</h4>
+                        {baseCvResult.baseCv.projects!.map((project) => (
+                          <p key={project.title}>
+                            <strong>{project.title}</strong>
+                            {project.description ? `: ${project.description}` : ""}
+                            {project.technologies?.length ? ` (${project.technologies.join(", ")})` : ""}
+                          </p>
+                        ))}
+                      </section>
+                    ) : null}
                   </div>
 
                   <details className={styles.baseCvEditor}>
                     <summary>Redigera grund-CV</summary>
+                    <p>Erfarenhet, utbildning, kompetenser, certifieringar och språk hämtas från din profil vid varje profilsparning. <a href="#profile-editor">Redigera dessa uppgifter i profilen</a>. Här kan du anpassa rubrik, sammanfattning och vilka avsnitt som visas.</p>
                     <form action={updateBaseCvAction} className={styles.profileForm}>
                       <input
                         type="hidden"
@@ -566,6 +585,7 @@ export default async function CandidatePage({
                             ["softSkills", "Mjuka kompetenser"],
                             ["certifications", "Certifieringar"],
                             ["languages", "Språk"],
+                            ["projects", "Projekt"],
                           ] as const).map(([key, label]) => (
                             <label key={key} className={styles.profileOption}>
                               <input

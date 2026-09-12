@@ -25,6 +25,7 @@ function visibility(formData: FormData): CandidateBaseCvVisibility {
     softSkills: formData.get("visibility.softSkills") === "on",
     certifications: formData.get("visibility.certifications") === "on",
     languages: formData.get("visibility.languages") === "on",
+    projects: formData.get("visibility.projects") === "on",
   };
 }
 

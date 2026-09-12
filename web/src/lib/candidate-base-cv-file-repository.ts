@@ -18,6 +18,7 @@ const VISIBILITY_KEYS = [
   "summary",
   "technicalSkills",
   "workExperience",
+  "projects",
 ] as const;
 
 interface CandidateBaseCvEnvelope {
@@ -78,6 +79,29 @@ function isEducation(value: unknown): boolean {
         !(key in education) || education[key] === undefined || typeof education[key] === "number"));
 }
 
+function isProjects(value: unknown): boolean {
+  return Array.isArray(value)
+    && value.every((project) => isObject(project)
+      && hasText(project.title)
+      && (project.description === undefined || typeof project.description === "string")
+      && (project.url === undefined || typeof project.url === "string")
+      && (project.technologies === undefined || isStringArray(project.technologies))
+      && Object.keys(project).every((key) => ["title", "description", "technologies", "url"].includes(key)));
+}
+
+/**
+ * The top-level `projects` field is optional (omitted when there is no
+ * project evidence, exactly like `summary`), so records written before it
+ * existed remain valid without changes. `visibility` flags are always
+ * required booleans, though, so a pre-existing record's `visibility.projects`
+ * must be backfilled to `false` (never invented as true) for the strict
+ * validator below to accept it.
+ */
+function backfillLegacyProjects(value: unknown): unknown {
+  if (!isObject(value) || !isObject(value.visibility) || "projects" in value.visibility) return value;
+  return { ...value, visibility: { ...value.visibility, projects: false } };
+}
+
 function isVisibility(value: unknown): boolean {
   if (!isObject(value)) return false;
   const keys = Object.keys(value).sort();
@@ -92,7 +116,7 @@ export function isCandidateBaseCv(value: unknown): value is CandidateBaseCv {
   const allowedKeys = [
     "candidateId", "source", "profileUpdatedAt", "headline", "summary",
     "workExperience", "education", "technicalSkills", "softSkills",
-    "certifications", "languages", "visibility", "createdAt", "updatedAt",
+    "certifications", "languages", "projects", "visibility", "createdAt", "updatedAt",
   ].sort();
 
   const checks = [
@@ -106,7 +130,8 @@ export function isCandidateBaseCv(value: unknown): value is CandidateBaseCv {
     value.profileUpdatedAt === undefined || isTimestamp(value.profileUpdatedAt),
     isWorkExperience(value.workExperience), isEducation(value.education),
     isStringArray(value.technicalSkills), isStringArray(value.softSkills),
-    isStringArray(value.certifications), isLanguages(value.languages), isVisibility(value.visibility),
+    isStringArray(value.certifications), isLanguages(value.languages),
+    value.projects === undefined || isProjects(value.projects), isVisibility(value.visibility),
     isTimestamp(value.createdAt), isTimestamp(value.updatedAt),
   ];
   return checks.every(Boolean);
@@ -117,8 +142,9 @@ function validateEnvelope(value: unknown): CandidateBaseCvRepositoryResult<Candi
     return failure("CORRUPT_STORAGE", "Grund-CV-lagringen har ett ogiltigt format.");
   }
 
+  const backfilled = value.baseCvs.map(backfillLegacyProjects);
   const candidateIds = new Set<string>();
-  for (const baseCv of value.baseCvs) {
+  for (const baseCv of backfilled) {
     if (!isCandidateBaseCv(baseCv)) {
       return failure("CORRUPT_STORAGE", "Grund-CV-lagringen innehåller en ogiltig post.");
     }
@@ -132,7 +158,7 @@ function validateEnvelope(value: unknown): CandidateBaseCvRepositoryResult<Candi
     ok: true,
     value: {
       schemaVersion: SCHEMA_VERSION,
-      baseCvs: structuredClone(value.baseCvs).sort((a, b) => a.candidateId.localeCompare(b.candidateId)),
+      baseCvs: structuredClone(backfilled as CandidateBaseCv[]).sort((a, b) => a.candidateId.localeCompare(b.candidateId)),
     },
   };
 }

@@ -106,6 +106,24 @@ describe("candidate Base CV domain and repository", () => {
     }
   });
 
+  it("loads a Base CV record saved before the projects field existed, without inventing a visible projects section", async () => {
+    const fixture = await repositoryFixture();
+    try {
+      const legacyRecord = {
+        candidateId: "candidate-a", source: "candidateProfile", headline: "IT-supporttekniker",
+        workExperience: [], education: [], technicalSkills: ["Microsoft 365"], softSkills: [], certifications: [], languages: [],
+        visibility: { headline: true, summary: false, workExperience: false, education: false, technicalSkills: true, softSkills: false, certifications: false, languages: false },
+        createdAt: timestamp, updatedAt: timestamp,
+      };
+      await writeFile(join(fixture.directory, "candidate-cvs.json"), JSON.stringify({ schemaVersion: 1, baseCvs: [legacyRecord] }), "utf8");
+      const loaded = await fixture.repository.getByCandidateId("candidate-a");
+      expect(loaded).toMatchObject({ ok: true, value: { headline: "IT-supporttekniker", visibility: { projects: false } } });
+      if (loaded.ok) expect(loaded.value.projects).toBeUndefined();
+    } finally {
+      await rm(fixture.directory, { recursive: true, force: true });
+    }
+  });
+
   it("fails closed for corrupt storage", async () => {
     const fixture = await repositoryFixture();
     try {

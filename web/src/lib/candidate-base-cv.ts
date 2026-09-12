@@ -1,4 +1,4 @@
-import type { CandidateProfile } from "../../../.agents/job-search/cli/src/profile";
+import type { CandidateProfile, Project } from "../../../.agents/job-search/cli/src/profile";
 
 export const BASE_CV_SOURCE = "candidateProfile" as const;
 
@@ -11,6 +11,7 @@ export interface CandidateBaseCvVisibility {
   softSkills: boolean;
   certifications: boolean;
   languages: boolean;
+  projects: boolean;
 }
 
 export interface CandidateBaseCv {
@@ -25,6 +26,7 @@ export interface CandidateBaseCv {
   softSkills: string[];
   certifications: string[];
   languages: CandidateProfile["languages"];
+  projects?: Project[];
   visibility: CandidateBaseCvVisibility;
   createdAt: string;
   updatedAt: string;
@@ -94,6 +96,7 @@ export function createCandidateBaseCvFromProfile(
       softSkills: [...profile.skills.soft],
       certifications: [...profile.certifications],
       languages: structuredClone(profile.languages),
+      ...(profile.projects?.length ? { projects: structuredClone(profile.projects) } : {}),
       visibility: {
         headline: true,
         summary: Boolean(profile.summary),
@@ -103,6 +106,7 @@ export function createCandidateBaseCvFromProfile(
         softSkills: profile.skills.soft.length > 0,
         certifications: profile.certifications.length > 0,
         languages: profile.languages.length > 0,
+        projects: (profile.projects ?? []).length > 0,
       },
       createdAt,
       updatedAt: createdAt,
@@ -133,4 +137,32 @@ export function updateCandidateBaseCvPresentation(
       updatedAt: input.updatedAt,
     },
   };
+}
+
+/** Replace profile-owned evidence, preserving deliberate CV presentation edits. */
+export function synchronizeCandidateBaseCv(
+  candidateId: string,
+  profile: CandidateProfile,
+  previousProfile: CandidateProfile | null,
+  existing: CandidateBaseCv | null,
+  now: string,
+): CandidateBaseCvResult<CandidateBaseCv> {
+  if (existing && existing.candidateId !== candidateId) return failure("INVALID_CANDIDATE_ID", "Grund-CV:t tillhör inte kandidaten.");
+  const created = createCandidateBaseCvFromProfile(candidateId, profile, now);
+  if (!created.ok || !existing) return created;
+  const next = created.value;
+  next.createdAt = existing.createdAt;
+  if (previousProfile && existing.headline !== previousProfile.headline && existing.headline !== "Job seeker") next.headline = existing.headline;
+  if (previousProfile && (existing.summary ?? "") !== (previousProfile.summary ?? "")) next.summary = existing.summary;
+  // Defensive fallback for a Base CV record saved before a field existed
+  // (e.g. projects): treated as an empty/hidden section, never fabricated.
+  const existingProjectsVisible = "projects" in existing.visibility ? existing.visibility.projects : false;
+  next.visibility = { ...existing.visibility, projects: existingProjectsVisible };
+  // Newly populated sections from a minimal baseline should be visible. An
+  // existing populated section's explicit hidden setting remains unchanged.
+  for (const key of ["workExperience", "education", "technicalSkills", "softSkills", "certifications", "languages", "projects"] as const) {
+    if ((existing[key] ?? []).length === 0 && (next[key] ?? []).length > 0) next.visibility[key] = true;
+  }
+  if (!existing.summary && next.summary) next.visibility.summary = true;
+  return { ok: true, value: next };
 }

@@ -194,7 +194,12 @@ function profileEvidence(profile: CandidateProfile): CandidateDocumentEvidence[]
   profile.skills.technical.forEach((skill, index) => add(`profile:technical-skill:${index}`, "skill", skill, [{ category: "skill", value: skill }]))
   profile.skills.soft.forEach((skill, index) => add(`profile:soft-skill:${index}`, "skill", skill, [{ category: "skill", value: skill }]))
   profile.workExperience.forEach((experience, index) => {
-    const content = experience.summary?.trim() || `${experience.title} at ${experience.company}`
+    const content = [
+      `${experience.title} at ${experience.company}`,
+      experience.location,
+      [experience.startDate, experience.endDate].filter(Boolean).join(" – "),
+      experience.summary?.trim(),
+    ].filter(Boolean).join(" · ")
     add(`profile:experience:${index}`, "experience", content, undefined, {
       employer: experience.company,
       role: experience.title,
@@ -203,7 +208,7 @@ function profileEvidence(profile: CandidateProfile): CandidateDocumentEvidence[]
       endDate: experience.endDate,
     })
   })
-  profile.education.forEach((education, index) => add(`profile:education:${index}`, "education", `${education.degree} in ${education.field}, ${education.institution}`))
+  profile.education.forEach((education, index) => add(`profile:education:${index}`, "education", [`${education.degree} in ${education.field}, ${education.institution}`, [education.startYear, education.endYear].filter((year) => year !== undefined).join(" – ")].filter(Boolean).join(" · ")))
   profile.certifications.forEach((certification, index) => add(`profile:certification:${index}`, "certification", certification, [{ category: "certification", value: certification }]))
   profile.languages.forEach((language, index) => add(`profile:language:${index}`, "language", `${language.name}: ${language.level}`, [{ category: "language", value: language.name }]))
   ;(profile.projects ?? []).forEach((project, index) => add(`profile:project:${index}`, "project", [project.title, project.description?.trim(), project.technologies?.length ? project.technologies.join(", ") : undefined, project.url].filter(Boolean).join(" · ")))

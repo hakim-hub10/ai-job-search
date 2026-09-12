@@ -6,6 +6,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { parseProfileEvidence } from "@/lib/profile-evidence";
+import { synchronizeCandidateBaseCv } from "@/lib/candidate-base-cv";
+import { createFileCandidateBaseCvRepository } from "@/lib/candidate-base-cv-file-repository";
 import { parseCandidateProfile } from "../../../../../.agents/job-search/cli/src/profile-input";
 import { createFileCoachWorkspaceRepository } from "../../../../../.agents/job-search/cli/src/coach-workspace-file-repository";
 import { resolveCoachRepositoryPaths } from "../../../../../.agents/job-search/cli/src/coach-cli-paths";
@@ -126,12 +128,20 @@ export async function saveCandidateProfileAction(formData: FormData) {
   const evidence = text(formData, "structuredProfile");
   if (evidence) profile = parseProfileEvidence(evidence, profile);
   if (profile.headline.trim().toLowerCase() === "job seeker") throw new Error("Ange din yrkesrubrik.");
+  const baseRepository = createFileCandidateBaseCvRepository(resolve(coachDir, "candidate-cvs.json"));
+  const base = await baseRepository.getByCandidateId(candidateId);
+  if (!base.ok && base.error.code !== "NOT_FOUND") throw new Error("Grund-CV:t kunde inte läsas. Profilen sparades inte.");
+  const synchronized = synchronizeCandidateBaseCv(candidateId, profile, existing.ok ? existing.value.profile : null, base.ok ? base.value : null, profile.updatedAt!);
+  if (!synchronized.ok) throw new Error("Grund-CV:t kunde inte uppdateras. Profilen sparades inte.");
   const saved = await context.repository.saveProfile(candidateId, profile);
 
   if (!saved.ok) {
     throw new Error("Candidate profile could not be saved.");
   }
 
+  const baseSaved = await baseRepository.save(synchronized.value);
+  if (!baseSaved.ok) throw new Error("Profilen sparades, men grund-CV:t kunde inte uppdateras. Spara profilen igen för att försöka på nytt.");
+  revalidatePath("/");
   revalidatePath(`/candidates/${candidateId}`);
   revalidatePath("/jobs");
 
