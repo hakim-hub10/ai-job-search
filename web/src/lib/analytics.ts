@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 
 import { createFileApplicationRepository } from "../../../.agents/job-search/cli/src/application-file-repository";
 import type { ApplicationRecord } from "../../../.agents/job-search/cli/src/applications";
-import { createRequirementIdentity, requirementCategoryForGapType } from "../../../.agents/job-search/cli/src/requirements";
+import { createRequirementIdentity, requirementCategoryForGapType, type RequirementCategory } from "../../../.agents/job-search/cli/src/requirements";
 import { createFileInterviewSessionRepository } from "../../../.agents/job-search/cli/src/interview-session-file-repository";
 import { createFileInterviewPreparationRepository } from "../../../.agents/job-search/cli/src/interview-preparation-file-repository";
 import { createFileInterviewSessionPreparationLinkRepository } from "../../../.agents/job-search/cli/src/interview-session-preparation-link-file-repository";
@@ -190,30 +190,49 @@ export function deriveJobSearchAnalytics(applications: ApplicationRecord[]): Job
     searchHistory: { availability: "notTracked" }, matching: { availability: applications.length > 0 ? "available" : "unavailable", matchedRequirements: matching.matched, missingRequirements: matching.missing, conflictingRequirements: matching.conflicting, unknownRequirements: matching.unknown } };
 }
 
+/**
+ * Grouping key for analytics rollups only - deliberately broader than
+ * requirements.ts's normalizeRequirementText, which preserves punctuation so
+ * matching/scoring keep e.g. "C" and "C++" distinct (see its "preserves
+ * punctuation, hyphens, slashes, and symbols" test). A human-facing summary
+ * has different goals: it should not double-count the same requirement
+ * written two conventional ways, such as "Active Directory" and
+ * "active-directory", or "Microsoft 365" and "microsoft-365". Folding only
+ * hyphens/underscores into spaces (in addition to the existing case-folding)
+ * fixes that formatting duplication without merging symbol-bearing terms
+ * like "C++", "C#", or ".NET" that must stay distinct.
+ */
+function analyticsRequirementBucketKey(category: RequirementCategory, original: string): string {
+  const collapsed = original.normalize("NFC").trim().toLowerCase().replace(/[-_]+/gu, " ").replace(/\s+/gu, " ").trim();
+  return `${category}:${collapsed}`;
+}
+
 function aggregateApplicationRequirementStates(application: ApplicationRecord, target: Map<string, RequirementInsight>): void {
   const seen = new Set<string>();
   for (const evidence of [...application.analysisSnapshot.matchingResult.matched, ...application.analysisSnapshot.matchingResult.missing, ...application.analysisSnapshot.matchingResult.conflicting, ...application.analysisSnapshot.matchingResult.unknown]) {
     for (const label of evidence.requirementCoverage?.matchedRequirements ?? []) {
       const identity = createRequirementIdentity("skill", label);
-      const current = target.get(identity.key) ?? { requirementId: identity.key, label: identity.original, applicationsRepresented: 0, matched: 0, missing: 0, conflicting: 0, unknown: 0 };
-      if (!seen.has(identity.key)) { current.applicationsRepresented += 1; seen.add(identity.key); }
+      const bucketKey = analyticsRequirementBucketKey(identity.category, identity.original);
+      const current = target.get(bucketKey) ?? { requirementId: bucketKey, label: identity.original, applicationsRepresented: 0, matched: 0, missing: 0, conflicting: 0, unknown: 0 };
+      if (!seen.has(bucketKey)) { current.applicationsRepresented += 1; seen.add(bucketKey); }
       if (evidence.status === "matched") current.matched += 1;
       if (evidence.status === "missing") current.missing += 1;
       if (evidence.status === "conflicting") current.conflicting += 1;
       if (evidence.status === "unknown") current.unknown += 1;
       if (identity.original.localeCompare(current.label) < 0) current.label = identity.original;
-      target.set(identity.key, current);
+      target.set(bucketKey, current);
     }
     for (const label of evidence.requirementCoverage?.missingRequirements ?? []) {
       const identity = createRequirementIdentity("skill", label);
-      const current = target.get(identity.key) ?? { requirementId: identity.key, label: identity.original, applicationsRepresented: 0, matched: 0, missing: 0, conflicting: 0, unknown: 0 };
-      if (!seen.has(identity.key)) { current.applicationsRepresented += 1; seen.add(identity.key); }
+      const bucketKey = analyticsRequirementBucketKey(identity.category, identity.original);
+      const current = target.get(bucketKey) ?? { requirementId: bucketKey, label: identity.original, applicationsRepresented: 0, matched: 0, missing: 0, conflicting: 0, unknown: 0 };
+      if (!seen.has(bucketKey)) { current.applicationsRepresented += 1; seen.add(bucketKey); }
       if (evidence.status === "matched") current.matched += 1;
       if (evidence.status === "missing") current.missing += 1;
       if (evidence.status === "conflicting") current.conflicting += 1;
       if (evidence.status === "unknown") current.unknown += 1;
       if (identity.original.localeCompare(current.label) < 0) current.label = identity.original;
-      target.set(identity.key, current);
+      target.set(bucketKey, current);
     }
   }
 }
@@ -225,11 +244,12 @@ export function deriveCandidateRequirementInsights(applications: ApplicationReco
     aggregateApplicationRequirementStates(application, requirements);
     for (const gap of application.analysisSnapshot.skillGapResult.gaps) {
       const identity = gap.requirement?.identity ?? createRequirementIdentity(requirementCategoryForGapType(gap.type), gap.jobRequirement);
-      const current = gaps.get(identity.key) ?? { label: identity.original, applications: new Set<string>(), occurrences: 0, severities: new Map<string, number>() };
+      const bucketKey = analyticsRequirementBucketKey(identity.category, identity.original);
+      const current = gaps.get(bucketKey) ?? { label: identity.original, applications: new Set<string>(), occurrences: 0, severities: new Map<string, number>() };
       current.label = current.label.localeCompare(identity.original) <= 0 ? current.label : identity.original;
       current.applications.add(application.id); current.occurrences += 1;
       current.severities.set(gap.severity, (current.severities.get(gap.severity) ?? 0) + 1);
-      gaps.set(identity.key, current);
+      gaps.set(bucketKey, current);
     }
   }
   return { availability: "available", applicationsTotal: applications.length, applicationsWithAnalysis: applications.length, applicationsWithoutAnalysis: 0,

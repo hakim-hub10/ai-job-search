@@ -70,6 +70,38 @@ describe("candidate requirement insights", () => {
     expect(result.requirements.find((item) => item.requirementId === "skill:microsoft 365")).toMatchObject({ applicationsRepresented: 2, matched: 1, missing: 0, conflicting: 1, unknown: 1 });
     expect(result.requirements.find((item) => item.requirementId === "skill:active directory")).toMatchObject({ applicationsRepresented: 1, matched: 0, missing: 1, conflicting: 0, unknown: 0 });
   });
+  it("groups casing and hyphen/underscore formatting of the same requirement into one analytics bucket", () => {
+    const first = application("a", "jobtech", "Malmö", "Support");
+    const second = application("b", "jobtech", "Malmö", "Support");
+    const evidence = (label: string) => ({ dimension: "technicalSkills" as const, status: "missing" as const, detail: "stored", requirementCoverage: { matchedRequirements: [], missingRequirements: [label], coverageRatio: 0 } });
+    first.analysisSnapshot.matchingResult.missing = [evidence("Active Directory")]; first.analysisSnapshot.matchingResult.totalMissing = 1;
+    second.analysisSnapshot.matchingResult.missing = [evidence("active-directory")]; second.analysisSnapshot.matchingResult.totalMissing = 1;
+    const result = deriveCandidateRequirementInsights([first, second]);
+    const bucket = result.requirements.find((item) => item.requirementId === "skill:active directory");
+    expect(bucket).toMatchObject({ applicationsRepresented: 2, missing: 2 });
+    expect(result.requirements.filter((item) => item.label.toLowerCase().includes("active"))).toHaveLength(1);
+  });
+  it("does not merge genuinely distinct symbol-bearing requirements such as C and C++", () => {
+    const first = application("a", "jobtech", "Malmö", "Developer");
+    const second = application("b", "jobtech", "Malmö", "Developer");
+    const evidence = (label: string) => ({ dimension: "technicalSkills" as const, status: "missing" as const, detail: "stored", requirementCoverage: { matchedRequirements: [], missingRequirements: [label], coverageRatio: 0 } });
+    first.analysisSnapshot.matchingResult.missing = [evidence("C")]; first.analysisSnapshot.matchingResult.totalMissing = 1;
+    second.analysisSnapshot.matchingResult.missing = [evidence("C++")]; second.analysisSnapshot.matchingResult.totalMissing = 1;
+    const result = deriveCandidateRequirementInsights([first, second]);
+    expect(result.requirements.find((item) => item.label === "C")).toMatchObject({ applicationsRepresented: 1 });
+    expect(result.requirements.find((item) => item.label === "C++")).toMatchObject({ applicationsRepresented: 1 });
+    expect(result.requirements).toHaveLength(2);
+  });
+  it("groups hyphen/underscore formatting duplicates in skill gaps without merging different domains' generic terms across categories", () => {
+    const first = application("a", "jobtech", "Malmö", "Logistics coordinator");
+    const second = application("b", "jobtech", "Malmö", "Logistics coordinator");
+    const gap = (label: string, category: "skill" | "certification") => ({ type: "missing_skill" as const, title: `Missing: ${label}`, description: "stored", jobRequirement: label, severity: "high" as const, evidence: "stored", requirement: { identity: { key: `${category}:${label.toLowerCase()}`, original: label, normalized: label.toLowerCase(), category }, importance: "required" as const } });
+    first.analysisSnapshot.skillGapResult.gaps = [gap("Forklift_licence", "certification")]; first.analysisSnapshot.skillGapResult.totalGaps = 1;
+    second.analysisSnapshot.skillGapResult.gaps = [gap("Forklift-licence", "certification")]; second.analysisSnapshot.skillGapResult.totalGaps = 1;
+    const result = deriveCandidateRequirementInsights([first, second]);
+    expect(result.skillGaps).toHaveLength(1);
+    expect(result.skillGaps[0]).toMatchObject({ applicationsRepresented: 2, occurrences: 2 });
+  });
   it("aggregates persisted skill gaps without scores or recommendation synthesis", () => {
     const first = application("a", "jobtech", "Malmö", "Support");
     first.analysisSnapshot.skillGapResult.gaps = [{ type: "missing_skill", title: "Missing: Docker", description: "stored", jobRequirement: "Required: Docker", severity: "high", evidence: "stored", requirement: { identity: { key: "skill:docker", original: "Docker", normalized: "docker", category: "skill" }, importance: "required" } }]; first.analysisSnapshot.skillGapResult.totalGaps = 1; first.analysisSnapshot.skillGapResult.highGaps = 1;
