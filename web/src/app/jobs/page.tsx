@@ -1,4 +1,7 @@
 import Link from "next/link";
+import { MatchConfidenceSummary } from "@/components/match-confidence-summary";
+import { unknownEvidenceLabel } from "@/lib/match-confidence";
+import PersonalNavigation from "@/components/personal-navigation";
 
 import { analyzeJobsForCandidate } from "@/lib/candidate-job-matching";
 import { loadCandidateProfileRepository } from "@/lib/candidate-profiles";
@@ -198,14 +201,7 @@ export default async function JobsPage({ searchParams }: JobsPageProps) {
           </div>
         </div>
 
-        <nav className={styles.nav}>
-          <Link href="/">Översikt</Link>
-          <Link className={styles.active} href="/jobs">
-            Jobb
-          </Link>
-          <Link href="/candidates">Min profil</Link>
-          <Link href="/applications">Mina ansökningar</Link>
-        </nav>
+        <PersonalNavigation candidateId={authorized.value.candidate.id} active="jobs" />
 
         <div className={styles.sidebarFooter}>
           <span>Personlig arbetsyta</span>
@@ -369,9 +365,7 @@ export default async function JobsPage({ searchParams }: JobsPageProps) {
                         <div className={styles.jobResultHeader}>
                           <strong>{job.title}</strong>
                           <p>{job.company ?? "Företag saknas"}</p>
-                          <p>
-                            Matchningsgrad: <strong>{ranked.score}/100</strong>
-                          </p>
+                          <MatchConfidenceSummary ranked={ranked} />
                         </div>
 
                         <div className={styles.candidateMeta}>
@@ -403,20 +397,6 @@ export default async function JobsPage({ searchParams }: JobsPageProps) {
                             </section>
 
                             <section className={styles.analysisSection}>
-                              <h4>Matchade krav</h4>
-                              <ul>
-                                {ranked.matchingResult.matched
-                                  .flatMap((evidence) => evidence.requirementCoverage?.matchedRequirements ?? [])
-                                  .map((requirement, index) => (
-                                    <li key={`${requirement}:${index}`}>{requirement}</li>
-                                  ))}
-                                {ranked.skillGapResult.strengths.map((strength, index) => (
-                                  <li key={`${strength.title}:${index}`}>{strength.title}</li>
-                                ))}
-                              </ul>
-                            </section>
-
-                            <section className={styles.analysisSection}>
                               <h4>Saknade krav / utvecklingsområden</h4>
                               <ul>
                                 {ranked.matchingResult.missing.flatMap(formatEvidence).map((item, index) => (
@@ -430,12 +410,7 @@ export default async function JobsPage({ searchParams }: JobsPageProps) {
                               <ul>
                                 {ranked.matchingResult.unknown.map((evidence, index) => (
                                   <li key={`${evidence.dimension}:match:${index}`}>
-                                    {formatDimension(evidence.dimension)}
-                                  </li>
-                                ))}
-                                {ranked.skillGapResult.unknowns.map((unknown, index) => (
-                                  <li key={`${unknown.dimension}:gap:${index}`}>
-                                    {formatDimension(unknown.dimension)}
+                                    {formatDimension(evidence.dimension)}: {unknownEvidenceLabel(evidence, job)}
                                   </li>
                                 ))}
                               </ul>

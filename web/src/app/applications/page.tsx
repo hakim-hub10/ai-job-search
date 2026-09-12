@@ -1,3 +1,4 @@
+import PersonalNavigation from "@/components/personal-navigation";
 import Link from "next/link";
 
 import { loadApplications } from "@/lib/applications";
@@ -46,12 +47,7 @@ export default async function ApplicationsPage() {
           </div>
         </div>
 
-        <nav className={styles.nav}>
-          <Link href="/">Översikt</Link>
-          <Link href="/jobs">Jobb</Link>
-          <Link href="/candidates">Min profil</Link>
-          <Link className={styles.active} href="/applications">Mina ansökningar</Link>
-        </nav>
+        <PersonalNavigation candidateId={context.value.candidate.id} active="applications" />
 
         <div className={styles.sidebarFooter}>
           <span>Personlig arbetsyta</span>

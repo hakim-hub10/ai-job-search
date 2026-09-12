@@ -1,3 +1,4 @@
+import PersonalNavigation from "@/components/personal-navigation";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -52,12 +53,7 @@ export default async function Home() {
   return <div className={styles.shell}>
     <aside className={styles.sidebar}>
       <div className={styles.brand}><div className={styles.logoMark}>AC</div><div><strong>AI Career Agent</strong><span>Din jobbsökning</span></div></div>
-      <nav className={styles.nav}>
-        <Link className={styles.active} href="/">Översikt</Link>
-        <Link href={`/candidates/${encodeURIComponent(candidateId)}`}>Min profil</Link>
-        <Link href="/jobs">Hitta jobb</Link>
-        <Link href="/applications">Mina ansökningar</Link>
-      </nav>
+      <PersonalNavigation candidateId={candidateId} active="overview" />
       <div className={styles.sidebarFooter}><span>Personlig arbetsyta</span><small>Din profil och dina ansökningar</small></div>
     </aside>
 

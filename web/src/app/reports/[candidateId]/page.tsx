@@ -1,6 +1,6 @@
+import PersonalNavigation from "@/components/personal-navigation";
 import Link from "next/link";
 
-import { loadCoachCandidates } from "@/lib/coach-candidates";
 import { loadCandidateActivityReport } from "@/lib/reports";
 import { configuredAuthorizationDependencies, requireOwnedCandidate } from "@/lib/authorization";
 import styles from "../../page.module.css";
@@ -158,21 +158,15 @@ export default async function CandidateReportPage({
   const start = query.start ?? "2026-01-01";
   const end = query.end ?? "2027-01-01";
 
-  const [result, candidateResult] = await Promise.all([
+  const [result] = await Promise.all([
     loadCandidateActivityReport(
       candidateId,
       toStartTimestamp(start),
       toStartTimestamp(end),
     ),
-    loadCoachCandidates(),
   ]);
 
-  const candidate =
-    candidateResult.configured && !candidateResult.error
-      ? candidateResult.candidates.find((item) => item.id === candidateId)
-      : undefined;
-
-  const candidateTitle = candidate?.displayName ?? candidateId;
+  const candidateTitle = owned.value.candidate.displayName;
 
   return (
     <div className={styles.shell}>
@@ -181,24 +175,15 @@ export default async function CandidateReportPage({
           <div className={styles.logoMark}>AC</div>
           <div>
             <strong>AI Career Agent</strong>
-            <span>Sweden Preview</span>
+            <span>Personlig arbetsyta</span>
           </div>
         </div>
 
-        <nav className={styles.nav}>
-          <Link href="/">Översikt</Link>
-          <Link href="/jobs">Jobb</Link>
-          <Link href="/candidates">Kandidater</Link>
-          <Link href="/applications">Ansökningar</Link>
-          <Link href="/coach">Jobbcoach</Link>
-          <Link className={styles.active} href="/reports">
-            Rapporter
-          </Link>
-        </nav>
+        <PersonalNavigation candidateId={candidateId} active="reports" />
 
         <div className={styles.sidebarFooter}>
-          <span>Lokal förhandsversion</span>
-          <small>Ingen molnsynkronisering</small>
+          <span>Din jobbsökning</span>
+          <small>Bara dina uppgifter</small>
         </div>
       </aside>
 
@@ -211,12 +196,10 @@ export default async function CandidateReportPage({
               Factual activity derived from the existing coach and application
               repositories.
             </p>
-            {candidate ? (
-              <p className={styles.subtitle}>Kandidat-ID: {candidate.id}</p>
-            ) : null}
+
           </div>
 
-          <Link href="/reports">Tillbaka till rapporter</Link>
+          <Link href="/">Till översikten</Link>
         </header>
 
         <section className={styles.panel}>

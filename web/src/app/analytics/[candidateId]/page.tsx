@@ -1,8 +1,8 @@
+import PersonalNavigation from "@/components/personal-navigation";
 import { configuredAuthorizationDependencies, requireOwnedCandidate } from "@/lib/authorization";
 import Link from "next/link";
 
 import { deriveCandidateCareerActions, loadCandidateAnalytics, loadCandidateInterviewPracticeAnalytics, loadCandidateRequirementInsights, parseAnalyticsPeriod } from "@/lib/analytics";
-import { loadCoachCandidates } from "@/lib/coach-candidates";
 import styles from "../../page.module.css";
 import { CareerActionList } from "./career-actions";
 
@@ -62,24 +62,18 @@ export default async function CandidateAnalyticsPage({
   const end = period.ok ? period.value.end : "2027-01-01";
   const asOfDate = period.ok ? period.value.asOf : end;
 
-  const [result, candidateResult, interviewPractice, requirementInsights] = await Promise.all([
+  const [result, interviewPractice, requirementInsights] = await Promise.all([
     loadCandidateAnalytics(
       candidateId,
       toTimestamp(start),
       toTimestamp(end),
       toTimestamp(asOfDate),
     ),
-    loadCoachCandidates(),
     loadCandidateInterviewPracticeAnalytics(candidateId),
     loadCandidateRequirementInsights(candidateId),
   ]);
 
-  const candidate =
-    candidateResult.configured && !candidateResult.error
-      ? candidateResult.candidates.find((item) => item.id === candidateId)
-      : undefined;
-
-  const candidateTitle = candidate?.displayName ?? candidateId;
+  const candidateTitle = owned.value.candidate.displayName;
 
   return (
     <div className={styles.shell}>
@@ -89,25 +83,15 @@ export default async function CandidateAnalyticsPage({
 
           <div>
             <strong>AI Career Agent</strong>
-            <span>Sweden Preview</span>
+            <span>Personlig arbetsyta</span>
           </div>
         </div>
 
-        <nav className={styles.nav}>
-          <Link href="/">Översikt</Link>
-          <Link href="/jobs">Jobb</Link>
-          <Link href="/candidates">Kandidater</Link>
-          <Link href="/applications">Ansökningar</Link>
-          <Link href="/coach">Jobbcoach</Link>
-          <Link href="/reports">Rapporter</Link>
-          <Link className={styles.active} href="/analytics">
-            Analys
-          </Link>
-        </nav>
+        <PersonalNavigation candidateId={candidateId} active="analytics" />
 
         <div className={styles.sidebarFooter}>
-          <span>Lokal förhandsversion</span>
-          <small>Ingen molnsynkronisering</small>
+          <span>Din jobbsökning</span>
+          <small>Bara dina uppgifter</small>
         </div>
       </aside>
 
@@ -122,12 +106,10 @@ export default async function CandidateAnalyticsPage({
               ansökningar, uppföljningar och jobbcoachaktiviteter.
             </p>
 
-            {candidate ? (
-              <p className={styles.subtitle}>Candidate ID: {candidate.id}</p>
-            ) : null}
+
           </div>
 
-          <Link href="/analytics">Tillbaka till analys</Link>
+          <Link href="/">Till översikten</Link>
         </header>
 
         <section className={styles.panel}>
