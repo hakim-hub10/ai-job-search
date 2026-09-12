@@ -29,4 +29,8 @@ export interface CandidateApplicationAssociationRepository {
   listByCandidateId(
     candidateId: string,
   ): Promise<CandidateApplicationAssociationRepositoryResult<CandidateApplicationAssociation[]>>
+  /** Idempotent: succeeds whether or not an association existed for this application. */
+  deleteByApplicationId(
+    applicationId: string,
+  ): Promise<CandidateApplicationAssociationRepositoryResult<void>>
 }

@@ -202,5 +202,14 @@ export function createFileApplicationDocumentRepository(filePath: string): Appli
       const record = versions.value.at(-1)
       return record ? { ok: true, value: structuredClone(record) } : failure("NOT_FOUND", "No document version was found.")
     },
+
+    async deleteByApplication(applicationId) {
+      const loaded = await loadEnvelope(); if (!loaded.ok) return loaded
+      const remaining = loaded.value.documents.filter((item) => item.applicationId !== applicationId)
+      const removedCount = loaded.value.documents.length - remaining.length
+      if (removedCount === 0) return { ok: true, value: 0 }
+      const written = await writeEnvelope({ schemaVersion: SCHEMA_VERSION, documents: remaining })
+      return written.ok ? { ok: true, value: removedCount } : written
+    },
   }
 }

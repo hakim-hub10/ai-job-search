@@ -258,5 +258,16 @@ export function createFileApplicationRepository(filePath: string): ApplicationRe
       if (!loaded.ok) return loaded
       return { ok: true, value: structuredClone(loaded.value.applications).sort(compareApplications) }
     },
+
+    async remove(id) {
+      const loaded = await loadEnvelope()
+      if (!loaded.ok) return loaded
+      if (!loaded.value.applications.some((existing) => existing.id === id)) {
+        return failure("NOT_FOUND", "Application record was not found.")
+      }
+      const applications = loaded.value.applications.filter((existing) => existing.id !== id)
+      const written = await writeEnvelope({ schemaVersion: SCHEMA_VERSION, applications })
+      return written.ok ? { ok: true, value: undefined } : written
+    },
   }
 }

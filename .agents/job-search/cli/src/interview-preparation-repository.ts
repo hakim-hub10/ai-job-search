@@ -28,4 +28,6 @@ export interface InterviewPreparationRepository {
   getById(id: string): Promise<InterviewPreparationRepositoryResult<InterviewPreparationRecord>>
   /** Stable ID order, not chronology. Each result retains candidate ownership. */
   listByApplicationId(applicationId: string): Promise<InterviewPreparationRepositoryResult<InterviewPreparationRecord[]>>
+  /** Removes every preparation for this application. Returns the count removed. */
+  deleteByApplicationId(applicationId: string): Promise<InterviewPreparationRepositoryResult<number>>
 }

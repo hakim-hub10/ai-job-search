@@ -25,4 +25,6 @@ export interface InterviewSessionPreparationLinkRepository {
    * records before create; no backfill or reassignment is permitted. */
   create(link: InterviewSessionPreparationLink): Promise<InterviewSessionPreparationLinkResult<InterviewSessionPreparationLink>>
   getBySessionId(sessionId: string): Promise<InterviewSessionPreparationLinkResult<InterviewSessionPreparationLink>>
+  /** Idempotent: succeeds whether or not a link existed for this session. */
+  deleteBySessionId(sessionId: string): Promise<InterviewSessionPreparationLinkResult<void>>
 }

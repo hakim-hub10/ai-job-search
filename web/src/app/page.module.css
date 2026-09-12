@@ -350,6 +350,91 @@
   font-size: 12px;
 }
 
+.rowActions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  flex-shrink: 0;
+  align-self: flex-start;
+}
+
+.rowActions > a {
+  font-size: 12px;
+  font-weight: 700;
+  color: #175cd3;
+  text-decoration: none;
+}
+
+.rowActions > a:hover {
+  color: #1849a9;
+}
+
+.deleteDetails summary {
+  cursor: pointer;
+  color: #b42318;
+  font-size: 12px;
+  font-weight: 700;
+  list-style: none;
+  width: fit-content;
+  margin-left: auto;
+}
+
+.deleteDetails summary::-webkit-details-marker {
+  display: none;
+}
+
+.deleteDetails summary:hover {
+  color: #912018;
+}
+
+.deleteConfirm {
+  margin-top: 10px;
+  padding: 14px;
+  max-width: 260px;
+  border: 1px solid #fda29b;
+  border-radius: 10px;
+  background: #fffbfa;
+  text-align: left;
+}
+
+.deleteConfirm strong {
+  color: #912018;
+  font-size: 13px;
+}
+
+.deleteConfirm p {
+  margin-top: 6px;
+  color: #667085;
+  font-size: 12px;
+}
+
+.deleteConfirmActions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.dangerButton {
+  background: #d92d20;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.dangerButton:hover {
+  background: #b42318;
+}
+
+.dangerButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .reportFilters {
   display: flex;
   flex-wrap: wrap;

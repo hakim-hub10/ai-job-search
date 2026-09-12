@@ -51,6 +51,14 @@ describe("interview session persistence", () => {
     expect(await repository.listByApplicationId("C")).toEqual({ ok: true, value: [] })
     expect(await repository.getById("absent")).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } })
   })
+  it("deletes every session for one application, is idempotent, and leaves other applications untouched", async () => {
+    const repository = createFileInterviewSessionRepository(path)
+    for (const value of [initial("session-1", "A"), initial("session-2", "A"), initial("session-3", "B")]) expect((await repository.save(value)).ok).toBe(true)
+    expect(await repository.deleteByApplicationId("A")).toEqual({ ok: true, value: 2 })
+    expect(await repository.listByApplicationId("A")).toEqual({ ok: true, value: [] })
+    expect(await repository.listByApplicationId("B")).toEqual({ ok: true, value: [initial("session-3", "B")] })
+    expect(await repository.deleteByApplicationId("A")).toEqual({ ok: true, value: 0 })
+  })
   it("rejects moving an existing session to a different application", async () => {
     const repository = createFileInterviewSessionRepository(path)
     await repository.save(initial())

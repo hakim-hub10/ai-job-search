@@ -88,5 +88,14 @@ export function createFileInterviewSessionPreparationLinkRepository(
       const link = loaded.value.links.find((item) => item.sessionId === sessionId)
       return link ? { ok: true, value: structuredClone(link) } : linkFailure("NOT_FOUND")
     },
+
+    async deleteBySessionId(sessionId) {
+      const loaded = await loadEnvelope()
+      if (!loaded.ok) return loaded
+      const links = loaded.value.links.filter((item) => item.sessionId !== sessionId)
+      if (links.length === loaded.value.links.length) return { ok: true, value: undefined }
+      const written = await writeEnvelope({ schemaVersion: SCHEMA_VERSION, links })
+      return written.ok ? { ok: true, value: undefined } : written
+    },
   }
 }

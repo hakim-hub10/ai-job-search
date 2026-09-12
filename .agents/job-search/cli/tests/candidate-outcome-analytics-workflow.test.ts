@@ -98,6 +98,10 @@ const applications: ApplicationRepository = {
       value: [structuredClone(application)],
     }
   },
+
+  async remove() {
+    return { ok: true, value: undefined }
+  },
 }
 
 const associations: CandidateApplicationAssociationRepository = {
@@ -127,6 +131,10 @@ const associations: CandidateApplicationAssociationRepository = {
           ok: true,
           value: [],
         }
+  },
+
+  async deleteByApplicationId() {
+    return { ok: true, value: undefined }
   },
 }
 

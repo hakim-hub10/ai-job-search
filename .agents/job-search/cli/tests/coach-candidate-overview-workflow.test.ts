@@ -17,11 +17,11 @@ function candidates(values: CoachCandidate[]): CoachWorkspaceRepository {
 }
 
 function applications(values: ApplicationRecord[]): ApplicationRepository {
-  return { async create(value) { return { ok: true, value } }, async save(value) { return { ok: true, value } }, async getById(id) { const value = values.find((item) => item.id === id); return value ? { ok: true, value: structuredClone(value) } : { ok: false, error: { code: "NOT_FOUND", message: "missing" } } }, async list() { return { ok: true, value: structuredClone(values) } } }
+  return { async create(value) { return { ok: true, value } }, async save(value) { return { ok: true, value } }, async getById(id) { const value = values.find((item) => item.id === id); return value ? { ok: true, value: structuredClone(value) } : { ok: false, error: { code: "NOT_FOUND", message: "missing" } } }, async list() { return { ok: true, value: structuredClone(values) } }, async remove() { return { ok: true, value: undefined } } }
 }
 
 function associations(values: CandidateApplicationAssociation[]): CandidateApplicationAssociationRepository {
-  return { async create(value) { return { ok: true, value } }, async getByApplicationId(id) { const value = values.find((item) => item.applicationId === id); return value ? { ok: true, value: structuredClone(value) } : { ok: false, error: { code: "NOT_FOUND", message: "missing" } } }, async listByCandidateId(id) { return { ok: true, value: structuredClone(values.filter((item) => item.candidateId === id)) } } }
+  return { async create(value) { return { ok: true, value } }, async getByApplicationId(id) { const value = values.find((item) => item.applicationId === id); return value ? { ok: true, value: structuredClone(value) } : { ok: false, error: { code: "NOT_FOUND", message: "missing" } } }, async listByCandidateId(id) { return { ok: true, value: structuredClone(values.filter((item) => item.candidateId === id)) } }, async deleteByApplicationId() { return { ok: true, value: undefined } } }
 }
 
 function followUps(values: CandidateFollowUp[]): CandidateFollowUpRepository {
@@ -30,12 +30,12 @@ function followUps(values: CandidateFollowUp[]): CandidateFollowUpRepository {
 
 function failingApplications(code: "READ_FAILURE" | "CORRUPT_STORAGE" | "UNSUPPORTED_SCHEMA_VERSION"): ApplicationRepository {
   const error = { code, message: `application ${code}` }
-  return { async create(value) { return { ok: true, value } }, async save(value) { return { ok: true, value } }, async getById() { return { ok: false, error } }, async list() { return { ok: false, error } } }
+  return { async create(value) { return { ok: true, value } }, async save(value) { return { ok: true, value } }, async getById() { return { ok: false, error } }, async list() { return { ok: false, error } }, async remove() { return { ok: false, error } } }
 }
 
 function failingAssociations(code: "READ_FAILURE" | "CORRUPT_STORAGE" | "UNSUPPORTED_SCHEMA_VERSION", value: CandidateApplicationAssociation): CandidateApplicationAssociationRepository {
   const error = { code, message: `association ${code}` }
-  return { async create(item) { return { ok: true, value: item } }, async getByApplicationId() { return { ok: false, error } }, async listByCandidateId() { return { ok: true, value: [value] } } }
+  return { async create(item) { return { ok: true, value: item } }, async getByApplicationId() { return { ok: false, error } }, async listByCandidateId() { return { ok: true, value: [value] } }, async deleteByApplicationId() { return { ok: false, error } } }
 }
 
 describe("Phase 6.4 candidate overview workflow", () => {

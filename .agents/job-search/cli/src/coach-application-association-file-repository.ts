@@ -166,5 +166,14 @@ export function createFileCandidateApplicationAssociationRepository(
           }
         : loaded
     },
+
+    async deleteByApplicationId(applicationId) {
+      const loaded = await loadEnvelope()
+      if (!loaded.ok) return loaded
+      const associations = loaded.value.associations.filter((existing) => existing.applicationId !== applicationId)
+      if (associations.length === loaded.value.associations.length) return { ok: true, value: undefined }
+      const written = await writeEnvelope({ schemaVersion: SCHEMA_VERSION, associations })
+      return written.ok ? { ok: true, value: undefined } : written
+    },
   }
 }

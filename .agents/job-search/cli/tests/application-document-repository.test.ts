@@ -129,6 +129,18 @@ describe("Phase 4.5 append-only document persistence", () => {
     expect(await createFileApplicationDocumentRepository(writePath).create(record("write-failure"))).toMatchObject({ ok: false, error: { code: "WRITE_FAILURE" } })
   })
 
+  it("deletes every version of every document type for one application without touching other applications", async () => {
+    const path = await paths(); const repository = createFileApplicationDocumentRepository(path.documents)
+    await repository.create(record("a-cv-1", "application-a", "cv", 1))
+    await repository.create(record("a-cv-2", "application-a", "cv", 2, secondCreatedAt))
+    await repository.create(record("a-letter-1", "application-a", "coverLetter"))
+    await repository.create(record("b-cv-1", "application-b", "cv"))
+    expect(await repository.deleteByApplication("application-a")).toEqual({ ok: true, value: 3 })
+    expect(await repository.listByApplication("application-a")).toEqual({ ok: true, value: [] })
+    expect(await repository.listByApplication("application-b")).toMatchObject({ ok: true, value: [{ id: "b-cv-1" }] })
+    expect(await repository.deleteByApplication("application-a")).toEqual({ ok: true, value: 0 })
+  })
+
   it("uses the same offline storage contract for IT, healthcare, logistics, and administration", async () => {
     const repository = createFileApplicationDocumentRepository((await paths()).documents)
     for (const [index, domain] of ["it", "healthcare", "logistics", "administration"].entries()) {

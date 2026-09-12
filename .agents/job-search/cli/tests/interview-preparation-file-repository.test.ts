@@ -52,13 +52,22 @@ describe("immutable interview preparation persistence", () => {
     expect(await repo.listByApplicationId("C")).toEqual({ ok: true, value: [] })
     expect(await repo.getById("missing")).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } })
   })
+  it("deletes every preparation for one application, is idempotent, and leaves other applications untouched", async () => {
+    const repo = createFileInterviewPreparationRepository(path)
+    const first = fixture("a"), second = fixture("z"), other = fixture("b", "B", "candidate-B")
+    for (const value of [second, other, first]) expect((await repo.create(value)).ok).toBe(true)
+    expect(await repo.deleteByApplicationId("A")).toEqual({ ok: true, value: 2 })
+    expect(await repo.listByApplicationId("A")).toEqual({ ok: true, value: [] })
+    expect(await repo.listByApplicationId("B")).toEqual({ ok: true, value: [other] })
+    expect(await repo.deleteByApplicationId("A")).toEqual({ ok: true, value: 0 })
+  })
   it("rejects duplicate IDs without replacing content or transferring ownership", async () => {
     const repo = createFileInterviewPreparationRepository(path)
     await repo.create(fixture())
     const before = await readFile(path, "utf8")
     expect(await repo.create(fixture("prep-1", "B", "candidate-B"))).toMatchObject({ ok: false, error: { code: "DUPLICATE_ID" } })
     expect(await readFile(path, "utf8")).toBe(before)
-    expect(Object.keys(repo).sort()).toEqual(["create", "getById", "listByApplicationId"])
+    expect(Object.keys(repo).sort()).toEqual(["create", "deleteByApplicationId", "getById", "listByApplicationId"])
   })
   it("snapshots input before I/O and detaches returned objects", async () => {
     const repo = createFileInterviewPreparationRepository(path)

@@ -3,6 +3,8 @@ import Link from "next/link";
 
 import { loadApplications } from "@/lib/applications";
 import { configuredAuthorizationDependencies, getAuthorizedCandidateContext } from "@/lib/authorization";
+import { deleteApplicationAction } from "./actions";
+import { DeleteApplicationButton } from "./delete-application-button";
 import styles from "../page.module.css";
 
 export const dynamic = "force-dynamic";
@@ -109,32 +111,43 @@ export default async function ApplicationsPage() {
 
             <div className={styles.candidateList}>
               {result.applications.map((application) => (
-                <Link
-                  href={`/applications/${encodeURIComponent(application.id)}`}
-                  key={application.id}
-                  style={{ color: "inherit", textDecoration: "none" }}
-                >
-                  <article className={styles.candidateRow}>
-                    <div>
-                      <strong>{application.jobSnapshot.title}</strong>
-                      <p>
-                        {application.jobSnapshot.company ?? "Företag saknas"}
-                      </p>
-                    </div>
+                <article className={styles.candidateRow} key={application.id}>
+                  <Link
+                    href={`/applications/${encodeURIComponent(application.id)}`}
+                    style={{ color: "inherit", textDecoration: "none", minWidth: 0 }}
+                  >
+                    <strong>{application.jobSnapshot.title}</strong>
+                    <p>
+                      {application.jobSnapshot.company ?? "Företag saknas"}
+                    </p>
+                  </Link>
 
-                    <div className={styles.candidateMeta}>
-                      <span>Status: {formatApplicationStatus(application.status)}</span>
-                      <span>
-                        Plats:{" "}
-                        {application.jobSnapshot.location ??
-                          "Plats saknas"}
-                      </span>
-                      <time dateTime={application.updatedAt}>
-                        Uppdaterad: {application.updatedAt}
-                      </time>
-                    </div>
-                  </article>
-                </Link>
+                  <Link
+                    href={`/applications/${encodeURIComponent(application.id)}`}
+                    className={styles.candidateMeta}
+                    style={{ color: "inherit", textDecoration: "none" }}
+                  >
+                    <span>Status: {formatApplicationStatus(application.status)}</span>
+                    <span>
+                      Plats:{" "}
+                      {application.jobSnapshot.location ??
+                        "Plats saknas"}
+                    </span>
+                    <time dateTime={application.updatedAt}>
+                      Uppdaterad: {application.updatedAt}
+                    </time>
+                  </Link>
+
+                  <div className={styles.rowActions}>
+                    <Link href={`/applications/${encodeURIComponent(application.id)}`}>
+                      Öppna
+                    </Link>
+                    <DeleteApplicationButton
+                      applicationId={application.id}
+                      deleteAction={deleteApplicationAction}
+                    />
+                  </div>
+                </article>
               ))}
             </div>
           </section>

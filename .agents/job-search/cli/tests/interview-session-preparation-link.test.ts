@@ -70,7 +70,14 @@ describe("explicit session preparation linkage", () => {
     expect(await c.resolve()).toEqual({ ok: true, value: c.preparation })
     expect(JSON.parse(await readFile(path, "utf8"))).toEqual({ schemaVersion: 1, links: [link] })
     expect((await stat(path)).mode & 0o777).toBe(0o600)
-    expect(Object.keys(c.repository).sort()).toEqual(["create", "getBySessionId"])
+    expect(Object.keys(c.repository).sort()).toEqual(["create", "deleteBySessionId", "getBySessionId"])
+  })
+  it("deletes a link by session id and is idempotent when no link exists", async () => {
+    const c = context()
+    expect(await c.repository.create(link)).toEqual({ ok: true, value: link })
+    expect(await c.repository.deleteBySessionId("session")).toEqual({ ok: true, value: undefined })
+    expect(await c.repository.getBySessionId("session")).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } })
+    expect(await c.repository.deleteBySessionId("session")).toEqual({ ok: true, value: undefined })
   })
   it("chooses only the explicit ID even when another preparation has identical question IDs", async () => {
     const c = context()

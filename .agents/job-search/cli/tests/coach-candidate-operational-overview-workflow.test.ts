@@ -13,9 +13,9 @@ import type { CoachActivity } from "../src/coach-activity"
 
 const candidate = (id: string): CoachCandidate => ({ id, displayName: id, createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z" })
 const candidateRepository = (value: CoachCandidate): CoachWorkspaceRepository => ({ async createCandidate(item) { return { ok: true, value: item } }, async getCandidateById(id) { return id === value.id ? { ok: true, value: structuredClone(value) } : { ok: false, error: { code: "NOT_FOUND", message: "missing" } } }, async listCandidates() { return { ok: true, value: [structuredClone(value)] } } })
-const emptyApplications: ApplicationRepository = { async create(value) { return { ok: true, value } }, async save(value) { return { ok: true, value } }, async getById() { return { ok: false, error: { code: "NOT_FOUND", message: "missing" } } }, async list() { return { ok: true, value: [] } } }
+const emptyApplications: ApplicationRepository = { async create(value) { return { ok: true, value } }, async save(value) { return { ok: true, value } }, async getById() { return { ok: false, error: { code: "NOT_FOUND", message: "missing" } } }, async list() { return { ok: true, value: [] } }, async remove() { return { ok: true, value: undefined } } }
 function associations(code?: CandidateApplicationAssociationRepositoryErrorCode): CandidateApplicationAssociationRepository {
-  return { async create(value) { return { ok: true, value } }, async getByApplicationId() { return { ok: false, error: { code: code ?? "NOT_FOUND", message: "missing" } } }, async listByCandidateId() { return { ok: true, value: [] } } }
+  return { async create(value) { return { ok: true, value } }, async getByApplicationId() { return { ok: false, error: { code: code ?? "NOT_FOUND", message: "missing" } } }, async listByCandidateId() { return { ok: true, value: [] } }, async deleteByApplicationId() { return { ok: true, value: undefined } } }
 }
 const emptyFollowUps: CandidateFollowUpRepository = { async create(value) { return { ok: true, value } }, async getById() { return { ok: false, error: { code: "NOT_FOUND", message: "missing" } } }, async listByCandidateId() { return { ok: true, value: [] } }, async save(value) { return { ok: true, value } } }
 function operations(overrides: Partial<CoachOperationsRepository> = {}): CoachOperationsRepository {

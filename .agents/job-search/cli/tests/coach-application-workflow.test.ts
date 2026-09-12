@@ -48,6 +48,12 @@ function applicationRepository(initial: ApplicationRecord[]): ApplicationReposit
         : { ok: false, error: { code: "NOT_FOUND", message: "Application record was not found." } }
     },
     async list() { return { ok: true, value: structuredClone(values) } },
+    async remove(id) {
+      const index = values.findIndex((item) => item.id === id)
+      if (index < 0) return { ok: false, error: { code: "NOT_FOUND", message: "Application record was not found." } }
+      values.splice(index, 1)
+      return { ok: true, value: undefined }
+    },
   }
 }
 
@@ -69,6 +75,11 @@ function associationRepository(initial: CandidateApplicationAssociation[] = []):
     },
     async listByCandidateId(id) {
       return { ok: true, value: structuredClone(values.filter((item) => item.candidateId === id)) }
+    },
+    async deleteByApplicationId(applicationId) {
+      const index = values.findIndex((item) => item.applicationId === applicationId)
+      if (index >= 0) values.splice(index, 1)
+      return { ok: true, value: undefined }
     },
   }
 }

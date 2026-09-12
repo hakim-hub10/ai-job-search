@@ -24,4 +24,6 @@ export interface ApplicationRepository {
   save(record: ApplicationRecord): Promise<ApplicationRepositoryResult<ApplicationRecord>>
   getById(id: string): Promise<ApplicationRepositoryResult<ApplicationRecord>>
   list(): Promise<ApplicationRepositoryResult<ApplicationRecord[]>>
+  /** Hard delete. Callers must remove application-owned data elsewhere first. */
+  remove(id: string): Promise<ApplicationRepositoryResult<void>>
 }

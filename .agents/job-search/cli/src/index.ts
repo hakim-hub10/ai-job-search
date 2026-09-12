@@ -313,6 +313,14 @@ export {
   type ApplicationWorkflowResult,
 } from "./application-workflow"
 export {
+  deleteApplicationAndOwnedData,
+  type ApplicationDeletionDependencies,
+  type ApplicationDeletionStage,
+  type ApplicationDeletionSummary,
+  type ApplicationDeletionError,
+  type ApplicationDeletionResult,
+} from "./application-deletion"
+export {
   buildCandidateEvidenceCatalog,
   buildApplicationDocumentFoundation,
   createStructuredDocumentDraft,

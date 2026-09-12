@@ -40,4 +40,6 @@ export interface ApplicationDocumentRepository {
   listByApplication(applicationId: string): Promise<ApplicationDocumentRepositoryResult<ApplicationDocumentRecord[]>>
   listVersions(applicationId: string, documentType: DocumentType): Promise<ApplicationDocumentRepositoryResult<ApplicationDocumentRecord[]>>
   getLatest(applicationId: string, documentType: DocumentType): Promise<ApplicationDocumentRepositoryResult<ApplicationDocumentRecord>>
+  /** Removes every version of every document type for this application. Returns the count removed. */
+  deleteByApplication(applicationId: string): Promise<ApplicationDocumentRepositoryResult<number>>
 }

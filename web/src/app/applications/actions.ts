@@ -7,6 +7,10 @@ import { redirect } from "next/navigation";
 
 import { createFileApplicationRepository } from "../../../../.agents/job-search/cli/src/application-file-repository";
 import { createFileApplicationDocumentRepository } from "../../../../.agents/job-search/cli/src/application-document-file-repository";
+import { deleteApplicationAndOwnedData } from "../../../../.agents/job-search/cli/src/application-deletion";
+import { createFileInterviewSessionRepository } from "../../../../.agents/job-search/cli/src/interview-session-file-repository";
+import { createFileInterviewPreparationRepository } from "../../../../.agents/job-search/cli/src/interview-preparation-file-repository";
+import { createFileInterviewSessionPreparationLinkRepository } from "../../../../.agents/job-search/cli/src/interview-session-preparation-link-file-repository";
 import { createFileCandidateBaseCvRepository } from "@/lib/candidate-base-cv-file-repository";
 import { createFileCandidateApplicationAssociationRepository } from "../../../../.agents/job-search/cli/src/coach-application-association-file-repository";
 import { resolveCoachRepositoryPaths } from "../../../../.agents/job-search/cli/src/coach-cli-paths";
@@ -87,6 +91,49 @@ export async function updateApplicationStatusAction(formData: FormData) {
   }
 
   redirect(`/applications/${encodeURIComponent(applicationId)}`);
+}
+
+export async function deleteApplicationAction(formData: FormData) {
+  const applicationIdValue = formData.get("applicationId");
+  const applicationId =
+    typeof applicationIdValue === "string" ? applicationIdValue.trim() : "";
+  if (!applicationId) throw new Error("Ansökans ID saknas.");
+  if (!(await authorizeApplication(applicationId)).ok) throw new Error("Ansökan kunde inte hittas.");
+
+  const coachDir = process.env.COACH_DIR?.trim();
+  const applicationRepositoryPath = process.env.APPLICATION_REPOSITORY?.trim();
+  const documentRepositoryPath = process.env.APPLICATION_DOCUMENT_REPOSITORY?.trim();
+  const sessionRepositoryPath = process.env.INTERVIEW_SESSION_REPOSITORY?.trim();
+  const preparationRepositoryPath = process.env.INTERVIEW_PREPARATION_REPOSITORY?.trim();
+  const linkRepositoryPath = process.env.INTERVIEW_SESSION_PREPARATION_LINK_REPOSITORY?.trim();
+
+  if (!coachDir || !applicationRepositoryPath || !documentRepositoryPath
+    || !sessionRepositoryPath || !preparationRepositoryPath || !linkRepositoryPath) {
+    throw new Error("Borttagning av ansökningar är inte fullständigt konfigurerad.");
+  }
+
+  const paths = resolveCoachRepositoryPaths(resolve(coachDir));
+  const sessionRepository = createFileInterviewSessionRepository(resolve(sessionRepositoryPath));
+  const preparationRepository = createFileInterviewPreparationRepository(resolve(preparationRepositoryPath));
+
+  const result = await deleteApplicationAndOwnedData(applicationId, {
+    applicationRepository: createFileApplicationRepository(resolve(applicationRepositoryPath)),
+    associationRepository: createFileCandidateApplicationAssociationRepository(paths.associations),
+    documentRepository: createFileApplicationDocumentRepository(resolve(documentRepositoryPath)),
+    sessionRepository,
+    preparationRepository,
+    sessionPreparationLinkRepository: createFileInterviewSessionPreparationLinkRepository(
+      resolve(linkRepositoryPath),
+      { sessionRepository, preparationRepository },
+    ),
+  });
+
+  if (!result.ok) {
+    throw new Error("Ansökan kunde inte raderas just nu.");
+  }
+
+  revalidatePath("/applications");
+  redirect("/applications");
 }
 
 export async function associateApplicationCandidateAction(formData: FormData) {

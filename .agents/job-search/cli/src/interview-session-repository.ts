@@ -24,4 +24,6 @@ export interface InterviewSessionRepository {
   getById(id: string): Promise<InterviewSessionRepositoryResult<InterviewSession>>
   /** Stable ID order, not chronological order. */
   listByApplicationId(applicationId: string): Promise<InterviewSessionRepositoryResult<InterviewSession[]>>
+  /** Removes every session for this application. Returns the count removed. */
+  deleteByApplicationId(applicationId: string): Promise<InterviewSessionRepositoryResult<number>>
 }

@@ -70,6 +70,18 @@ describe("Phase 6.2 candidate application association file repository", () => {
     }
   })
 
+  it("deletes an association by application id, is idempotent, and leaves other candidates' associations untouched", async () => {
+    const { repository } = await fixture()
+    const kept = association("candidate-a", "application-1", "2026-01-01T00:00:00.000Z")
+    const removed = association("candidate-b", "application-2", "2026-01-02T00:00:00.000Z")
+    expect((await repository.create(kept)).ok).toBe(true)
+    expect((await repository.create(removed)).ok).toBe(true)
+    expect(await repository.deleteByApplicationId("application-2")).toEqual({ ok: true, value: undefined })
+    expect(await repository.getByApplicationId("application-2")).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } })
+    expect(await repository.getByApplicationId("application-1")).toEqual({ ok: true, value: kept })
+    expect(await repository.deleteByApplicationId("application-2")).toEqual({ ok: true, value: undefined })
+  })
+
   it("fails closed for malformed, extra-field, duplicate, and unsupported storage", async () => {
     const { path, repository } = await fixture()
     await mkdir(dirname(path), { recursive: true })

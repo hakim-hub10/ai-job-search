@@ -142,6 +142,18 @@ describe("JSON application repository", () => {
     expect(await repository.list()).toMatchObject({ ok: false, error: { code: "CORRUPT_STORAGE" } })
   })
 
+  it("removes an application by id, leaves others untouched, and reports missing records", async () => {
+    const repository = createFileApplicationRepository(await repositoryPath())
+    const keep = record("keep")
+    const toRemove = record("remove-me")
+    expect((await repository.create(keep)).ok).toBe(true)
+    expect((await repository.create(toRemove)).ok).toBe(true)
+    expect(await repository.remove("remove-me")).toEqual({ ok: true, value: undefined })
+    expect(await repository.getById("remove-me")).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } })
+    expect(await repository.getById("keep")).toEqual({ ok: true, value: keep })
+    expect(await repository.remove("remove-me")).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } })
+  })
+
   it("uses atomic replacement and reports practical read and write failures", async () => {
     const path = await repositoryPath()
     const repository = createFileApplicationRepository(path)

@@ -24,11 +24,11 @@ function candidateRepository(values: CoachCandidate[]): CoachWorkspaceRepository
 }
 
 function applicationRepository(values: ApplicationRecord[]): ApplicationRepository {
-  return { async create(value) { return { ok: true, value } }, async save(value) { return { ok: true, value } }, async getById(id) { const value = values.find((item) => item.id === id); return value ? { ok: true, value: structuredClone(value) } : { ok: false, error: { code: "NOT_FOUND", message: "missing" } } }, async list() { return { ok: true, value: structuredClone(values) } } }
+  return { async create(value) { return { ok: true, value } }, async save(value) { return { ok: true, value } }, async getById(id) { const value = values.find((item) => item.id === id); return value ? { ok: true, value: structuredClone(value) } : { ok: false, error: { code: "NOT_FOUND", message: "missing" } } }, async list() { return { ok: true, value: structuredClone(values) } }, async remove() { return { ok: true, value: undefined } } }
 }
 
 function associationRepository(values: CandidateApplicationAssociation[]): CandidateApplicationAssociationRepository {
-  return { async create(value) { values.push(structuredClone(value)); return { ok: true, value: structuredClone(value) } }, async getByApplicationId(id) { const value = values.find((item) => item.applicationId === id); return value ? { ok: true, value: structuredClone(value) } : { ok: false, error: { code: "NOT_FOUND", message: "missing" } } }, async listByCandidateId(id) { return { ok: true, value: structuredClone(values.filter((item) => item.candidateId === id)) } } }
+  return { async create(value) { values.push(structuredClone(value)); return { ok: true, value: structuredClone(value) } }, async getByApplicationId(id) { const value = values.find((item) => item.applicationId === id); return value ? { ok: true, value: structuredClone(value) } : { ok: false, error: { code: "NOT_FOUND", message: "missing" } } }, async listByCandidateId(id) { return { ok: true, value: structuredClone(values.filter((item) => item.candidateId === id)) } }, async deleteByApplicationId() { return { ok: true, value: undefined } } }
 }
 
 function followUpRepository(values: CandidateFollowUp[] = []): CandidateFollowUpRepository {

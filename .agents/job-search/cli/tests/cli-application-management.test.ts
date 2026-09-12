@@ -78,6 +78,7 @@ describe("H3 application management CLI boundary", () => {
       save: async () => ({ ok: false, error: { code: "WRITE_FAILURE", message: "safe failure" } }),
       getById: async () => ({ ok: true, value: structuredClone(existing) }),
       list: async () => ({ ok: true, value: [structuredClone(existing)] }),
+      remove: async () => ({ ok: true, value: undefined }),
     }
     expect(await updateManagedApplicationStatus(failing, { applicationId: existing.id, status: "applied", timestamp: appliedAt })).toMatchObject({ ok: false, error: { kind: "repository", error: { code: "WRITE_FAILURE" } } })
   })

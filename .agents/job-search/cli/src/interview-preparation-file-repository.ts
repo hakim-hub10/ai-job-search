@@ -101,5 +101,15 @@ export function createFileInterviewPreparationRepository(filePath: string): Inte
       return { ok: true, value: loaded.value.preparations.filter((item) => item.applicationId === applicationId)
         .sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0) }
     },
+
+    async deleteByApplicationId(applicationId) {
+      const loaded = await loadEnvelope()
+      if (!loaded.ok) return loaded
+      const remaining = loaded.value.preparations.filter((item) => item.applicationId !== applicationId)
+      const removedCount = loaded.value.preparations.length - remaining.length
+      if (removedCount === 0) return { ok: true, value: 0 }
+      const written = await writeEnvelope({ schemaVersion: SCHEMA_VERSION, preparations: remaining })
+      return written.ok ? { ok: true, value: removedCount } : written
+    },
   }
 }

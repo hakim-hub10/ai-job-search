@@ -75,6 +75,11 @@ function repository(initial: ApplicationRecord[] = []) {
       if (listError) return { ok: false, error: listError }
       return { ok: true, value: [...records.values()].map((record) => structuredClone(record)) }
     },
+    async remove(id) {
+      if (!records.has(id)) return { ok: false, error: { code: "NOT_FOUND", message: "missing" } }
+      records.delete(id)
+      return { ok: true, value: undefined }
+    },
   }
   return {
     repository: implementation,
