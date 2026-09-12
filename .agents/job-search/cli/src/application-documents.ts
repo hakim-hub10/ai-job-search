@@ -206,6 +206,7 @@ function profileEvidence(profile: CandidateProfile): CandidateDocumentEvidence[]
   profile.education.forEach((education, index) => add(`profile:education:${index}`, "education", `${education.degree} in ${education.field}, ${education.institution}`))
   profile.certifications.forEach((certification, index) => add(`profile:certification:${index}`, "certification", certification, [{ category: "certification", value: certification }]))
   profile.languages.forEach((language, index) => add(`profile:language:${index}`, "language", `${language.name}: ${language.level}`, [{ category: "language", value: language.name }]))
+  ;(profile.projects ?? []).forEach((project, index) => add(`profile:project:${index}`, "project", [project.title, project.description?.trim(), project.technologies?.length ? project.technologies.join(", ") : undefined, project.url].filter(Boolean).join(" · ")))
   return result
 }
 

@@ -11,7 +11,7 @@ import type { ReviewedCandidateImportClaim } from "./candidate-import-review";
 export const MAX_CANDIDATE_IMPORT_PROFILE_VALUE_LENGTH = 10_000;
 
 type ProfileChangeAction = "add" | "no-op" | "conflict" | "unsupported";
-type ProfileChangePath = "skills.technical" | "skills.soft" | "certifications" | "languages" | "headline" | "workExperience" | "education";
+type ProfileChangePath = "skills.technical" | "skills.soft" | "certifications" | "languages" | "headline" | "workExperience" | "education" | "projects";
 
 export interface CandidateProfileChangePreviewEntry {
   claimId: string;
@@ -83,7 +83,7 @@ function normalize(value: string): string {
 function isClaimKind(value: unknown): value is CandidateImportClaimKind {
   return typeof value === "string" && [
     "technicalSkill", "softSkill", "workExperience", "education",
-    "certification", "language", "headline",
+    "certification", "language", "headline", "project",
   ].includes(value);
 }
 
@@ -166,6 +166,12 @@ function changeForReview(review: ReviewedCandidateImportClaim, profile: Candidat
       return entry(review.claim.id, "workExperience", profile.workExperience, proposed, "unsupported", "EXPLICIT_STRUCTURED_WORK_EXPERIENCE_REQUIRED");
     case "education":
       return entry(review.claim.id, "education", profile.education, proposed, "unsupported", "EXPLICIT_STRUCTURED_EDUCATION_REQUIRED");
+    case "project":
+      // A raw imported line is, at most, a plausible project title - never
+      // enough to safely infer a description, technologies, or URL. Same
+      // boundary as workExperience/education: the candidate completes and
+      // approves a structured project entry explicitly in the profile UI.
+      return entry(review.claim.id, "projects", profile.projects ?? [], proposed, "unsupported", "EXPLICIT_STRUCTURED_PROJECT_REQUIRED");
   }
 }
 

@@ -5,6 +5,7 @@ import { resolve } from "node:path";
 
 import { createFileCoachWorkspaceRepository } from "../../../../../../.agents/job-search/cli/src/coach-workspace-file-repository";
 import { resolveCoachRepositoryPaths } from "../../../../../../.agents/job-search/cli/src/coach-cli-paths";
+import { parseCandidateProfile } from "../../../../../../.agents/job-search/cli/src/profile-input";
 import type { CandidateImportClaim, CandidateImportClaimKind } from "@/lib/candidate-import-claims";
 import { extractCandidateImportClaims } from "@/lib/candidate-import-claims";
 import { extractCandidateImportDocx } from "@/lib/candidate-import-docx";
@@ -13,13 +14,14 @@ import { validateCandidateImportUpload } from "@/lib/candidate-import-upload";
 import { reviewCandidateImportClaim, createUserAddedCandidateImportClaim, candidateImportClaimFingerprint, type ReviewedCandidateImportClaim } from "@/lib/candidate-import-review";
 import { applyCandidateImportProfile, previewCandidateImportProfile } from "@/lib/candidate-import-profile";
 import { applyCandidateBaseCvRefresh, previewCandidateBaseCvRefresh } from "@/lib/candidate-import-base-cv";
+import { parseProfileEvidence, profileCompletionIssues } from "@/lib/profile-evidence";
 import { createFileCandidateProfileRepository } from "../../../../../../.agents/job-search/cli/src/candidate-profile-file-repository";
 import { createFileCandidateBaseCvRepository } from "@/lib/candidate-base-cv-file-repository";
 import { configuredAuthorizationDependencies, requireOwnedCandidate } from "@/lib/authorization";
 
 export type OnboardingActionResult =
   | { ok: true; claims: OnboardingClaimView[]; importId: string; documentId: string }
-  | { ok: true; complete: true }
+  | { ok: true; complete: true; needsCompletion?: boolean }
   | { ok: false; code: string; message: string };
 
 function failure(code: string, message: string): OnboardingActionResult {
@@ -134,6 +136,25 @@ function isKind(value: unknown): value is CandidateImportClaimKind {
   return ["technicalSkill", "softSkill", "certification", "language", "headline", "workExperience", "education"].includes(String(value));
 }
 
+function initialCandidateProfile() {
+  return parseCandidateProfile({
+    headline: "Job seeker",
+    targetRoles: [],
+    locationPreferences: [],
+    workMode: "open",
+    remotePreference: false,
+    preferredIndustries: [],
+    preferredEmploymentType: ["open"],
+    skills: { technical: [], soft: [] },
+    workExperience: [],
+    education: [],
+    certifications: [],
+    languages: [],
+    yearsOfExperience: 0,
+    careerGoals: ["Explore career opportunities"],
+  });
+}
+
 function reconstructReviews(candidateId: string, input: unknown, session: {
   candidateId: string;
   importId: string;
@@ -199,23 +220,49 @@ export async function applyCandidateOnboardingAction(formData: FormData): Promis
 
   const profileRepository = createFileCandidateProfileRepository(context.paths.candidateProfiles);
   const baseCvRepository = createFileCandidateBaseCvRepository(resolve(context.coachDir, "candidate-cvs.json"));
-  const profile = await profileRepository.getProfileByCandidateId(candidateId);
-  if (!profile.ok) return failure(profile.error.code === "NOT_FOUND" ? "PROFILE_NOT_FOUND" : "PROFILE_READ_FAILED", "Din profil kunde inte läsas.");
-  const profilePreview = previewCandidateImportProfile({ candidateId, profile: profile.value.profile, reviews, linkage });
+  let profile = await profileRepository.getProfileByCandidateId(candidateId);
+  if (!profile.ok && profile.error.code !== "NOT_FOUND") return failure("PROFILE_READ_FAILED", "Din profil kunde inte läsas.");
+  const previousProfile = profile.ok ? profile.value.profile : null;
+  const evidence = text(formData.get("structuredProfile"));
+  let validatedEvidence;
+  if (evidence) {
+    try { validatedEvidence = parseProfileEvidence(evidence, previousProfile ?? initialCandidateProfile()); }
+    catch { return failure("INVALID_PROFILE", "Kontrollera yrkesrubrik, anställningar och utbildningar innan du sparar."); }
+  } else if (!previousProfile || previousProfile.headline === "Job seeker") {
+    return failure("PROFILE_INCOMPLETE", "Ange din yrkesrubrik och komplettera erfarenhet och utbildning innan du sparar.");
+  }
+  if (!profile.ok) {
+    const initialized = await profileRepository.saveProfile(candidateId, validatedEvidence ?? initialCandidateProfile());
+    if (!initialized.ok) return failure("PROFILE_SAVE_FAILED", "Profilen kunde inte sparas. Inga ändringar bekräftades.");
+    profile = await profileRepository.getProfileByCandidateId(candidateId);
+    if (!profile.ok) return failure("PROFILE_READ_FAILED", "Profilen kunde inte läsas efter sparandet.");
+  }
+  // The explicit headline field is authoritative when structured completion is used.
+  const importReviews = evidence ? reviews.filter(review => review.claim.kind !== "headline") : reviews;
+  const profilePreview = previewCandidateImportProfile({ candidateId, profile: profile.value.profile, reviews: importReviews, linkage });
   if (!profilePreview.ok) return failure(profilePreview.error.code, "Uppgifterna kunde inte förhandsgranskas.");
   const confirmHeadline = formData.get("confirmHeadline") === "on";
-  const profileApply = await applyCandidateImportProfile({ candidateId, reviews, linkage, preview: profilePreview.value, confirmConflictClaimIds: confirmHeadline ? reviews.filter((review) => review.claim.kind === "headline" && review.decision !== "rejected").map((review) => review.claim.id) : [], profileRepository });
+  const profileApply = await applyCandidateImportProfile({ candidateId, reviews: importReviews, linkage, preview: profilePreview.value, confirmConflictClaimIds: confirmHeadline ? reviews.filter((review) => review.claim.kind === "headline" && review.decision !== "rejected").map((review) => review.claim.id) : [], profileRepository });
   if (!profileApply.ok) return failure(profileApply.error.code, "Profilen kunde inte sparas. Inga ändringar bekräftades.");
 
-  const updatedProfile = await profileRepository.getProfileByCandidateId(candidateId);
+  let updatedProfile = await profileRepository.getProfileByCandidateId(candidateId);
   if (!updatedProfile.ok) return failure("PROFILE_READ_FAILED", "Profilen kunde inte läsas efter sparandet.");
+  if (evidence) {
+    const completed = parseProfileEvidence(evidence, updatedProfile.value.profile);
+    completed.updatedAt = new Date().toISOString();
+    const saved = await profileRepository.saveProfile(candidateId, completed);
+    if (!saved.ok) return failure("PROFILE_SAVE_FAILED", "Profilen kunde inte sparas.");
+    updatedProfile = await profileRepository.getProfileByCandidateId(candidateId);
+    if (!updatedProfile.ok) return failure("PROFILE_READ_FAILED", "Profilen kunde inte läsas efter sparandet.");
+  }
   const currentBase = await baseCvRepository.getByCandidateId(candidateId);
   if (!currentBase.ok && currentBase.error.code !== "NOT_FOUND") return failure("BASE_CV_READ_FAILED", "CV:t kunde inte läsas.");
   const basePreview = previewCandidateBaseCvRefresh({ candidateId, profile: updatedProfile.value.profile, baseCv: currentBase.ok ? currentBase.value : null, creationTimestamp: new Date().toISOString() });
   if (!basePreview.ok) return failure(basePreview.error.code, "CV:t kunde inte förhandsgranskas.");
   const baseApply = await applyCandidateBaseCvRefresh({ candidateId, preview: basePreview.value, confirmConflictPaths: confirmHeadline ? ["headline"] : [], profileRepository, baseCvRepository });
   if (!baseApply.ok) return failure(baseApply.error.code, "Profilen sparades, men CV:t kunde inte uppdateras ännu.");
-  return { ok: true, complete: true };
+  const needsCompletion = profileCompletionIssues(updatedProfile.value.profile).length > 0;
+  return { ok: true, complete: true, ...(needsCompletion ? { needsCompletion: true } : {}) };
 }
 
 export async function createOnboardingIdAction(): Promise<string> {

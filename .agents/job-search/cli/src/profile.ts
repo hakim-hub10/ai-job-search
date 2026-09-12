@@ -1,6 +1,20 @@
 export type WorkMode = "remote" | "hybrid" | "onsite" | "open"
 export type EmploymentType = "full-time" | "part-time" | "contract" | "temporary" | "internship" | "open"
 
+/**
+ * Domain-neutral: a project can be a GitHub repository, a portfolio piece, a
+ * school assignment, a construction project, a marketing campaign, a research
+ * project, or volunteer work. Optional throughout - candidates without
+ * projects are not required to have this field, and every existing
+ * CandidateProfile literal across the codebase remains valid without it.
+ */
+export interface Project {
+  title: string
+  description?: string
+  technologies?: string[]
+  url?: string
+}
+
 export interface CandidateProfile {
   headline: string
   targetRoles: string[]
@@ -37,6 +51,7 @@ export interface CandidateProfile {
   careerGoals: string[]
   summary?: string
   updatedAt?: string
+  projects?: Project[]
 }
 
 export function createDefaultCandidateProfile(): CandidateProfile {

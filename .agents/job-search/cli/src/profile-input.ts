@@ -29,12 +29,13 @@ const EMPLOYMENT_TYPES = new Set<EmploymentType>(["full-time", "part-time", "con
 const PROFILE_FIELDS = new Set([
   "headline", "targetRoles", "locationPreferences", "workMode", "remotePreference",
   "preferredIndustries", "preferredEmploymentType", "skills", "workExperience", "education",
-  "certifications", "languages", "yearsOfExperience", "careerGoals", "summary", "updatedAt",
+  "certifications", "languages", "yearsOfExperience", "careerGoals", "summary", "updatedAt", "projects",
 ])
 const SKILL_FIELDS = new Set(["technical", "soft"])
 const EXPERIENCE_FIELDS = new Set(["title", "company", "location", "startDate", "endDate", "summary"])
 const EDUCATION_FIELDS = new Set(["degree", "field", "institution", "startYear", "endYear"])
 const LANGUAGE_FIELDS = new Set(["name", "level"])
+const PROJECT_FIELDS = new Set(["title", "description", "technologies", "url"])
 
 function failure(code: CandidateProfileInputErrorCode, path: string, message: string): never {
   throw new CandidateProfileInputError(code, `${path} ${message}`, path)
@@ -147,6 +148,24 @@ function parseLanguages(value: unknown): CandidateProfile["languages"] {
   })
 }
 
+function parseProjects(value: unknown): NonNullable<CandidateProfile["projects"]> {
+  if (!Array.isArray(value)) failure("INVALID_FIELD", "profile.projects", "must be an array")
+  return value.map((entry, index) => {
+    const path = `profile.projects[${index}]`
+    const input = object(entry, path, "INVALID_ENTRY")
+    rejectUnknownFields(input, PROJECT_FIELDS, path)
+    const description = optionalText(input, "description", path)
+    const url = optionalText(input, "url", path)
+    const technologies = "technologies" in input ? stringArray(input.technologies, `${path}.technologies`) : undefined
+    return {
+      title: text(required(input, "title", path), `${path}.title`, true),
+      ...(description === undefined ? {} : { description }),
+      ...(technologies === undefined ? {} : { technologies }),
+      ...(url === undefined ? {} : { url }),
+    }
+  })
+}
+
 /** Validates untrusted input and creates a CandidateProfile without defaults or inference. */
 export function parseCandidateProfile(value: unknown): CandidateProfile {
   const input = object(value, "profile", "INVALID_ROOT")
@@ -180,6 +199,7 @@ export function parseCandidateProfile(value: unknown): CandidateProfile {
   const updatedAt = optionalText(input, "updatedAt", "profile")
   if (summary !== undefined) result.summary = summary
   if (updatedAt !== undefined) result.updatedAt = updatedAt
+  if ("projects" in input) result.projects = parseProjects(input.projects)
   return result
 }
 

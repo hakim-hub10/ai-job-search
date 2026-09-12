@@ -5,6 +5,8 @@ import { useActionState, useMemo, useState, type FormEvent } from "react";
 import type { CandidateImportClaimKind } from "@/lib/candidate-import-claims";
 import type { OnboardingActionResult, OnboardingClaimView } from "./actions";
 import { applyCandidateOnboardingAction, uploadCandidateOnboardingAction } from "./actions";
+import StructuredProfileFields from "@/components/structured-profile-fields";
+import type { CandidateProfile } from "../../../../../../.agents/job-search/cli/src/profile";
 import styles from "./onboarding.module.css";
 
 interface ReviewItem {
@@ -27,13 +29,14 @@ const labels: Record<CandidateImportClaimKind, string> = {
   workExperience: "Arbetslivserfarenhet",
   education: "Utbildning",
   headline: "Titel",
+  project: "Projekt",
 };
 
 function errorMessage(result: OnboardingActionResult | null): string | null {
   return result && !result.ok ? result.message : null;
 }
 
-export default function OnboardingClient({ candidateId }: { candidateId: string }) {
+export default function OnboardingClient({ candidateId, initialProfile }: { candidateId: string; initialProfile?: CandidateProfile | null }) {
   const [uploadState, uploadAction, uploading] = useActionState<OnboardingActionResult | null, FormData>((_state, formData) => uploadCandidateOnboardingAction(formData), null);
   const [applyState, applyAction, applying] = useActionState<OnboardingActionResult | null, FormData>((_state, formData) => applyCandidateOnboardingAction(formData), null);
   const [items, setItems] = useState<ReviewItem[] | null>(null);
@@ -82,8 +85,8 @@ export default function OnboardingClient({ candidateId }: { candidateId: string 
       <section className={styles.complete} aria-live="polite">
         <span className={styles.completeMark} aria-hidden="true">✓</span>
         <p className={styles.eyebrow}>Klart</p>
-        <h2>Din profil är klar</h2>
-        <p>Vi har sparat dina bekräftade uppgifter och uppdaterat ditt grund-CV.</p>
+        <h2>{applyState?.ok && "needsCompletion" in applyState && applyState.needsCompletion ? "Profilen är sparad – kontrollera kompletteringar" : "Din profil är sparad"}</h2>
+        <p>Vi har sparat dina bekräftade uppgifter och uppdaterat ditt grund-CV. Granska profilen innan du skapar ett anpassat CV.</p>
         <div className={styles.actions}>
           <a href={`/candidates/${encodeURIComponent(candidateId)}`}>Se min profil</a>
           <a href="/jobs">Hitta jobb</a>
@@ -97,7 +100,7 @@ export default function OnboardingClient({ candidateId }: { candidateId: string 
       <div className={styles.progress} aria-label="Onboardingens steg">
         <span className={step === "upload" ? styles.current : styles.done}>1. Ladda upp</span>
         <span className={step === "review" ? styles.current : ""}>2. Kontrollera</span>
-        <span>3. Klart</span>
+        <span>3. Komplettera och spara</span>
       </div>
 
       {step === "upload" ? (
@@ -121,6 +124,7 @@ export default function OnboardingClient({ candidateId }: { candidateId: string 
               <div>
                 <p className={styles.eyebrow}>Kontrollera</p>
                 <h2>Vi hittade detta i ditt CV</h2>
+                <p>Text om anställningar och utbildning är ett underlag. Fyll själv i motsvarande strukturerade uppgifter nedan; vi gissar inte arbetsgivare, datum eller examina.</p>
                 <p>Ändra sådant som inte stämmer och ta bort det du inte vill spara.</p>
               </div>
               <button type="button" className={styles.secondary} onClick={approveAll}>Godkänn alla</button>
@@ -176,6 +180,9 @@ export default function OnboardingClient({ candidateId }: { candidateId: string 
             <input type="hidden" name="documentId" value={uploadState && uploadState.ok && "documentId" in uploadState ? uploadState.documentId : ""} />
             <input type="hidden" name="reviews" value={JSON.stringify(reviewItems.map(({ claim, decision, reviewedValue }) => ({ claimId: claim.id, decision, ...(reviewedValue === undefined ? {} : { reviewedValue }) })))} />
             <input type="hidden" name="added" value={JSON.stringify(added)} />
+            <h2>Komplettera din professionella profil</h2>
+            <p>Bekräfta din yrkesrubrik. Använd texten ovan som stöd när du lägger till eller rättar anställningar och utbildningar.</p>
+            <StructuredProfileFields profile={initialProfile} includePresentation />
             <label className={styles.confirmChoice}>
               <input type="checkbox" name="confirmHeadline" />
               Jag godkänner att en befintlig titel ersätts om jag har valt en ny.

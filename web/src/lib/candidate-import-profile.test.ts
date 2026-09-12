@@ -34,7 +34,7 @@ function profile(): CandidateProfile {
   };
 }
 
-function review(kind: "technicalSkill" | "softSkill" | "certification" | "language" | "headline" | "workExperience" | "education", value: string, id = `${kind}-claim`, decision: "approved" | "edited-and-approved" | "rejected" = "approved", source: "cv-text" | "user" = "cv-text") {
+function review(kind: "technicalSkill" | "softSkill" | "certification" | "language" | "headline" | "workExperience" | "education" | "project", value: string, id = `${kind}-claim`, decision: "approved" | "edited-and-approved" | "rejected" = "approved", source: "cv-text" | "user" = "cv-text") {
   return {
     claim: {
       id,
@@ -111,17 +111,20 @@ describe("candidate import profile integration", () => {
     expect(result.ok).toBe(false);
   });
 
-  it("requires explicit language levels and rejects flattened work and education", () => {
+  it("requires explicit language levels and rejects flattened work, education, and project claims", () => {
     const result = preview([
       review("language", "Swedish"),
       review("workExperience", "Engineer, Acme 2020-2024"),
       review("education", "Bachelor of Science, University"),
+      review("project", "GITHUB-PROJEKT: Migrated 200 users to Microsoft 365"),
     ]);
     expect(result.changes.map((change) => change.reason)).toEqual([
       "EXPLICIT_LANGUAGE_LEVEL_REQUIRED",
       "EXPLICIT_STRUCTURED_WORK_EXPERIENCE_REQUIRED",
       "EXPLICIT_STRUCTURED_EDUCATION_REQUIRED",
+      "EXPLICIT_STRUCTURED_PROJECT_REQUIRED",
     ]);
+    expect(result.changes.every((change) => change.action === "unsupported")).toBe(true);
   });
 
   it("only treats an explicit headline as a headline conflict", () => {
@@ -167,6 +170,28 @@ describe("candidate import profile integration", () => {
     expect(saved.locationPreferences).toEqual(["Jönköping"]);
     expect(saved.careerGoals).toEqual(["Build systems"]);
     expect(saved.workExperience).toEqual(profile().workExperience);
+  });
+
+  it("merges many approved facts without truncating or removing existing structured history", async () => {
+    const store = repository();
+    const technical = Array.from({ length: 11 }, (_, index) => review("technicalSkill", `Domain tool ${index + 1}`, `technical-${index + 1}`));
+    const certifications = Array.from({ length: 5 }, (_, index) => review("certification", `Professional credential ${index + 1}`, `certification-${index + 1}`));
+    const languages = [
+      review("language", "Language A (Fluent)", "language-a"),
+      review("language", "Language B (Professional)", "language-b"),
+    ];
+    const reviews = [...technical, ...certifications, ...languages];
+    const result = await applyCandidateImportProfile({ candidateId: linkage.candidateId, reviews, linkage, preview: preview(reviews), profileRepository: store.repo });
+    expect(result.ok).toBe(true);
+    const saved = store.savedProfiles[0]!;
+    expect(saved.skills.technical).toHaveLength(12);
+    expect(saved.certifications).toHaveLength(6);
+    expect(saved.languages).toEqual(expect.arrayContaining([
+      { name: "Language A", level: "Fluent" },
+      { name: "Language B", level: "Professional" },
+    ]));
+    expect(saved.workExperience).toEqual(profile().workExperience);
+    expect(saved.education).toEqual(profile().education);
   });
 
   it("applies an approved user-added claim and records its origin in the receipt", async () => {

@@ -64,8 +64,8 @@ export default async function Home() {
       </header>
 
       <section className={styles.cards}>
-        <article className={styles.card}><span>Profil</span><strong>Klar</strong><small>Din profil är redo för matchning</small></article>
-        <article className={styles.card}><span>Grund-CV</span><strong>{model.baseCvReady ? "Klar" : "Saknas"}</strong><small>{model.baseCvReady ? "Redo att användas i ansökningar" : "Skapa ett grund-CV"}</small></article>
+        <article className={styles.card}><span>Profil</span><strong>{model.profileReady ? "Klar" : "Att komplettera"}</strong><small>{model.profileReady ? "Din profil är redo för matchning" : "Kontrollera yrkesrubrik, erfarenhet och utbildning"}</small></article>
+        <article className={styles.card}><span>Grund-CV</span><strong>{model.baseCvReady ? "Klar" : "Att komplettera"}</strong><small>{model.baseCvReady ? "Redo att användas i ansökningar" : "Skapa ett grund-CV"}</small></article>
         <article className={styles.card}><span>Ansökningar</span><strong>{model.applicationCount}</strong><small>{model.applicationCount === 1 ? "Sparad ansökan" : "Sparade ansökningar"}</small></article>
       </section>
 

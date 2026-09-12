@@ -5,6 +5,7 @@ import { resolve } from "node:path";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import { parseProfileEvidence } from "@/lib/profile-evidence";
 import { parseCandidateProfile } from "../../../../../.agents/job-search/cli/src/profile-input";
 import { createFileCoachWorkspaceRepository } from "../../../../../.agents/job-search/cli/src/coach-workspace-file-repository";
 import { resolveCoachRepositoryPaths } from "../../../../../.agents/job-search/cli/src/coach-cli-paths";
@@ -75,7 +76,7 @@ export async function saveCandidateProfileAction(formData: FormData) {
     throw new Error("Candidate profile could not be read.");
   }
 
-  const profile = parseCandidateProfile({
+  let profile = parseCandidateProfile({
     headline: text(formData, "headline"),
     targetRoles: lines(formData, "targetRoles"),
     locationPreferences: lines(formData, "locationPreferences"),
@@ -122,6 +123,9 @@ export async function saveCandidateProfileAction(formData: FormData) {
     updatedAt: new Date().toISOString(),
   });
 
+  const evidence = text(formData, "structuredProfile");
+  if (evidence) profile = parseProfileEvidence(evidence, profile);
+  if (profile.headline.trim().toLowerCase() === "job seeker") throw new Error("Ange din yrkesrubrik.");
   const saved = await context.repository.saveProfile(candidateId, profile);
 
   if (!saved.ok) {

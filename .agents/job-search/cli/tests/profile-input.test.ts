@@ -110,6 +110,30 @@ describe("safe candidate profile input", () => {
     inputError(() => parseCandidateProfile(completeProfile({ languages: [{ name: "English", level: 3 }] })), "INVALID_FIELD", "profile.languages[0].level")
   })
 
+  it("is optional and defaults to absent - every existing profile literal without projects stays valid", () => {
+    const profile = parseCandidateProfile(completeProfile())
+    expect(profile.projects).toBeUndefined()
+  })
+
+  it("parses a structured project when provided, domain-neutral and optional throughout", () => {
+    const profile = parseCandidateProfile(completeProfile({
+      projects: [
+        { title: "Internal scheduling tool", description: "Built a rota tool for a 20-person team.", technologies: ["TypeScript", "SQL"], url: "https://github.com/example/rota" },
+        { title: "Community food drive" },
+      ],
+    }))
+    expect(profile.projects).toEqual([
+      { title: "Internal scheduling tool", description: "Built a rota tool for a 20-person team.", technologies: ["TypeScript", "SQL"], url: "https://github.com/example/rota" },
+      { title: "Community food drive" },
+    ])
+  })
+
+  it("rejects malformed or unsupported project fields", () => {
+    inputError(() => parseCandidateProfile(completeProfile({ projects: [{ description: "No title" }] })), "INVALID_FIELD", "profile.projects[0].title")
+    inputError(() => parseCandidateProfile(completeProfile({ projects: [{ title: "X", repo: "https://example.test" }] })), "UNSUPPORTED_VALUE", "profile.projects[0].repo")
+    inputError(() => parseCandidateProfile(completeProfile({ projects: "not an array" })), "INVALID_FIELD", "profile.projects")
+  })
+
   it("rejects unknown and commonly misspelled fields", () => {
     inputError(() => parseCandidateProfile({ ...completeProfile(), certifcations: [] }), "UNSUPPORTED_VALUE", "profile.certifcations")
     inputError(() => parseCandidateProfile({ ...completeProfile(), experiance: [] }), "UNSUPPORTED_VALUE", "profile.experiance")

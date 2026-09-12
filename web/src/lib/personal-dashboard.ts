@@ -1,3 +1,4 @@
+import { profileCompletionIssues } from "./profile-evidence";
 import type { ApplicationRecord } from "../../../.agents/job-search/cli/src/applications";
 import type { CandidateBaseCv } from "./candidate-base-cv";
 import type { CandidateProfile } from "../../../.agents/job-search/cli/src/profile";
@@ -9,12 +10,13 @@ export interface PersonalDashboardInput {
 }
 
 export type PersonalDashboardAction =
+  | { kind: "profile"; label: string; href: string }
   | { kind: "baseCv"; label: string; href: string }
   | { kind: "jobs"; label: string; href: "/jobs" }
   | { kind: "application"; label: string; href: string };
 
 export interface PersonalDashboardModel {
-  profileReady: true;
+  profileReady: boolean;
   baseCvReady: boolean;
   applicationCount: number;
   recentApplications: ApplicationRecord[];
@@ -38,8 +40,12 @@ export function buildPersonalDashboardModel(
     .filter((application) => application.status === "interview")
     .sort((left, right) => applicationTime(right) - applicationTime(left));
 
+  const profileReady = profileCompletionIssues(input.profile).length === 0;
+  const baseCvReady = Boolean(input.baseCv && profileCompletionIssues(input.baseCv).length === 0);
   let nextAction: PersonalDashboardAction;
-  if (!input.baseCv) {
+  if (!profileReady) {
+    nextAction = { kind: "profile", label: "Komplettera din profil", href: `/candidates/${encodeURIComponent(candidateId)}#profile-editor` };
+  } else if (!input.baseCv) {
     nextAction = {
       kind: "baseCv",
       label: "Skapa ditt grund-CV",
@@ -57,8 +63,8 @@ export function buildPersonalDashboardModel(
   }
 
   return {
-    profileReady: true,
-    baseCvReady: Boolean(input.baseCv),
+    profileReady,
+    baseCvReady,
     applicationCount: input.applications.length,
     recentApplications,
     nextAction,

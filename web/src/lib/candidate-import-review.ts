@@ -55,7 +55,7 @@ function hasText(value: unknown): value is string {
 function isClaimKind(value: unknown): value is CandidateImportClaimKind {
   return typeof value === "string" && [
     "technicalSkill", "softSkill", "workExperience", "education",
-    "certification", "language", "headline",
+    "certification", "language", "headline", "project",
   ].includes(value);
 }
 
