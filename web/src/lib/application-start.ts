@@ -1,5 +1,5 @@
 import { createApplicationWorkflow } from "../../../.agents/job-search/cli/src/application-workflow";
-import type { ApplicationRecord } from "../../../.agents/job-search/cli/src/applications";
+import { findDuplicateApplications, type ApplicationRecord } from "../../../.agents/job-search/cli/src/applications";
 import type { ApplicationRepository } from "../../../.agents/job-search/cli/src/application-repository";
 import { createCoachApplicationWorkflow } from "../../../.agents/job-search/cli/src/coach-application-workflow";
 import type { CandidateApplicationAssociationRepository } from "../../../.agents/job-search/cli/src/coach-application-association-repository";
@@ -129,6 +129,32 @@ export async function startApplicationFromJob(
     return failure("JOB_NOT_FOUND", "Det valda jobbet kunde inte hittas i den aktuella sökningen.");
   }
 
+  // Duplicate detection must be scoped to this candidate only: two different
+  // users (each with their own candidate) applying to the same public job
+  // are not duplicates of each other. ApplicationRepository has no concept of
+  // ownership, so the candidate's own applications are resolved through the
+  // association repository first, and findDuplicateApplications - the same
+  // pure domain function the workflow itself uses - is run against only that
+  // scoped list.
+  const ownAssociations = await dependencies.associationRepository.listByCandidateId(candidateId);
+  if (!ownAssociations.ok) {
+    return failure("APPLICATION_STORAGE_FAILURE", "Kandidatens ansökningar kunde inte läsas.");
+  }
+  const ownApplications: ApplicationRecord[] = [];
+  for (const association of ownAssociations.value) {
+    const owned = await dependencies.applicationRepository.getById(association.applicationId);
+    if (!owned.ok) return failure("APPLICATION_STORAGE_FAILURE", "Kandidatens ansökningar kunde inte läsas.");
+    ownApplications.push(owned.value);
+  }
+  const ownDuplicates = findDuplicateApplications(ownApplications, rankedJob);
+  if (ownDuplicates.length > 0) {
+    return failure(
+      "DUPLICATE_APPLICATION",
+      "Du har redan skapat en ansökan för det här jobbet.",
+      ownDuplicates[0]?.applicationId,
+    );
+  }
+
   const createdAt = dependencies.now?.() ?? new Date().toISOString();
   const applicationId = dependencies.createId?.() ?? crypto.randomUUID();
   const applicationWorkflow = createApplicationWorkflow(dependencies.applicationRepository);
@@ -136,16 +162,13 @@ export async function startApplicationFromJob(
     id: applicationId,
     rankedJob,
     createdAt,
+    // The candidate-scoped check above already ran; the workflow's own
+    // duplicate check operates on the entire (cross-candidate) repository
+    // and must not re-trigger for a different candidate's identical job.
+    allowDuplicate: true,
   });
 
   if (!created.ok) {
-    if (created.error.kind === "duplicate_advisory") {
-      return failure(
-        "DUPLICATE_APPLICATION",
-        "Det finns redan en ansökan för det här jobbet och kandidaten.",
-      );
-    }
-
     if (created.error.kind === "repository") {
       return failure("APPLICATION_STORAGE_FAILURE", "Ansökningsarkivet kunde inte uppdateras.");
     }

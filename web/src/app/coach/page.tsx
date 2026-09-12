@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { loadCoachCandidates } from "@/lib/coach-candidates";
-import { configuredAuthorizationDependencies, getAuthorizedCandidateContext } from "@/lib/authorization";
+import { getAuthenticatedUser } from "@/lib/auth-session";
 import styles from "../page.module.css";
 
 export const dynamic = "force-dynamic";
@@ -17,9 +17,18 @@ function formatDate(value: string) {
 }
 
 export default async function CoachPage() {
-  const authorization = configuredAuthorizationDependencies();
-  if (!authorization.ok) return <main style={{ maxWidth: 900, margin: "0 auto", padding: "48px 24px" }}><h1>Coachvyn är inte tillgänglig</h1></main>;
-  if (authorization.ok && (await getAuthorizedCandidateContext(authorization.value)).ok) return <main style={{ maxWidth: 900, margin: "0 auto", padding: "48px 24px" }}><h1>Coachvyn är inte tillgänglig</h1><p>Coachbehörighet är inte aktiverad för jobbsökarprofiler.</p></main>;
+  // This roster lists every candidate across every account and predates
+  // Better Auth. Any authenticated identity in this product is a job seeker
+  // scoped to their own candidate (see job-seeker-ownership.ts) - there is no
+  // separate coach role - so any active session, even one whose candidate
+  // has not been auto-provisioned yet, must never see this global list.
+  let authenticatedUser = null;
+  try {
+    authenticatedUser = await getAuthenticatedUser();
+  } catch {
+    authenticatedUser = null;
+  }
+  if (authenticatedUser) return <main style={{ maxWidth: 900, margin: "0 auto", padding: "48px 24px" }}><h1>Coachvyn är inte tillgänglig</h1><p>Coachbehörighet är inte aktiverad för jobbsökarprofiler.</p></main>;
   const result = await loadCoachCandidates();
 
   return (
