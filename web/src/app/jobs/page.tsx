@@ -6,9 +6,10 @@ import PersonalNavigation from "@/components/personal-navigation";
 import { analyzeJobsForCandidate } from "@/lib/candidate-job-matching";
 import { loadCandidateProfileRepository } from "@/lib/candidate-profiles";
 import { searchWebJobs } from "@/lib/jobs";
+import { applicationErrorHeading, formatApplicationError, shouldShowApplicationError } from "@/lib/application-error-messages";
 import styles from "../page.module.css";
 import { startApplicationAction } from "./actions";
-import { configuredAuthorizationDependencies, getAuthorizedCandidateContext } from "@/lib/authorization";
+import { configuredAuthorizationDependencies, getAuthorizedCandidateContext, requireOwnedApplication } from "@/lib/authorization";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,7 @@ interface JobsPageProps {
     location?: string;
     limit?: string;
     applicationError?: string;
+    duplicateApplicationId?: string;
   }>;
 }
 
@@ -41,25 +43,6 @@ function formatSearchError(
   return code === "ALL_SOURCES_FAILED"
     ? "Ingen av de valda jobbkällorna kunde nås just nu."
     : "Ett tekniskt fel uppstod under jobbsökningen.";
-}
-
-function formatApplicationError(code: string): string {
-  const messages: Record<string, string> = {
-    CONFIGURATION_MISSING: "Det finns ett tekniskt problem med att skapa ansökningar just nu.",
-    INVALID_INPUT: "Kandidatens eller jobbets information är ogiltig.",
-    CANDIDATE_NOT_FOUND: "Den valda kandidaten kunde inte hittas.",
-    CANDIDATE_STORAGE_FAILURE: "Kandidatregistret kunde inte läsas.",
-    PROFILE_NOT_FOUND: "Kandidatprofil saknas för den valda kandidaten.",
-    PROFILE_STORAGE_FAILURE: "Kandidatprofilen kunde inte läsas.",
-    SEARCH_FAILED: "Jobbet kunde inte hämtas igen för att skapa ansökan.",
-    JOB_NOT_FOUND: "Det valda jobbet kunde inte hittas i den aktuella sökningen.",
-    APPLICATION_STORAGE_FAILURE: "Din ansökan kunde inte sparas just nu.",
-    DUPLICATE_APPLICATION: "Det finns redan en ansökan för det här jobbet och kandidaten.",
-    APPLICATION_CREATION_FAILED: "Ansökan kunde inte skapas.",
-    APPLICATION_ASSOCIATION_FAILED: "Ansökan skapades, men kunde inte kopplas till kandidaten.",
-  };
-
-  return messages[code] ?? "Ansökan kunde inte startas.";
 }
 
 function formatSourceName(source: string): string {
@@ -147,12 +130,23 @@ export default async function JobsPage({ searchParams }: JobsPageProps) {
   const location = firstValue(params.location);
   const limit = parseLimit(params.limit);
   const applicationError = firstValue(params.applicationError);
+  const duplicateApplicationId = firstValue(params.duplicateApplicationId);
 
   const authorization = configuredAuthorizationDependencies();
   if (!authorization.ok) return <main className={styles.main}><section className={styles.panel}><h1>Jobb kunde inte visas</h1><p>Resursen kunde inte hittas.</p></section></main>;
   const authorized = await getAuthorizedCandidateContext(authorization.value);
   if (!authorized.ok) return <main className={styles.main}><section className={styles.panel}><h1>Jobb kunde inte visas</h1><p>Logga in igen eller försök senare.</p></section></main>;
   const selectedCandidate = authorized.value.candidate;
+
+  // A DUPLICATE_APPLICATION banner is carried entirely in the URL (redirect
+  // query params), so a stale link - browser back/forward, a bookmark, a
+  // lingering tab - can still point at it after the referenced application
+  // was deleted. Re-check live ownership before showing it; if the
+  // application is gone, the warning is obsolete and must not render.
+  const duplicateApplicationStillExists = applicationError === "DUPLICATE_APPLICATION" && duplicateApplicationId
+    ? (await requireOwnedApplication(duplicateApplicationId, authorization.value)).ok
+    : true;
+  const showApplicationError = shouldShowApplicationError(applicationError, duplicateApplicationStillExists);
 
   const hasSearch = query.length > 0 || location.length > 0;
 
@@ -278,11 +272,20 @@ export default async function JobsPage({ searchParams }: JobsPageProps) {
           </form>
         </section>
 
-        {applicationError ? (
+        {showApplicationError ? (
           <section className={styles.panel}>
             <div className={styles.emptyState}>
-              <strong>Ansökan kunde inte startas</strong>
+              <strong>{applicationErrorHeading(applicationError)}</strong>
               <p>{formatApplicationError(applicationError)}</p>
+              {applicationError === "DUPLICATE_APPLICATION" ? (
+                duplicateApplicationId ? (
+                  <Link href={`/applications/${encodeURIComponent(duplicateApplicationId)}`}>
+                    Visa min ansökan
+                  </Link>
+                ) : (
+                  <Link href="/applications">Visa mina ansökningar</Link>
+                )
+              ) : null}
             </div>
           </section>
         ) : null}

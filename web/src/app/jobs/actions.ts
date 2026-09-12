@@ -24,7 +24,7 @@ function parseLimit(value: string): number {
     : 0;
 }
 
-function redirectToJobs(formData: FormData, errorCode: string): never {
+function redirectToJobs(formData: FormData, errorCode: string, duplicateApplicationId?: string): never {
   const params = new URLSearchParams();
   const query = formText(formData, "query");
   const location = formText(formData, "location");
@@ -34,6 +34,7 @@ function redirectToJobs(formData: FormData, errorCode: string): never {
   if (location) params.set("location", location);
   if (limit) params.set("limit", limit);
   params.set("applicationError", errorCode);
+  if (duplicateApplicationId) params.set("duplicateApplicationId", duplicateApplicationId);
 
   redirect(`/jobs?${params.toString()}`);
 }
@@ -80,7 +81,7 @@ export async function startApplicationAction(formData: FormData) {
   );
 
   if (!result.ok) {
-    redirectToJobs(formData, result.code);
+    redirectToJobs(formData, result.code, result.applicationId);
   }
 
   redirect(`/applications/${encodeURIComponent(result.application.id)}`);
