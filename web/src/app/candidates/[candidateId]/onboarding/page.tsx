@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { loadCandidateProfile } from "@/lib/candidate-profiles";
 
 import { loadCandidateOperationalOverview } from "@/lib/candidate-overview";
 import { configuredAuthorizationDependencies, requireOwnedCandidate } from "@/lib/authorization";
@@ -26,6 +27,7 @@ export default async function CandidateOnboardingPage({ params }: { params: Prom
     );
   }
 
+  const profile = await loadCandidateProfile(candidateId);
   return (
     <main className={styles.main}>
       <header className={styles.header}>
@@ -36,7 +38,7 @@ export default async function CandidateOnboardingPage({ params }: { params: Prom
         </div>
         <Link href={`/candidates/${encodeURIComponent(candidateId)}`}>Tillbaka till profilen</Link>
       </header>
-      <OnboardingClient candidateId={candidateId} />
+      <OnboardingClient candidateId={candidateId} initialProfile={profile.profile} />
     </main>
   );
 }
