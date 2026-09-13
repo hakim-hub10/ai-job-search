@@ -1,13 +1,6 @@
-import { describe, expect, it, mock } from "bun:test";
+import { describe, expect, it } from "bun:test";
 
-mock.module("server-only", () => ({}));
-mock.module("@/lib/authorization", () => ({
-  configuredAuthorizationDependencies: () => ({ ok: false, error: { code: "UNAUTHENTICATED", message: "synthetic" } }),
-  requireOwnedApplication: async () => ({ ok: false, error: { code: "UNAUTHENTICATED", message: "synthetic" } }),
-  requireOwnedCandidate: async () => ({ ok: false, error: { code: "UNAUTHENTICATED", message: "synthetic" } }),
-}));
-
-const { documentLanguage } = await import("./actions");
+import { documentLanguage } from "./document-language";
 
 function formData(value?: string): FormData {
   const data = new FormData();
