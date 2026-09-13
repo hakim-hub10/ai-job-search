@@ -34,6 +34,7 @@ function repository(stored: ApplicationDocumentRecord, missing = false): Applica
         ? { ok: false, error: { code: "NOT_FOUND", message: "/private/document" } }
         : { ok: true, value: structuredClone(stored) };
     },
+    async deleteByApplication() { throw new Error("not used"); },
   };
 }
 

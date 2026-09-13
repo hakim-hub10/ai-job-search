@@ -56,6 +56,7 @@ function dependencies(initial: ApplicationDocumentRecord[] = [
     async save(value) { return { ok: true, value }; },
     async getById() { return { ok: true, value: application }; },
     async list() { return { ok: true, value: [application] }; },
+    async remove() { throw new Error("not used"); },
   };
   const documentRepository: ApplicationDocumentRepository = {
     async create(value) { documents.push(value); return { ok: true, value }; },
@@ -63,6 +64,7 @@ function dependencies(initial: ApplicationDocumentRecord[] = [
     async listByApplication(id) { return { ok: true, value: documents.filter((item) => item.applicationId === id) }; },
     async listVersions(id, type) { return { ok: true, value: documents.filter((item) => item.applicationId === id && item.documentType === type) }; },
     async getLatest() { return { ok: false, error: { code: "NOT_FOUND", message: "missing" } }; },
+    async deleteByApplication() { throw new Error("not used"); },
   };
   return {
     documents,
@@ -72,6 +74,7 @@ function dependencies(initial: ApplicationDocumentRecord[] = [
       async create(value) { return { ok: true, value }; },
       async getByApplicationId() { return { ok: true, value: { candidateId, applicationId, createdAt: timestamp } }; },
       async listByCandidateId() { return { ok: true, value: [] }; },
+      async deleteByApplicationId() { throw new Error("not used"); },
     } as CandidateApplicationAssociationRepository,
     candidateRepository: {
       async createCandidate() { throw new Error("not used"); },
@@ -96,6 +99,20 @@ describe("document editor boundary", () => {
     expect(saved).toMatchObject({ ok: true, value: { documentType: "cv", version: 3 } });
     expect(store.documents.some((item) => item.id === "letter-2")).toBe(true);
     expect(store.documents.some((item) => item.id === "cv-2")).toBe(true);
+  });
+
+  it("decodes HTML entities from generated content so the editor never shows a literal &amp;", async () => {
+    const store = dependencies([document("cv-amp", "cv", 1, "Records management &amp; filing at H&amp;M")]);
+    expect(await readDocumentEditorState(applicationId, "cv", store)).toMatchObject({ ok: true, value: { currentContent: "Records management & filing at H&M" } });
+  });
+
+  it("preserves English letter paragraphs and exact edited Markdown through a new version", async () => {
+    const previous = { ...document("letter-en", "coverLetter", 1, "Dear Hiring Manager,"), language: "en" as const };
+    const store = dependencies([previous]);
+    const content = "Dear Hiring Manager,\n\nI would like to discuss this role.\n\nKind regards,\nAlex";
+    const saved = await saveDocumentEdit({ applicationId, documentType: "coverLetter", content }, store);
+    expect(saved).toMatchObject({ ok: true, value: { language: "en", version: 2, renderedDocument: { content } } });
+    expect(store.documents[0]).toEqual(previous);
   });
 
   it("rejects unsupported types, oversized text, and missing documents", async () => {

@@ -26,6 +26,7 @@ function repository(records: ApplicationDocumentRecord[]): ApplicationDocumentRe
     async listByApplication() { return { ok: true, value: records }; },
     async listVersions() { return { ok: true, value: records }; },
     async getLatest() { return { ok: true, value: structuredClone(records.at(-1)!) }; },
+    async deleteByApplication() { throw new Error("not used"); },
   };
 }
 

@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { documentTitleForCv, type DocumentPresentationModel, type DocumentPresentationSection, type DocumentTemplateDefinition } from "@/lib/document-presentation";
+import { cvBodySections, documentNameForCv, documentTitleForCv, type DocumentPresentationModel, type DocumentPresentationSection, type DocumentTemplateDefinition } from "@/lib/document-presentation";
 import styles from "../../../page.module.css";
 import { DocumentExportControls } from "./document-export-controls";
 import TemplateSelector from "./template-selector";
@@ -12,8 +12,8 @@ function normalizedHeading(heading: string): string {
 function order(section: DocumentPresentationSection): number {
   const heading = normalizedHeading(section.heading);
   const ranks: Record<string, number> = {
-    profil: 1, summary: 1, experience: 2, erfarenhet: 2, "work experience": 2,
-    utbildning: 3, education: 3, kompetenser: 4, skills: 4, certifieringar: 5,
+    profil: 1, summary: 1, "professional summary": 1, experience: 2, erfarenhet: 2, "work experience": 2,
+    utbildning: 3, education: 3, kompetenser: 4, skills: 4, yrkeskompetenser: 4, "professional skills": 4, "personliga kompetenser": 4, "interpersonal skills": 4, certifieringar: 5,
     certifications: 5, sprak: 6, languages: 6, kontakt: 7, contact: 7,
   };
   return ranks[heading] ?? 8;
@@ -28,8 +28,9 @@ export default function ClassicCvPreview({
   presentation: DocumentPresentationModel;
   template: DocumentTemplateDefinition;
 }) {
-  const ordered = [...presentation.sections].sort((a, b) => order(a) - order(b));
-  const title = documentTitleForCv(ordered);
+  const ordered = cvBodySections(presentation.sections).sort((a, b) => order(a) - order(b));
+  const name = documentNameForCv(presentation.sections);
+  const title = documentTitleForCv(presentation.sections);
 
   return (
     <main className={styles.classicCvPage}>
@@ -41,7 +42,8 @@ export default function ClassicCvPreview({
       <article className={styles.classicCv}>
         <header className={styles.classicCvHeader}>
           <p className={styles.classicCvLabel}>CURRICULUM VITAE</p>
-          {title ? <h1>{title}</h1> : null}
+          {name || title ? <h1>{name || title}</h1> : null}
+            {name && title ? <p>{title}</p> : null}
           <p>Version {presentation.version} · Skapad {presentation.createdAt}</p>
         </header>
         {ordered.map((section) => (

@@ -12,7 +12,7 @@ import {
   WidthType,
 } from "docx";
 
-import { classifyCvSection, documentTitleForCv, type DocumentPresentationSection } from "./document-presentation";
+import { classifyCvSection, cvBodySections, documentContactForCv, documentNameForCv, documentTitleForCv, type DocumentPresentationSection } from "./document-presentation";
 import { sanitizedDocumentExportModel, type DocumentExportModel } from "./document-export";
 
 export interface ExportedDocxDocument {
@@ -56,24 +56,28 @@ function heading(section: DocumentPresentationSection, style = "SectionHeading")
   });
 }
 
-function sectionParagraphs(sections: readonly DocumentPresentationSection[], style = "SectionHeading"): Paragraph[] {
+function sectionParagraphs(sections: readonly DocumentPresentationSection[], style = "SectionHeading", letter = false): Paragraph[] {
   return sections.flatMap((section) => [
-    heading(section, style),
-    ...section.items.map((item) => new Paragraph({ style: "Body", bullet: { level: 0 }, children: [text(item)] })),
+    ...(section.heading ? [heading(section, style)] : []),
+    ...section.items.map((item) => new Paragraph({ style: "Body", ...(!letter ? { bullet: { level: 0 } } : {}), children: [text(item)] })),
   ]);
 }
 
 function titleParagraph(model: DocumentExportModel, color: string, includeCvTitle: boolean): Paragraph[] {
   const title = includeCvTitle ? documentTitleForCv(model.presentation.sections) : undefined;
+  const name = includeCvTitle ? documentNameForCv(model.presentation.sections) : undefined;
+  const contact = includeCvTitle ? documentContactForCv(model.presentation.sections) : undefined;
   return [
-    new Paragraph({ style: "DocumentLabel", children: [text(label(model), { bold: true, color })] }),
-    ...(title ? [new Paragraph({ style: "DocumentTitle", children: [text(title, { bold: true, color })] })] : []),
+    ...(name ? [new Paragraph({ style: "DocumentTitle", children: [text(name, { bold: true, color })] })] : []),
+    ...(!name ? [new Paragraph({ style: "DocumentLabel", children: [text(label(model), { bold: true, color })] })] : []),
+    ...(contact ? [new Paragraph({ style: "DocumentContact", children: [text(contact)] })] : []),
+    ...(title ? [new Paragraph({ style: name ? "DocumentSubtitle" : "DocumentTitle", children: [text(title, { bold: true, color })] })] : []),
   ];
 }
 
 function modernCv(model: DocumentExportModel): Table {
   const sidebar = model.presentation.sections.filter((section) => classifyCvSection(section) === "sidebar");
-  const main = model.presentation.sections.filter((section) => classifyCvSection(section) === "main");
+  const main = cvBodySections(model.presentation.sections).filter((section) => classifyCvSection(section) === "main");
   return new Table({
     width: { size: 100, type: WidthType.PERCENTAGE },
     columnWidths: [3050, 6588],
@@ -115,9 +119,9 @@ function modernCv(model: DocumentExportModel): Table {
 
 function modernLetter(model: DocumentExportModel): Paragraph[] {
   return [
-    ...titleParagraph(model, MODERN_DARK, false),
+
     ...model.presentation.sections.flatMap((section) => [
-      heading(section, "ModernHeading"),
+      ...(section.heading ? [heading(section, "ModernHeading")] : []),
       ...section.items.map((item) => new Paragraph({
         style: "Body",
         border: { left: { style: BorderStyle.SINGLE, size: 16, color: MODERN_ACCENT, space: 12 } },
@@ -130,12 +134,10 @@ function modernLetter(model: DocumentExportModel): Paragraph[] {
 function singleColumn(model: DocumentExportModel, variant: "classic" | "minimal"): Paragraph[] {
   const color = variant === "classic" ? CLASSIC_DARK : MINIMAL_DARK;
   const headingStyle = variant === "classic" ? "ClassicHeading" : "MinimalHeading";
-  const sections = model.templateId === "classic" && model.documentType === "cv"
-    ? [...model.presentation.sections]
-    : model.presentation.sections;
+  const sections = model.documentType === "cv" ? cvBodySections(model.presentation.sections) : model.presentation.sections;
   return [
-    ...titleParagraph(model, color, model.documentType === "cv"),
-    ...sectionParagraphs(sections, headingStyle),
+    ...(model.documentType === "cv" ? titleParagraph(model, color, true) : []),
+    ...sectionParagraphs(sections, headingStyle, model.documentType === "coverLetter"),
   ];
 }
 
@@ -148,6 +150,8 @@ function documentFor(model: DocumentExportModel): Document {
       default: { document: { run: { font: "Arial", size: 21, color: "20252B" } } },
       paragraphStyles: [
         { id: "DocumentLabel", name: "Document Label", basedOn: "Normal", next: "Normal", quickFormat: true, run: { font: "Arial", size: 18, characterSpacing: 18 }, paragraph: { spacing: { after: 120 } } },
+        { id: "DocumentSubtitle", name: "Document Subtitle", basedOn: "Normal", next: "Normal", run: { font: "Arial", size: 24 }, paragraph: { spacing: { after: 180 }, keepNext: true } },
+        { id: "DocumentContact", name: "Document Contact", basedOn: "Normal", next: "Normal", run: { font: "Arial", size: 18, color: "65717D" }, paragraph: { spacing: { after: 120 }, keepNext: true } },
         { id: "DocumentTitle", name: "Document Title", basedOn: "Normal", next: "Normal", quickFormat: true, run: { font: "Arial", size: 34 }, paragraph: { spacing: { after: 180 }, keepNext: true } },
         { id: "SectionHeading", name: "Section Heading", basedOn: "Normal", next: "Body", quickFormat: true, run: { font: "Arial", size: 24, bold: true, color: CLASSIC_DARK }, paragraph: { spacing: { before: 220, after: 70 }, keepNext: true, border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: "B9C0C6", space: 6 } } } },
         { id: "ModernHeading", name: "Modern Heading", basedOn: "SectionHeading", next: "Body", quickFormat: true, run: { font: "Arial", size: 24, bold: true, color: MODERN_DARK }, paragraph: { spacing: { before: 220, after: 70 }, keepNext: true } },

@@ -102,7 +102,7 @@ export function sanitizedDocumentExportModel(model: DocumentExportModel): Docume
   const sections: DocumentPresentationModel["sections"] = [];
   for (const section of model.presentation.sections) {
     if (!section || typeof section.heading !== "string" || !Array.isArray(section.items) || !section.items.every((item) => typeof item === "string")) return null;
-    sections.push({ heading: sanitizeDocumentExportText(section.heading), items: section.items.map(sanitizeDocumentExportText) });
+    sections.push({ ...(section.kind === "identity" ? { kind: "identity" as const } : {}), heading: sanitizeDocumentExportText(section.heading), items: section.items.map(sanitizeDocumentExportText) });
   }
   return {
     ...model,

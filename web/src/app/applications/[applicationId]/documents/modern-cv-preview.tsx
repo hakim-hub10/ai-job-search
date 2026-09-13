@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { classifyCvSection, documentTitleForCv, type DocumentPresentationModel, type DocumentPresentationSection, type DocumentTemplateDefinition } from "@/lib/document-presentation";
+import { cvBodySections, documentNameForCv, classifyCvSection, documentTitleForCv, type DocumentPresentationModel, type DocumentPresentationSection, type DocumentTemplateDefinition } from "@/lib/document-presentation";
 import styles from "../../../page.module.css";
 import { DocumentExportControls } from "./document-export-controls";
 import TemplateSelector from "./template-selector";
@@ -13,6 +13,10 @@ function mainSections(sections: DocumentPresentationSection[]) {
   return sections.filter((section) => classifyCvSection(section) === "main");
 }
 
+function compactSidebarSection(section: DocumentPresentationSection): boolean {
+  return ["Kompetenser", "Skills", "Certifieringar", "Certifications", "Språk", "Languages"].includes(section.heading);
+}
+
 export default function ModernCvPreview({
   applicationId,
   presentation,
@@ -23,7 +27,8 @@ export default function ModernCvPreview({
   template: DocumentTemplateDefinition;
 }) {
   const sidebar = sidebarSections(presentation.sections);
-  const main = mainSections(presentation.sections);
+  const main = mainSections(cvBodySections(presentation.sections));
+  const name = documentNameForCv(presentation.sections);
   const title = documentTitleForCv(presentation.sections);
 
   return (
@@ -39,7 +44,7 @@ export default function ModernCvPreview({
           {sidebar.map((section) => (
             <section className={styles.modernCvSidebarSection} key={section.heading}>
               <h2>{section.heading}</h2>
-              <ul>
+              <ul className={compactSidebarSection(section) ? styles.modernCvPills : undefined}>
                 {section.items.map((item) => <li key={item}>{item}</li>)}
               </ul>
             </section>
@@ -48,14 +53,15 @@ export default function ModernCvPreview({
         <div className={styles.modernCvMain}>
           <header className={styles.modernCvHeader}>
             <p className={styles.modernCvKicker}>CURRICULUM VITAE</p>
-            {title ? <h1>{title}</h1> : null}
+            {name || title ? <h1>{name || title}</h1> : null}
+            {name && title ? <p>{title}</p> : null}
             <p className={styles.modernCvMeta}>Version {presentation.version} · Skapad {presentation.createdAt}</p>
           </header>
           {main.map((section) => (
             <section className={styles.modernCvSection} key={section.heading}>
               <h2>{section.heading || "Övrigt"}</h2>
               <div className={styles.modernCvSectionBody}>
-                {section.items.map((item) => <p key={item}>{item}</p>)}
+                {section.items.filter(item => item !== title).map((item) => <p key={item}>{item}</p>)}
               </div>
             </section>
           ))}

@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { documentTitleForCv, type DocumentPresentationModel, type DocumentTemplateDefinition } from "@/lib/document-presentation";
+import { cvBodySections, documentNameForCv, documentTitleForCv, type DocumentPresentationModel, type DocumentTemplateDefinition } from "@/lib/document-presentation";
 import styles from "../../../page.module.css";
 import { DocumentExportControls } from "./document-export-controls";
 import TemplateSelector from "./template-selector";
@@ -14,6 +14,7 @@ export default function MinimalCvPreview({
   presentation: DocumentPresentationModel;
   template: DocumentTemplateDefinition;
 }) {
+  const name = documentNameForCv(presentation.sections);
   const title = documentTitleForCv(presentation.sections);
 
   return (
@@ -25,11 +26,12 @@ export default function MinimalCvPreview({
       </div>
       <article className={styles.minimalCv}>
         <header className={styles.minimalCvHeader}>
-          {title ? <h1>{title}</h1> : null}
+          {name || title ? <h1>{name || title}</h1> : null}
+            {name && title ? <p>{title}</p> : null}
           <p>Version {presentation.version} · {presentation.createdAt}</p>
         </header>
         <div className={styles.minimalCvBody}>
-          {presentation.sections.map((section) => (
+          {cvBodySections(presentation.sections).map((section) => (
             <section className={styles.minimalCvSection} key={section.heading}>
               <h2>{section.heading || "Övrigt"}</h2>
               {section.items.map((item) => <p key={item}>{item}</p>)}

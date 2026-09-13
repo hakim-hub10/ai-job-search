@@ -19,6 +19,7 @@ import { createFileCandidateApplicationAssociationRepository } from "../../../.a
 import { resolveCoachRepositoryPaths } from "../../../.agents/job-search/cli/src/coach-cli-paths";
 import { createFileCoachWorkspaceRepository } from "../../../.agents/job-search/cli/src/coach-workspace-file-repository";
 import { createFileCandidateProfileRepository } from "../../../.agents/job-search/cli/src/candidate-profile-file-repository";
+import { decodeDocumentEntities } from "./document-presentation";
 
 export const MAX_DOCUMENT_EDIT_LENGTH = 20_000;
 export const DOCUMENT_TYPES = ["cv", "coverLetter"] as const;
@@ -53,6 +54,7 @@ export interface DocumentEditorState {
   applicationId: string;
   documentType: DocumentType;
   candidateId: string;
+  language?: "sv" | "en";
   currentVersion: number;
   currentContent: string;
 }
@@ -111,6 +113,7 @@ export interface AiRewriteProposal {
 }
 
 export interface DocumentRewriteProviderRequest {
+  language?: "sv" | "en";
   mode: DocumentRewriteMode;
   currentContent: string;
   candidateEvidence: CandidateEvidence[];
@@ -192,8 +195,9 @@ async function loadEditorState(
       applicationId,
       documentType: type,
       candidateId: candidate.value.id,
+      language: latest.language,
       currentVersion: latest.version,
-      currentContent: latest.renderedDocument.content,
+      currentContent: decodeDocumentEntities(latest.renderedDocument.content),
       application: application.value,
     },
   };
@@ -220,17 +224,17 @@ export async function saveDocumentEdit(
   const generatedDocument = {
     applicationId: state.value.applicationId,
     documentType: state.value.documentType,
-    language: "sv" as const,
+    language: state.value.language ?? "sv",
     requiresHumanReview: true,
     warnings: [],
     sections: [{
-      id: `manual:${state.value.documentType}`,
+      id: "manual:content",
       kind: "context" as const,
       claims: [{
         id: `manual:${state.value.documentType}:content`,
         kind: "neutralContext" as const,
         provenance: "neutral" as const,
-        text: input.content,
+        text: input.content.replace(/\r\n?/gu, "\n"),
         evidenceIds: [],
       }],
     }],
@@ -268,6 +272,7 @@ export async function requestDocumentAiRewrite(
   const catalog = buildCandidateEvidenceCatalog({ matchingProfile: profile.value.profile });
   if (!catalog.ok) return failure("AI_PROPOSAL_INVALID", "Kandidatunderlaget kunde inte valideras.");
   const response = await provider.rewrite({
+    language: state.value.language,
     mode,
     currentContent: input.currentDraft,
     applicationId: state.value.applicationId,

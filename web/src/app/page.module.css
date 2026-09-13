@@ -1119,6 +1119,20 @@
     overflow-wrap: anywhere;
   }
 
+  .modernCvPills {
+    grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+    gap: 7px;
+  }
+
+  .modernCvPills li {
+    padding: 6px 8px;
+    border: 1px solid rgba(220, 233, 229, 0.35);
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.06);
+    font-size: 11px;
+    line-height: 1.35;
+  }
+
   .modernCvEmpty {
     color: #c4d0d0;
     font-size: 12px;
@@ -1663,3 +1677,14 @@
       box-shadow: none;
     }
   }
+
+/* Documents preserve selectable designs while allowing long evidence to wrap. */
+.modernCvSectionBody p, .modernCvSidebar li,
+.modernLetterSection p, .classicLetterSection p, .minimalLetterSection p {
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+@media print {
+  .modernCvSection h2, .classicLetterSection h2, .minimalLetterSection h2 { break-after: avoid; }
+  .modernCvSectionBody p, .modernLetterSection p, .classicLetterSection p, .minimalLetterSection p { orphans: 3; widows: 3; }
+}

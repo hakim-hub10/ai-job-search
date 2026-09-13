@@ -24,10 +24,7 @@ export default function ModernCoverLetterPreview({
       <article className={styles.modernLetter}>
         <div className={styles.modernLetterRail} aria-hidden="true" />
         <div className={styles.modernLetterContent}>
-          <header className={styles.modernLetterHeader}>
-            <p>PERSONLIGT BREV</p>
-            <p>Version {presentation.version} · Skapad {presentation.createdAt}</p>
-          </header>
+
           {presentation.sections.map((section) => (
             <section className={styles.modernLetterSection} key={section.heading}>
               {section.heading ? <h2>{section.heading}</h2> : null}

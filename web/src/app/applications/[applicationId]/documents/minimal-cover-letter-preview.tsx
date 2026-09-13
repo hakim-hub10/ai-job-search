@@ -22,10 +22,7 @@ export default function MinimalCoverLetterPreview({
         <DocumentExportControls applicationId={applicationId} documentType="coverLetter" templateId={template.id} />
       </div>
       <article className={styles.minimalLetter}>
-        <header className={styles.minimalLetterHeader}>
-          <h1>Personligt brev</h1>
-          <p>Version {presentation.version} · {presentation.createdAt}</p>
-        </header>
+
         <div className={styles.minimalLetterBody}>
           {presentation.sections.map((section) => (
             <section className={styles.minimalLetterSection} key={section.heading}>

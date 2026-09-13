@@ -22,10 +22,7 @@ export default function ClassicCoverLetterPreview({
         <DocumentExportControls applicationId={applicationId} documentType="coverLetter" templateId={template.id} />
       </div>
       <article className={styles.classicLetter}>
-        <header className={styles.classicLetterHeader}>
-          <p>PERSONLIGT BREV</p>
-          <p>Version {presentation.version} · Skapad {presentation.createdAt}</p>
-        </header>
+
         <div className={styles.classicLetterBody}>
           {presentation.sections.map((section) => (
             <section className={styles.classicLetterSection} key={section.heading}>
