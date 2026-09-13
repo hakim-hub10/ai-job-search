@@ -1,4 +1,4 @@
-import { describe, expect, it, mock } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
 
 mock.module("server-only", () => ({}));
 let authenticated = true;
@@ -9,7 +9,8 @@ mock.module("./auth-session", () => ({
   },
 }));
 
-const { getCurrentJobSeekerCandidate, getOrCreateOwnedCandidateForUser, getOwnedCandidateForUser } = await import("./job-seeker-ownership");
+const { configuredJobSeekerOwnershipDependencies, getCurrentJobSeekerCandidate, getOrCreateOwnedCandidateForUser, getOwnedCandidateForUser } = await import("./job-seeker-ownership");
+const authDb = await import("./auth-db");
 import type { CandidateOwnership } from "./candidate-ownership";
 import type { CoachCandidate } from "../../../.agents/job-search/cli/src/coach-workspace";
 import type { CoachWorkspaceRepository } from "../../../.agents/job-search/cli/src/coach-workspace-repository";
@@ -49,7 +50,7 @@ function fixture(options: { ownership?: CandidateOwnership[]; candidates?: Coach
     async listCandidates() { return { ok: true, value: [...candidates.values()].map((candidate) => structuredClone(candidate)) }; },
   };
   const dependencies: JobSeekerOwnershipDependencies = { ownershipStore, candidateRepository, createId: () => "candidate-reserved", now: () => now };
-  return { dependencies, ownership, candidates, creates };
+  return { dependencies, ownership, candidates, get creates() { return creates; } };
 }
 
 function candidate(id: string): CoachCandidate { return { id, displayName: "Existing", createdAt: now, updatedAt: now }; }
@@ -127,5 +128,90 @@ describe("job-seeker candidate ownership", () => {
     const result = await getOrCreateOwnedCandidateForUser(userA, f.dependencies);
     expect(result.ok).toBe(true);
     expect(f.candidates.get("candidate-reserved")).toEqual({ id: "candidate-reserved", displayName: "User A", createdAt: now, updatedAt: now });
+  });
+});
+
+
+describe("ownership database timestamp mapping", () => {
+  let rows: Record<string, unknown>[];
+  let inserts: number;
+  let query: ReturnType<typeof spyOn>;
+  let previousCoachDir: string | undefined;
+
+  beforeEach(() => {
+    previousCoachDir = process.env.COACH_DIR;
+    process.env.COACH_DIR = "/tmp/ownership-adapter-test-unused";
+    rows = [{ userId: userA.id, candidateId: "candidate-reserved", relationship: "owner", createdAt: new Date(now) }];
+    inserts = 0;
+    query = spyOn(authDb, "getAuthDatabase").mockReturnValue({
+      async query(sql: string, values: unknown[]) {
+        if (sql.startsWith("INSERT")) {
+          inserts += 1;
+          rows.push({ userId: values[0], candidateId: values[1], relationship: values[2], createdAt: new Date(values[3] as string) });
+        }
+        return { rows: structuredClone(rows) };
+      },
+    } as ReturnType<typeof authDb.getAuthDatabase>);
+  });
+
+  afterEach(() => {
+    query.mockRestore();
+    if (previousCoachDir === undefined) delete process.env.COACH_DIR;
+    else process.env.COACH_DIR = previousCoachDir;
+  });
+
+  function dependencies() {
+    const configured = configuredJobSeekerOwnershipDependencies();
+    if (!("ownershipStore" in configured)) throw new Error("Test ownership configuration missing");
+    const f = fixture();
+    return { ...f, dependencies: { ...f.dependencies, ownershipStore: configured.ownershipStore }, get creates() { return f.creates; } };
+  }
+
+  it("maps PostgreSQL SELECT Date timestamps to domain ISO strings", async () => {
+    const f = dependencies();
+    expect(await f.dependencies.ownershipStore.listByUserId(userA.id)).toEqual({ ok: true, value: [{ userId: userA.id, candidateId: "candidate-reserved", relationship: "owner", createdAt: now }] });
+    expect(inserts).toBe(0);
+  });
+
+  it("maps INSERT RETURNING Date timestamps and creates only one Candidate", async () => {
+    rows = [];
+    const f = dependencies();
+    const first = await getOrCreateOwnedCandidateForUser(userA, f.dependencies);
+    const second = await getOrCreateOwnedCandidateForUser(userA, f.dependencies);
+    expect(first.ok && first.value.id).toBe("candidate-reserved");
+    expect(second).toEqual(first);
+    expect(inserts).toBe(1);
+    expect(rows).toHaveLength(1);
+    expect(f.creates).toBe(1);
+    expect(await f.dependencies.ownershipStore.listByUserId(userA.id)).toEqual({ ok: true, value: [{ userId: userA.id, candidateId: "candidate-reserved", relationship: "owner", createdAt: now }] });
+  });
+
+  it.each([new Date(NaN), "invalid", "", 123, null])("rejects invalid database timestamps: %p", async (createdAt) => {
+    rows[0]!.createdAt = createdAt;
+    const f = dependencies();
+    expect(await getOrCreateOwnedCandidateForUser(userA, f.dependencies)).toMatchObject({ ok: false, error: { code: "OWNERSHIP_INTEGRITY_FAILURE" } });
+    expect(f.creates).toBe(0);
+    expect(inserts).toBe(0);
+  });
+
+  it.each([now, "2026-09-10T00:00:00Z"])("preserves valid ISO timestamp strings: %s", async (createdAt) => {
+    rows[0]!.createdAt = createdAt;
+    const f = dependencies();
+    expect(await f.dependencies.ownershipStore.listByUserId(userA.id)).toEqual({ ok: true, value: [{ userId: userA.id, candidateId: "candidate-reserved", relationship: "owner", createdAt }] });
+  });
+
+  it("recovers a missing Candidate using the existing Date-bearing reservation exactly once", async () => {
+    const f = dependencies();
+    const before = structuredClone(rows);
+    expect(await getOwnedCandidateForUser(userA.id, f.dependencies)).toMatchObject({ ok: false, error: { code: "CANDIDATE_NOT_FOUND" } });
+    const first = await getOrCreateOwnedCandidateForUser(userA, f.dependencies);
+    const second = await getOrCreateOwnedCandidateForUser(userA, f.dependencies);
+    expect(first.ok && first.value.id).toBe("candidate-reserved");
+    expect(second).toEqual(first);
+    expect([...f.candidates.keys()]).toEqual(["candidate-reserved"]);
+    expect(f.creates).toBe(1);
+    expect(inserts).toBe(0);
+    expect(rows).toEqual(before);
+    expect(rows).toHaveLength(1);
   });
 });

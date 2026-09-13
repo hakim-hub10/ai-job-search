@@ -33,6 +33,7 @@ function fixture() {
       async create(r) { calls.push("create"); records.push(structuredClone(r)); return { ok: true, value: structuredClone(r) }; },
       async getById(id) { calls.push(`read:${id}`); const r = records.find((r) => r.id === id); return r ? { ok: true, value: structuredClone(r) } : missing; },
       async listByApplicationId(id) { calls.push(`list:${id}`); return { ok: true, value: structuredClone(records.filter((r) => r.applicationId === id)) }; },
+      async deleteByApplicationId() { throw new Error("not used"); },
     },
   };
   return { deps, records, calls, application, profile };
@@ -53,7 +54,7 @@ describe("interview preparation web data", () => {
       if (!foundation.ok) throw new Error("foundation"); expect(stored.requirementContext).toEqual(foundation.value.requirements);
       expect(stored.plan.job.jobId).toBe(f.application.jobSnapshot.id);
       expect(r).toEqual(value(await load("A", stored.id, f.deps)));
-      expect(stored.evidenceSnapshot.find((e) => e.kind === "experience")).toMatchObject({ content: "Hjälpte kollegor med supportärenden.", context: { employer: "Exempelbolaget", role: "Tekniker" } });
+      expect(stored.evidenceSnapshot.find((e) => e.kind === "experience")).toMatchObject({ content: "Tekniker at Exempelbolaget · Göteborg · Hjälpte kollegor med supportärenden.", context: { employer: "Exempelbolaget", role: "Tekniker" } });
       expect(JSON.stringify(r)).not.toMatch(/PRIVATE_NAME|candidateId|profileUpdatedAt|sourceId|matchingProfile|email|phone/);
       expect({ app: f.application, profile: f.profile }).toEqual(before);
     } finally { spy.mockRestore(); }

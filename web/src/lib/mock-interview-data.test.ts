@@ -40,6 +40,7 @@ function fixture() {
     linkRepository: {
       async create(l) { calls.push("link"); links.set(l.sessionId, structuredClone(l)); return { ok: true, value: structuredClone(l) }; },
       async getBySessionId(id) { calls.push("resolve"); const l = links.get(id); return l ? { ok: true, value: structuredClone(l) } : missing; },
+      async deleteBySessionId() { throw new Error("not used"); },
     },
   }; return { deps, preparations, sessions, links, calls };
 }

@@ -56,11 +56,13 @@ function fixture(options: { ownership?: CandidateOwnership[]; associations?: Arr
     async create() { throw new Error("not used"); }, async save() { throw new Error("not used"); },
     async getById(id) { return applicationIds.has(id) ? { ok: true, value: { id } as never } : { ok: false, error: { code: "NOT_FOUND", message: "missing" } }; },
     async list() { return { ok: true, value: [] }; },
+    async remove() { throw new Error("not used"); },
   };
   const associationRepository: CandidateApplicationAssociationRepository = {
     async create() { throw new Error("not used"); },
     async getByApplicationId(id) { const row = associations.find((association) => association.applicationId === id); return row ? { ok: true, value: { ...row, createdAt: timestamp } } : { ok: false, error: { code: "NOT_FOUND", message: "missing" } }; },
     async listByCandidateId(id) { return { ok: true, value: associations.filter((association) => association.candidateId === id).map((association) => ({ ...association, createdAt: timestamp })) }; },
+    async deleteByApplicationId() { throw new Error("not used"); },
   };
   const baseOwnership: JobSeekerOwnershipDependencies = { ownershipStore, candidateRepository };
   return { ownership: baseOwnership, applicationRepository, associationRepository };
@@ -109,9 +111,9 @@ describe("authorization boundary", () => {
   it("resolves documents and interviews through application ownership", async () => {
     const deps = dependencies();
     const document = { id: "document-a", applicationId: "application-a" } as never;
-    const documentRepository: ApplicationDocumentRepository = { async create() { throw new Error("not used"); }, async getById() { return { ok: true, value: document }; }, async listByApplication() { return { ok: true, value: [] }; }, async listVersions() { return { ok: true, value: [] }; }, async getLatest() { return { ok: true, value: document }; } };
+    const documentRepository: ApplicationDocumentRepository = { async create() { throw new Error("not used"); }, async getById() { return { ok: true, value: document }; }, async listByApplication() { return { ok: true, value: [] }; }, async listVersions() { return { ok: true, value: [] }; }, async getLatest() { return { ok: true, value: document }; }, async deleteByApplication() { throw new Error("not used"); } };
     const preparation = { id: "preparation-a", applicationId: "application-a", candidateId: "candidate-a" } as never;
-    const preparationRepository: InterviewPreparationRepository = { async create() { throw new Error("not used"); }, async getById() { return { ok: true, value: preparation }; }, async listByApplicationId() { return { ok: true, value: [] }; } };
+    const preparationRepository: InterviewPreparationRepository = { async create() { throw new Error("not used"); }, async getById() { return { ok: true, value: preparation }; }, async listByApplicationId() { return { ok: true, value: [] }; }, async deleteByApplicationId() { throw new Error("not used"); } };
     const session = { id: "session-a", applicationId: "application-a" } as never;
     const sessionRepository: Pick<InterviewSessionRepository, "getById"> = { async getById() { return { ok: true, value: session }; } };
     const extended = { ...deps, documentRepository, preparationRepository, sessionRepository };
@@ -123,7 +125,7 @@ describe("authorization boundary", () => {
 
   it("fails closed on inconsistent interview linkage", async () => {
     const deps = dependencies();
-    const preparationRepository: InterviewPreparationRepository = { async create() { throw new Error("not used"); }, async getById() { return { ok: true, value: { id: "prep", applicationId: "application-a", candidateId: "candidate-b" } as never }; }, async listByApplicationId() { return { ok: true, value: [] }; } };
+    const preparationRepository: InterviewPreparationRepository = { async create() { throw new Error("not used"); }, async getById() { return { ok: true, value: { id: "prep", applicationId: "application-a", candidateId: "candidate-b" } as never }; }, async listByApplicationId() { return { ok: true, value: [] }; }, async deleteByApplicationId() { throw new Error("not used"); } };
     expect(await requireOwnedInterviewPreparation("prep", { ...deps, preparationRepository })).toMatchObject({ ok: false, error: { code: "INTEGRITY_ERROR" } });
   });
 

@@ -11,7 +11,7 @@ import { resolveCoachRepositoryPaths } from "../../../.agents/job-search/cli/src
 
 import { getAuthDatabase } from "./auth-db";
 import { requireAuthenticatedUser, type AuthenticatedUser } from "./auth-session";
-import { CANDIDATE_OWNERSHIP_RELATIONSHIP, type CandidateOwnership } from "./candidate-ownership";
+import { CANDIDATE_OWNERSHIP_RELATIONSHIP, createCandidateOwnership, type CandidateOwnership } from "./candidate-ownership";
 
 export type JobSeekerOwnershipErrorCode =
   | "UNAUTHENTICATED"
@@ -61,8 +61,13 @@ function validText(value: unknown): value is string {
 }
 
 function ownershipRow(value: Record<string, unknown>): CandidateOwnership | null {
-  if (!validText(value.userId) || !validText(value.candidateId) || value.relationship !== CANDIDATE_OWNERSHIP_RELATIONSHIP || typeof value.createdAt !== "string") return null;
-  return { userId: value.userId, candidateId: value.candidateId, relationship: CANDIDATE_OWNERSHIP_RELATIONSHIP, createdAt: value.createdAt };
+  const timestamp = value.createdAt;
+  if (timestamp instanceof Date && !Number.isFinite(timestamp.getTime())) return null;
+  const result = createCandidateOwnership({
+    ...value,
+    createdAt: timestamp instanceof Date ? timestamp.toISOString() : timestamp,
+  });
+  return result.ok ? result.value : null;
 }
 
 function createDatabaseOwnershipStore(): CandidateOwnershipStore {
