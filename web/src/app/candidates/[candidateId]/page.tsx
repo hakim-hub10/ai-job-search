@@ -1,4 +1,5 @@
 import { reviewProfileQuality } from "@/lib/profile-quality";
+import PersonalNavigation from "@/components/personal-navigation";
 import Link from "next/link";
 import StructuredProfileFields from "@/components/structured-profile-fields";
 import { profileCompletionIssues } from "@/lib/profile-evidence";
@@ -102,16 +103,7 @@ export default async function CandidatePage({
           <h1 className={styles.brand}>Min arbetsyta</h1>
         </div>
 
-        <nav className={styles.nav}>
-          <Link href="/" className={styles.navItem}>
-            Översikt
-          </Link>
-          <Link href="/jobs" className={styles.navItem}>Jobb</Link>
-          <Link href={`/candidates/${encodeURIComponent(candidateId)}`} className={`${styles.navItem} ${styles.active}`}>Min profil</Link>
-          <Link href="/applications" className={styles.navItem}>
-            Ansökningar
-          </Link>
-        </nav>
+        <PersonalNavigation candidateId={candidateId} active="profile" />
       </aside>
 
       <main className={styles.main}>
@@ -124,8 +116,8 @@ export default async function CandidatePage({
             </p>
           </div>
 
-          <Link href="/candidates" className={styles.secondaryButton}>
-            Tillbaka till kandidater
+          <Link href="/" className={styles.secondaryButton}>
+            Till översikten
           </Link>
           <Link href={`/candidates/${encodeURIComponent(candidateId)}/onboarding`} className={styles.secondaryButton}>
             Uppdatera profil från CV
