@@ -21,7 +21,7 @@ function text(formData: FormData, name: string): string {
 
 function lines(formData: FormData, name: string): string[] {
   return text(formData, name)
-    .split(/\r?\n/)
+    .split(/[\r\n,]+/)
     .map((value) => value.trim())
     .filter(Boolean);
 }
