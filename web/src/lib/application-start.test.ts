@@ -127,6 +127,11 @@ function dependencies(options: {
     async list() {
       return { ok: true, value: [...applicationRecords.values()].map((record) => structuredClone(record)) };
     },
+    async remove(id) {
+      if (!applicationRecords.has(id)) return { ok: false, error: { code: "NOT_FOUND", message: "missing application" } };
+      applicationRecords.delete(id);
+      return { ok: true, value: undefined };
+    },
   };
 
   const associationRepository: CandidateApplicationAssociationRepository = {
@@ -148,6 +153,11 @@ function dependencies(options: {
         ok: true,
         value: associationRecords.filter((item) => item.candidateId === candidateId).map((item) => structuredClone(item)),
       };
+    },
+    async deleteByApplicationId(applicationId) {
+      const index = associationRecords.findIndex((item) => item.applicationId === applicationId);
+      if (index >= 0) associationRecords.splice(index, 1);
+      return { ok: true, value: undefined };
     },
   };
 
@@ -257,7 +267,7 @@ describe("web application start boundary", () => {
       now: () => createdAt,
     });
 
-    expect(repeated).toMatchObject({ ok: false, code: "DUPLICATE_APPLICATION" });
+    expect(repeated).toMatchObject({ ok: false, code: "DUPLICATE_APPLICATION", applicationId: "application-1" });
     expect(repeatedStore.applicationCreateCalls).toBe(0);
   });
 
