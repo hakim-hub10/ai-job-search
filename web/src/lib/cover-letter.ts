@@ -1,6 +1,7 @@
+import { documentQualityProfile, professionalDocumentGenerator, resolveDocumentLanguage } from "./professional-documents";
+import type { DocumentLanguage } from "../../../.agents/job-search/cli/src/application-documents";
 import {
   generateApplicationDocument,
-  type ApplicationDocumentGenerator,
 } from "../../../.agents/job-search/cli/src/index";
 import { createApplicationDocumentStorageWorkflow } from "../../../.agents/job-search/cli/src/application-document-storage-workflow";
 import type { ApplicationRepository } from "../../../.agents/job-search/cli/src/application-repository";
@@ -11,6 +12,7 @@ import type { CandidateProfileRepository } from "../../../.agents/job-search/cli
 
 export interface CreateCoverLetterInput {
   applicationId: string;
+  language?: DocumentLanguage;
 }
 
 export type CreateCoverLetterFailureCode =
@@ -58,64 +60,7 @@ function failure(
   return { ok: false, code, message };
 }
 
-const deterministicCoverLetterGenerator: ApplicationDocumentGenerator = {
-  async generate(request) {
-    const sections = new Map<string, {
-      id: string;
-      kind: (typeof request.selectedEvidence)[number]["kind"];
-      claims: Array<{
-        id: string;
-        kind: "candidateFact";
-        provenance: "verbatim";
-        text: string;
-        evidenceIds: string[];
-      }>;
-    }>();
-
-    for (const evidence of request.selectedEvidence) {
-      const section = sections.get(evidence.kind) ?? {
-        id: `deterministic:${evidence.kind}`,
-        kind: evidence.kind,
-        claims: [],
-      };
-      section.claims.push({
-        id: `deterministic:${evidence.id}`,
-        kind: "candidateFact",
-        provenance: "verbatim",
-        text: evidence.content,
-        evidenceIds: [evidence.id],
-      });
-      sections.set(evidence.kind, section);
-    }
-
-    return {
-      ok: true,
-      value: {
-        applicationId: request.applicationId,
-        type: request.type,
-        language: request.language,
-        sections: [
-          {
-            id: "deterministic:context",
-            kind: "context" as const,
-            claims: [
-              {
-                id: "deterministic:cover-letter-context",
-                kind: "neutralContext" as const,
-                provenance: "neutral" as const,
-                text: "Strukturerad disposition för personligt brev.",
-                evidenceIds: [],
-              },
-            ],
-          },
-          ...sections.values(),
-        ],
-      },
-    };
-  },
-};
-
-/** Creates an application-scoped cover-letter outline from profile evidence only. */
+/** Creates an application-scoped cover letter from profile evidence only. */
 export async function createCoverLetter(
   input: CreateCoverLetterInput,
   dependencies: CreateCoverLetterDependencies,
@@ -153,9 +98,10 @@ export async function createCoverLetter(
 
   const generated = await generateApplicationDocument({
     application: application.value,
-    candidateDocumentInput: { matchingProfile: profile.value.profile },
-    tailoringOptions: { type: "coverLetter", language: "sv" },
-    generator: deterministicCoverLetterGenerator,
+    candidateDocumentInput: { matchingProfile: documentQualityProfile(profile.value.profile), identity: { fullName: candidate.value.displayName } },
+    tailoringOptions: { type: "coverLetter", language: resolveDocumentLanguage(input.language, application.value.jobSnapshot.description), maxEvidenceItems: 200 },
+    generator: professionalDocumentGenerator,
+    generationOptions: { untrustedJobDescription: application.value.jobSnapshot.description ?? undefined },
   });
 
   if (!generated.ok) {

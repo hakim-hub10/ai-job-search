@@ -132,6 +132,19 @@ function importanceFor(evidenceId: string, requirements: RequirementEvidenceCont
   return values.length ? Math.min(...values) : Number.MAX_SAFE_INTEGER
 }
 
+/**
+ * A CV/letter header reads name first, then contact details - not the
+ * alphabetical order of internal evidence IDs ("email" before "full-name"
+ * before "phone"). This only reorders identity evidence against other
+ * identity evidence; every other kind keeps the existing id tiebreaker.
+ */
+const IDENTITY_FIELD_ORDER = ["full-name", "location", "email", "phone", "link"] as const
+function identityFieldRank(evidenceId: string): number {
+  const field = evidenceId.replace(/^document:identity:/u, "").replace(/:\d+$/u, "")
+  const rank = IDENTITY_FIELD_ORDER.indexOf(field as (typeof IDENTITY_FIELD_ORDER)[number])
+  return rank === -1 ? IDENTITY_FIELD_ORDER.length : rank
+}
+
 function compareEvidence(a: CandidateEvidence, b: CandidateEvidence, foundation: ApplicationDocumentFoundation, preferred: Set<string>): number {
   const aSupport = supports(a.id, foundation.requirements)
   const bSupport = supports(b.id, foundation.requirements)
@@ -143,6 +156,11 @@ function compareEvidence(a: CandidateEvidence, b: CandidateEvidence, foundation:
   const aSection = SECTION_ORDER.indexOf(a.kind)
   const bSection = SECTION_ORDER.indexOf(b.kind)
   if (aSection !== bSection) return aSection - bSection
+  if (a.kind === "identity" && b.kind === "identity") {
+    const aRank = identityFieldRank(a.id)
+    const bRank = identityFieldRank(b.id)
+    if (aRank !== bRank) return aRank - bRank
+  }
   return a.id.localeCompare(b.id)
 }
 

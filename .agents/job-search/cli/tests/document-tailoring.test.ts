@@ -138,4 +138,24 @@ describe("Phase 4.2 tailoring policies", () => {
     const input = foundation({ catalog: { evidence: [evidence("domain", "skill", value, [requirement.identity.key])] }, requirements: [{ requirement, status: "matched", evidenceIds: ["domain"] }] })
     expect(createTailoringPlan(input, { type: "cv", language: "en" })).toMatchObject({ ok: true, value: { selections: [expect.objectContaining({ evidenceId: "domain", emphasis: "primary" })] } })
   })
+
+  it("orders identity evidence for a document header (name first) instead of alphabetically by evidence ID", () => {
+    // Deliberately inserted out of header order and in an order where a bare
+    // ID sort ("email" < "full-name" < "phone") would put the name last.
+    const input = foundation({
+      catalog: {
+        evidence: [
+          evidence("document:identity:email", "identity", "alex@example.test"),
+          evidence("document:identity:phone", "identity", "070-1234567"),
+          evidence("document:identity:full-name", "identity", "Alex Example"),
+        ],
+      },
+      requirements: [],
+    })
+    const result = createTailoringPlan(input, { type: "cv", language: "en" })
+    if (!result.ok) throw new Error(result.error.message)
+    expect(result.value.selections.map((item) => item.evidenceId)).toEqual([
+      "document:identity:full-name", "document:identity:email", "document:identity:phone",
+    ])
+  })
 })

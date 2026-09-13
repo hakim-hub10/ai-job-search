@@ -13,7 +13,7 @@ import {
 import type { CandidateProfile } from "../../../.agents/job-search/cli/src/profile";
 import type { CandidateProfileRepository } from "../../../.agents/job-search/cli/src/candidate-profile-repository";
 import type { CandidateBaseCvRepository } from "./candidate-base-cv-repository";
-import { createCandidateBaseCvFromProfile } from "./candidate-base-cv";
+import { createCandidateBaseCvFromProfile, synchronizeCandidateBaseCv } from "./candidate-base-cv";
 import { createTailoredCv } from "./tailored-cv";
 import type { ApplicationDocumentRecord, ApplicationDocumentRepository } from "../../../.agents/job-search/cli/src/application-document-repository";
 
@@ -116,6 +116,7 @@ function stores(options: {
         : { ok: false, error: { code: "NOT_FOUND", message: "missing application" } });
     },
     async list() { return { ok: true, value: [...applications.values()] }; },
+    async remove() { throw new Error("not used"); },
   };
   const documentRepository: ApplicationDocumentRepository = {
     async create(value) { documents.push(value); return { ok: true, value }; },
@@ -127,6 +128,7 @@ function stores(options: {
         : { ok: true, value: documents.filter((item) => item.applicationId === id && item.documentType === type) };
     },
     async getLatest(id, type) { const value = documents.filter((item) => item.applicationId === id && item.documentType === type).at(-1); return value ? { ok: true, value } : { ok: false, error: { code: "NOT_FOUND", message: "missing document" } }; },
+    async deleteByApplication() { throw new Error("not used"); },
   };
   return {
     applicationRepository,
@@ -136,6 +138,7 @@ function stores(options: {
         return options.associationResult ?? { ok: true, value: { candidateId, applicationId, createdAt: timestamp } };
       },
       async listByCandidateId() { return { ok: true, value: [] }; },
+      async deleteByApplicationId() { throw new Error("not used"); },
     } as CandidateApplicationAssociationRepository,
     candidateRepository: candidateRepository(),
     profileRepository: profileRepository(options.profileResult),
@@ -146,13 +149,87 @@ function stores(options: {
 }
 
 describe("tailored CV boundary", () => {
+  it("renders structured profile evidence after Base CV synchronization", async () => {
+    const completed = { ...profile(), education: [{ degree: "YH", field: "IT", institution: "Synthetic School", startYear: 2020, endYear: 2022 }] };
+    const synced = synchronizeCandidateBaseCv(candidateId, completed, null, null, timestamp);
+    if (!synced.ok) throw new Error("fixture");
+    const store = stores({ profileResult: { ok: true, value: { candidateId, profile: completed } }, baseCvResult: { ok: true, value: synced.value } });
+    const result = await createTailoredCv({ applicationId }, { ...store, createId: () => "complete-cv", now: () => timestamp });
+    if (!result.ok) throw new Error(result.message);
+    const content = result.document.renderedDocument.content;
+    for (const fact of [completed.headline, completed.summary!, "Exempel AB", "Synthetic School", "Microsoft 365", "AZ-900", "Svenska"]) expect(content).toContain(fact);
+    expect(content).not.toContain("Kubernetes");
+  });
+
+  it("retains complete visible structured evidence without promoting unsupported job skills", async () => {
+    const complete: CandidateProfile = {
+      ...profile(),
+      skills: {
+        technical: ["Domain tool A", "Domain tool B", "Domain tool C"],
+        soft: ["Collaboration", "Planning"],
+      },
+      certifications: ["Professional credential A", "Professional credential B"],
+      languages: [
+        { name: "Language A", level: "Fluent" },
+        { name: "Language B", level: "Professional" },
+      ],
+      workExperience: [
+        { title: "Role A", company: "Organization A", location: "City A", summary: "Delivered service A." },
+        { title: "Role B", company: "Organization B", location: "City B", summary: "Delivered service B." },
+      ],
+      education: [
+        { degree: "Diploma A", field: "Field A", institution: "School A" },
+        { degree: "Diploma B", field: "Field B", institution: "School B" },
+      ],
+    };
+    const completeJob = normalizeJob({
+      ...job(),
+      skills: ["Unsupported job skill"],
+      description: "Unsupported job skill is required.",
+    });
+    const rankedJob = analyzeJobs(complete, [completeJob]).rankedJobs[0];
+    if (!rankedJob) throw new Error("fixture");
+    const created = createApplication({ id: applicationId, rankedJob, createdAt: timestamp });
+    if (!created.ok) throw new Error("fixture");
+    const base = createCandidateBaseCvFromProfile(candidateId, complete, timestamp);
+    if (!base.ok) throw new Error("fixture");
+    const store = stores({
+      applicationResult: { ok: true, value: created.value },
+      profileResult: { ok: true, value: { candidateId, profile: complete } },
+      baseCvResult: { ok: true, value: base.value },
+    });
+
+    const result = await createTailoredCv({ applicationId }, { ...store, createId: () => "complete-cv", now: () => timestamp });
+    if (!result.ok) throw new Error(result.message);
+    const content = result.document.renderedDocument.content;
+    for (const fact of [
+      "Domain tool A", "Domain tool B", "Domain tool C", "Collaboration", "Planning",
+      "Professional credential A", "Professional credential B", "Language A", "Language B",
+      "Organization A", "Organization B", "School A", "School B",
+    ]) expect(content).toContain(fact);
+    expect(content).not.toContain("Unsupported job skill");
+  });
+
+  it("respects an explicitly hidden authored Base CV summary", async () => {
+    const store = stores();
+    const base = createCandidateBaseCvFromProfile(candidateId, profile(), timestamp);
+    if (!base.ok) throw new Error("fixture");
+    base.value.visibility.summary = false;
+    const result = await createTailoredCv({ applicationId }, { ...store, baseCvRepository: baseCvRepository({ ok: true, value: base.value }), createId: () => "hidden-summary", now: () => timestamp });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.document.renderedDocument.content).not.toContain(profile().summary!);
+      expect(result.document.generatedDocument.sections.find(section => section.kind === "summary")?.claims).toHaveLength(1);
+    }
+  });
+
   it("creates a deterministic CV with version one and no invented job skill", async () => {
     const store = stores();
     const result = await createTailoredCv({ applicationId }, { ...store, createId: () => "document-1", now: () => timestamp });
 
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error(result.message);
-    expect(result.document).toMatchObject({ applicationId, documentType: "cv", version: 1, language: "sv" });
+    expect(result.document).toMatchObject({ applicationId, documentType: "cv", version: 1, language: "en" });
     expect(result.document.renderedDocument.content).toContain("Microsoft 365");
     expect(result.document.renderedDocument.content).not.toContain("Kubernetes");
     expect(store.documents).toHaveLength(1);

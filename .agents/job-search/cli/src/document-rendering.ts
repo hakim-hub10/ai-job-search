@@ -118,7 +118,18 @@ export function renderGeneratedApplicationDocument(
     if (!claims.every((claim) => claim && typeof claim.id === "string" && typeof claim.text === "string" && Array.isArray(claim.evidenceIds))) {
       return failure("INVALID_GENERATED_DOCUMENT", "Every generated document claim must be structured.")
     }
-    if (section.kind === "identity") {
+    if (section.id === "manual:content" && document.requiresHumanReview && claims.every(claim => claim.kind === "neutralContext" && claim.provenance === "neutral" && claim.evidenceIds.length === 0)) {
+      // Explicitly user-edited Markdown remains review-required, with no promotion to candidate facts.
+      for (const claim of claims) {
+        lines.push(claim.text)
+        renderMap.push({ sectionId: section.id, claimId: claim.id, blockIndex: blocks++, evidenceIds: [], provenance: "neutral" })
+      }
+    } else if (document.documentType === "coverLetter" && section.id === "professional:letter") {
+      for (const claim of claims) {
+        lines.push(escape(claim.text), "")
+        renderMap.push({ sectionId: section.id, claimId: claim.id, blockIndex: blocks++, evidenceIds: [...claim.evidenceIds], provenance: claim.provenance })
+      }
+    } else if (section.kind === "identity") {
       if (claims.length) {
         lines.push(`# ${claims.map((claim) => escape(claim.text)).join(" | ")}`)
         for (const claim of claims) {
@@ -132,7 +143,9 @@ export function renderGeneratedApplicationDocument(
         }
       }
     } else if (claims.length) {
-      lines.push(`## ${labels[section.kind] ?? labels.other}`)
+      const presentationLabel = section.id === "professional:technicalSkills" ? (document.language === "sv" ? "Yrkeskompetenser" : "Professional skills")
+        : section.id === "professional:softSkills" ? (document.language === "sv" ? "Personliga kompetenser" : "Interpersonal skills") : labels[section.kind] ?? labels.other
+      lines.push(`## ${presentationLabel}`)
       for (const claim of claims) {
         lines.push(`- ${escape(claim.text)}`)
         renderMap.push({

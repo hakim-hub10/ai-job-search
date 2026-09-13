@@ -1,6 +1,8 @@
+import { documentQualityProfile, documentQualityExclusions, createProfessionalDocumentGenerator, resolveDocumentLanguage } from "./professional-documents";
+import type { SkillReviewItem } from "./profile-quality";
+import type { DocumentLanguage } from "../../../.agents/job-search/cli/src/application-documents";
 import {
   generateApplicationDocument,
-  type ApplicationDocumentGenerator,
 } from "../../../.agents/job-search/cli/src/index";
 import { createApplicationDocumentStorageWorkflow } from "../../../.agents/job-search/cli/src/application-document-storage-workflow";
 import type { ApplicationRepository } from "../../../.agents/job-search/cli/src/application-repository";
@@ -13,6 +15,7 @@ import type { CandidateBaseCv } from "./candidate-base-cv";
 
 export interface CreateTailoredCvInput {
   applicationId: string;
+  language?: DocumentLanguage;
 }
 
 export type CreateTailoredCvFailureCode =
@@ -39,6 +42,8 @@ export interface CreateTailoredCvFailure {
 export interface CreateTailoredCvSuccess {
   ok: true;
   document: ApplicationDocumentRecord;
+  /** Approved profile evidence excluded from the CV as likely pollution (see documentQualityProfile), with the reason for each - never silently lost. */
+  excludedProfileEvidence: SkillReviewItem[];
 }
 
 export type CreateTailoredCvResult =
@@ -95,48 +100,6 @@ function profileForBaseCv(
   };
 }
 
-const deterministicGenerator: ApplicationDocumentGenerator = {
-  async generate(request) {
-    const sections = new Map<string, {
-      id: string;
-      kind: (typeof request.selectedEvidence)[number]["kind"];
-      claims: Array<{
-        id: string;
-        kind: "candidateFact";
-        provenance: "verbatim";
-        text: string;
-        evidenceIds: string[];
-      }>;
-    }>();
-
-    for (const evidence of request.selectedEvidence) {
-      const section = sections.get(evidence.kind) ?? {
-        id: `deterministic:${evidence.kind}`,
-        kind: evidence.kind,
-        claims: [],
-      };
-      section.claims.push({
-        id: `deterministic:${evidence.id}`,
-        kind: "candidateFact",
-        provenance: "verbatim",
-        text: evidence.content,
-        evidenceIds: [evidence.id],
-      });
-      sections.set(evidence.kind, section);
-    }
-
-    return {
-      ok: true,
-      value: {
-        applicationId: request.applicationId,
-        type: request.type,
-        language: request.language,
-        sections: [...sections.values()],
-      },
-    };
-  },
-};
-
 /** Creates an application-scoped CV using only trusted profile/Base CV evidence. */
 export async function createTailoredCv(
   input: CreateTailoredCvInput,
@@ -180,13 +143,17 @@ export async function createTailoredCv(
       : failure("BASE_CV_STORAGE_FAILURE", "Grund-CV-lagringen kunde inte läsas.");
   }
 
+  const sourceProfile = profileForBaseCv(profile.value.profile, baseCv.value);
+  const excludedProfileEvidence = documentQualityExclusions(sourceProfile);
   const generated = await generateApplicationDocument({
     application: application.value,
     candidateDocumentInput: {
-      matchingProfile: profileForBaseCv(profile.value.profile, baseCv.value),
+      matchingProfile: documentQualityProfile(sourceProfile),
+      identity: { fullName: candidate.value.displayName },
     },
-    tailoringOptions: { type: "cv", language: "sv" },
-    generator: deterministicGenerator,
+    tailoringOptions: { type: "cv", language: resolveDocumentLanguage(input.language, application.value.jobSnapshot.description), maxEvidenceItems: 200 },
+    generator: createProfessionalDocumentGenerator({ composeSummary: baseCv.value.visibility.summary || !baseCv.value.summary?.trim() }),
+    generationOptions: { untrustedJobDescription: application.value.jobSnapshot.description ?? undefined },
   });
 
   if (!generated.ok) {
@@ -207,5 +174,5 @@ export async function createTailoredCv(
     return failure("DOCUMENT_STORAGE_FAILURE", "Det anpassade CV:t kunde inte sparas.");
   }
 
-  return { ok: true, document: stored.value };
+  return { ok: true, document: stored.value, excludedProfileEvidence };
 }

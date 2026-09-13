@@ -38,6 +38,7 @@ function dependencies(options: {
         return options.applicationResult ?? { ok: true, value: application };
       },
       async list() { return { ok: true, value: [application] }; },
+      async remove() { throw new Error("not used"); },
     } as ApplicationRepository,
     associationRepository: {
       async create() { throw new Error("not used"); },
@@ -47,6 +48,7 @@ function dependencies(options: {
           : { ok: true, value: association };
       },
       async listByCandidateId() { return { ok: true, value: [association] }; },
+      async deleteByApplicationId() { throw new Error("not used"); },
     } as CandidateApplicationAssociationRepository,
     candidateRepository: {
       async createCandidate() { throw new Error("not used"); },
@@ -70,6 +72,7 @@ function dependencies(options: {
       },
       async listVersions() { throw new Error("not used"); },
       async getLatest() { throw new Error("not used"); },
+      async deleteByApplication() { throw new Error("not used"); },
     } as ApplicationDocumentRepository,
   };
 }

@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { createDefaultCandidateProfile } from "../../../.agents/job-search/cli/src/profile";
 import { classifySkill, looksLikeRawImportBlock, previewSkillReview, reviewProfileQuality, summaryReviewItem } from "./profile-quality";
+import { presentSkills } from "./skill-presentation";
 
 test("flags pollution conservatively without mutating approved evidence", () => {
   const profile = createDefaultCandidateProfile();
@@ -69,4 +70,9 @@ test("moving a flagged certification into projects creates a minimal structured 
   expect(next.certifications).toEqual(["CompTIA A+"]);
   expect(next.projects).toEqual([{ title: "GITHUB-PROJEKT: Migrated 200 users to Microsoft 365" }]);
   expect(profile.certifications).toHaveLength(2);
+});
+test("presentation aliases preserve distinct identity systems and Intune, with configurable groups", () => {
+  const items = presentSkills(["AD", "Active Directory", "Azure AD / Entra ID", "Entra ID", "M365", "Office 365", "Intune", "IT-"], [{ id: "tools", label: "Tools", concepts: ["Intune"] }]);
+  expect(items.map(x => x.label)).toEqual(["Active Directory", "Microsoft Entra ID", "Microsoft 365", "Intune"]);
+  expect(items.at(-1)?.group).toBe("tools");
 });

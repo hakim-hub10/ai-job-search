@@ -74,11 +74,13 @@ function stores(options: {
     async save(value) { return { ok: true, value }; },
     async getById() { return options.applicationMissing ? { ok: false, error: { code: "NOT_FOUND", message: "missing" } } : { ok: true, value: app }; },
     async list() { return { ok: true, value: [app] }; },
+    async remove() { throw new Error("not used"); },
   };
   const associationRepository: CandidateApplicationAssociationRepository = {
     async create(value) { return { ok: true, value }; },
     async getByApplicationId() { return options.associationMissing ? { ok: false, error: { code: "NOT_FOUND", message: "missing" } } : { ok: true, value: { candidateId, applicationId, createdAt: timestamp } }; },
     async listByCandidateId() { return { ok: true, value: [] }; },
+    async deleteByApplicationId() { throw new Error("not used"); },
   };
   const candidateRepository: CoachWorkspaceRepository = {
     async createCandidate() { throw new Error("not used"); },
@@ -96,18 +98,20 @@ function stores(options: {
     async listByApplication() { return { ok: true, value: documents }; },
     async listVersions() { return options.documentError ? { ok: false, error: { code: "CORRUPT_STORAGE", message: "corrupt" } } : { ok: true, value: documents }; },
     async getLatest() { throw new Error("not used"); },
+    async deleteByApplication() { throw new Error("not used"); },
   };
   return { applicationRepository, associationRepository, candidateRepository, profileRepository, documentRepository, documents };
 }
 
 describe("cover letter boundary", () => {
-  it("creates a Swedish cover-letter outline with grounded claims and version one", async () => {
+  it("creates a Swedish factual letter with grounded claims and version one", async () => {
     const store = stores();
-    const result = await createCoverLetter({ applicationId }, { ...store, createId: () => "letter-1", now: () => timestamp });
+    const result = await createCoverLetter({ applicationId, language: "sv" }, { ...store, createId: () => "letter-1", now: () => timestamp });
 
     expect(result).toMatchObject({ ok: true, document: { documentType: "coverLetter", version: 1, language: "sv" } });
     if (!result.ok) throw new Error(result.message);
-    expect(result.document.renderedDocument.content.toLowerCase()).toContain("personligt brev");
+    expect(result.document.renderedDocument.content).toStartWith("Hej,");
+    expect(result.document.renderedDocument.content).toContain("Med vänliga hälsningar");
     expect(result.document.renderedDocument.content).toContain("Microsoft 365");
     expect(result.document.renderedDocument.content).not.toContain("Kubernetes");
     expect(store.documents).toHaveLength(1);
