@@ -185,12 +185,14 @@ export default async function ApplicationDetailPage({
                       <>
                         <p><Link href={`/applications/${encodeURIComponent(application.id)}/documents/cv`}>Visa anpassat CV</Link></p>
                         <form action={createTailoredCvAction}>
+                          <label>Dokumentspråk <select name="documentLanguage" defaultValue="auto"><option value="auto">Annonsens språk</option><option value="sv">Svenska</option><option value="en">English</option></select></label>
                           <input type="hidden" name="applicationId" value={application.id} />
                           <button type="submit">Skapa ny version</button>
                         </form>
                       </>
                     ) : baseCvResult?.ok && baseCvResult.baseCv ? (
                       <form action={createTailoredCvAction}>
+                          <label>Dokumentspråk <select name="documentLanguage" defaultValue="auto"><option value="auto">Annonsens språk</option><option value="sv">Svenska</option><option value="en">English</option></select></label>
                         <input type="hidden" name="applicationId" value={application.id} />
                         <button type="submit">Skapa anpassat CV</button>
                       </form>
@@ -215,12 +217,14 @@ export default async function ApplicationDetailPage({
                       <>
                         <p><Link href={`/applications/${encodeURIComponent(application.id)}/documents/cover-letter`}>Visa personligt brev</Link></p>
                         <form action={createCoverLetterAction}>
+                          <label>Dokumentspråk <select name="documentLanguage" defaultValue="auto"><option value="auto">Annonsens språk</option><option value="sv">Svenska</option><option value="en">English</option></select></label>
                           <input type="hidden" name="applicationId" value={application.id} />
                           <button type="submit">Skapa ny version</button>
                         </form>
                       </>
                     ) : (
                       <form action={createCoverLetterAction}>
+                          <label>Dokumentspråk <select name="documentLanguage" defaultValue="auto"><option value="auto">Annonsens språk</option><option value="sv">Svenska</option><option value="en">English</option></select></label>
                         <input type="hidden" name="applicationId" value={application.id} />
                         <button type="submit">Skapa personligt brev</button>
                       </form>

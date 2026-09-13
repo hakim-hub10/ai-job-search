@@ -127,6 +127,34 @@ describe("cover letter boundary", () => {
     expect(store.documents.every((document) => document.documentType === "coverLetter")).toBe(true);
   });
 
+  it("creates an explicit English letter with English grounded claims", async () => {
+    const store = stores();
+    const result = await createCoverLetter({ applicationId, language: "en" }, { ...store, createId: () => "letter-1", now: () => timestamp });
+
+    expect(result).toMatchObject({ ok: true, document: { documentType: "coverLetter", version: 1, language: "en" } });
+    if (!result.ok) throw new Error(result.message);
+    expect(result.document.renderedDocument.content).toStartWith("Dear Hiring Manager,");
+    expect(result.document.renderedDocument.content).toContain("Kind regards,");
+    expect(result.document.renderedDocument.content).toContain("Microsoft 365");
+    expect(result.document.renderedDocument.content).not.toContain("Kubernetes");
+  });
+
+  it("preserves each version's own explicit language and leaves matching untouched across a language switch", async () => {
+    const store = stores();
+    const first = await createCoverLetter({ applicationId, language: "sv" }, { ...store, createId: () => "letter-1", now: () => timestamp });
+    const second = await createCoverLetter({ applicationId, language: "en" }, { ...store, createId: () => "letter-2", now: () => "2026-09-06T11:00:00.000Z" });
+
+    expect(first).toMatchObject({ ok: true, document: { version: 1, language: "sv" } });
+    expect(second).toMatchObject({ ok: true, document: { version: 2, language: "en" } });
+    if (!first.ok || !second.ok) throw new Error("expected both versions to succeed");
+    for (const document of [first.document, second.document]) {
+      expect(document.renderedDocument.content).toContain("Microsoft 365");
+      expect(document.renderedDocument.content).not.toContain("Kubernetes");
+    }
+    expect(second.document.generatedDocument.sections.flatMap((section) => section.claims.flatMap((claim) => claim.evidenceIds)).sort())
+      .toEqual(first.document.generatedDocument.sections.flatMap((section) => section.claims.flatMap((claim) => claim.evidenceIds)).sort());
+  });
+
   it("fails safely for missing inputs and corrupt document storage", async () => {
     const missingApplication = await createCoverLetter({ applicationId }, stores({ applicationMissing: true }));
     const missingAssociation = await createCoverLetter({ applicationId }, stores({ associationMissing: true }));

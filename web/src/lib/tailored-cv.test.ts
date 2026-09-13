@@ -245,6 +245,29 @@ describe("tailored CV boundary", () => {
     expect(store.documents.map((document) => document.version)).toEqual([1, 2]);
   });
 
+  it("honors an explicit Swedish selection over English auto-detection from the job description", async () => {
+    const store = stores();
+    const result = await createTailoredCv({ applicationId, language: "sv" }, { ...store, createId: () => "document-1", now: () => timestamp });
+
+    expect(result).toMatchObject({ ok: true, document: { language: "sv" } });
+  });
+
+  it("preserves each version's own explicit language and leaves matching untouched across a language switch", async () => {
+    const store = stores();
+    const first = await createTailoredCv({ applicationId, language: "sv" }, { ...store, createId: () => "document-1", now: () => timestamp });
+    const second = await createTailoredCv({ applicationId, language: "en" }, { ...store, createId: () => "document-2", now: () => "2026-09-06T11:00:00.000Z" });
+
+    expect(first).toMatchObject({ ok: true, document: { version: 1, language: "sv" } });
+    expect(second).toMatchObject({ ok: true, document: { version: 2, language: "en" } });
+    if (!first.ok || !second.ok) throw new Error("expected both versions to succeed");
+    for (const document of [first.document, second.document]) {
+      expect(document.renderedDocument.content).toContain("Microsoft 365");
+      expect(document.renderedDocument.content).not.toContain("Kubernetes");
+    }
+    expect(second.document.generatedDocument.sections.flatMap((section) => section.claims.flatMap((claim) => claim.evidenceIds)).sort())
+      .toEqual(first.document.generatedDocument.sections.flatMap((section) => section.claims.flatMap((claim) => claim.evidenceIds)).sort());
+  });
+
   it("fails explicitly for missing application, association, profile, and Base CV", async () => {
     const missingApplication = await createTailoredCv({ applicationId }, { ...stores({ applicationResult: { ok: false, error: { code: "NOT_FOUND", message: "missing" } } }) });
     const missingAssociation = await createTailoredCv({ applicationId }, { ...stores({ associationResult: { ok: false, error: { code: "NOT_FOUND", message: "missing" } } }) });

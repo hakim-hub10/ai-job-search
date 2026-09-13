@@ -223,6 +223,13 @@ export async function associateApplicationCandidateAction(formData: FormData) {
   redirect(`/applications/${encodeURIComponent(applicationId)}`);
 }
 
+export function documentLanguage(formData: FormData): "sv" | "en" | undefined {
+  const value = formData.get("documentLanguage");
+  if (value === "sv" || value === "en") return value;
+  if (value && value !== "auto") throw new Error("Dokumentspråket kunde inte användas.");
+  return undefined;
+}
+
 export async function createTailoredCvAction(formData: FormData) {
   const applicationIdValue = formData.get("applicationId");
   const applicationId =
@@ -239,7 +246,7 @@ export async function createTailoredCvAction(formData: FormData) {
 
   const paths = resolveCoachRepositoryPaths(resolve(coachDir));
   const result = await createTailoredCv(
-    { applicationId },
+    { applicationId, language: documentLanguage(formData) },
     {
       applicationRepository: createFileApplicationRepository(resolve(applicationRepositoryPath)),
       associationRepository: createFileCandidateApplicationAssociationRepository(paths.associations),
@@ -289,7 +296,7 @@ export async function createCoverLetterAction(formData: FormData) {
 
   const paths = resolveCoachRepositoryPaths(resolve(coachDir));
   const result = await createCoverLetter(
-    { applicationId },
+    { applicationId, language: documentLanguage(formData) },
     {
       applicationRepository: createFileApplicationRepository(resolve(applicationRepositoryPath)),
       associationRepository: createFileCandidateApplicationAssociationRepository(paths.associations),
@@ -391,7 +398,7 @@ export async function requestDocumentAiRewriteAction(formData: FormData) {
       if (!foundation.ok) return { ok: false as const, message: "AI-förslaget kunde inte valideras." };
       const plan = createTailoringPlan(foundation.value, {
         type: request.documentType,
-        language: "sv",
+        language: request.language ?? "sv",
       });
       if (!plan.ok) return { ok: false as const, message: "AI-förslaget kunde inte valideras." };
       const generated = await generateDocumentProposal(foundation.value, plan.value, generator, {
@@ -401,7 +408,7 @@ export async function requestDocumentAiRewriteAction(formData: FormData) {
       const document = {
         applicationId: request.applicationId,
         documentType: request.documentType,
-        language: "sv" as const,
+        language: request.language ?? "sv",
         requiresHumanReview: generated.value.requiresHumanReview,
         warnings: [],
         sections: generated.value.proposal.sections,
