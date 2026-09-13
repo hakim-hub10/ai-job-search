@@ -93,6 +93,26 @@ describe("Phase 4.1 truthful document foundation", () => {
     expect(input).toEqual(before)
   })
 
+  it("maps profile.projects to project evidence, never as a certification or skill", () => {
+    const profile = { ...matchingProfile(), projects: [{ title: "Internal ticketing tool", description: "Built a support ticketing tool for a 30-person IT team.", technologies: ["TypeScript", "SQL"], url: "https://github.com/example/ticketing" }] }
+    const result = buildCandidateEvidenceCatalog({ matchingProfile: profile })
+    expect(result).toMatchObject({ ok: true })
+    if (!result.ok) throw new Error("expected catalog")
+    const project = result.value.evidence.find((item) => item.id === "profile:project:0")
+    expect(project).toMatchObject({ kind: "project" });
+    expect(project?.content).toContain("Internal ticketing tool");
+    expect(project?.content).toContain("https://github.com/example/ticketing");
+    expect(result.value.evidence.some((item) => item.kind === "certification" && item.content.includes("github.com"))).toBe(false);
+    expect(result.value.evidence.some((item) => item.kind === "skill" && item.content.includes("github.com"))).toBe(false);
+  })
+
+  it("omits project evidence entirely when the profile has no projects, without error", () => {
+    const result = buildCandidateEvidenceCatalog({ matchingProfile: matchingProfile() })
+    expect(result).toMatchObject({ ok: true })
+    if (!result.ok) throw new Error("expected catalog")
+    expect(result.value.evidence.some((item) => item.kind === "project")).toBe(false)
+  })
+
   it("rejects duplicate or malformed candidate evidence rather than deriving hidden IDs", () => {
     expect(buildCandidateEvidenceCatalog({ evidence: [
       { id: "same", kind: "skill", content: "Scheduling" },

@@ -1,5 +1,7 @@
+import { reviewProfileQuality } from "@/lib/profile-quality";
 import Link from "next/link";
 import StructuredProfileFields from "@/components/structured-profile-fields";
+import { profileCompletionIssues } from "@/lib/profile-evidence";
 
 import { loadCandidateOperationalOverview } from "@/lib/candidate-overview";
 import { loadCandidateFollowUps } from "@/lib/candidate-follow-ups";
@@ -173,6 +175,7 @@ export default async function CandidatePage({
                 </div>
               </div>
 
+              {profileResult.profile && profileCompletionIssues(profileResult.profile).length > 0 && <p role="status">Att komplettera eller kontrollera: {profileCompletionIssues(profileResult.profile).join(", ")}. Lägg till uppgifter där det är relevant för dig.</p>}
               {!profileResult.configured ? (
                 <p>Profilen kan inte sparas just nu. Försök igen senare.</p>
               ) : profileResult.error ? (
@@ -192,6 +195,12 @@ export default async function CandidatePage({
                     value={candidate.id}
                   />
 
+                  {profileResult.profile && <details>
+                    <summary>Granska kompetensernas datakvalitet</summary>
+                    <p>Inga sparade uppgifter tas bort automatiskt. Granska varje markerat värde: behåll det, flytta texten till rätt erfarenhet eller certifiering, eller ta bort det från kompetensfältet. Ändringarna gäller först när du sparar profilen. Misstänkta värden används inte som kompetenser i nya dokument.</p>
+                    <ul>{reviewProfileQuality(profileResult.profile).filter(item => item.suspicious).map(item => <li key={`${item.field}:${item.index}`}><strong>{item.value}</strong> — {item.classification}</li>)}</ul>
+                  </details>}
+
                   <div className={styles.profileGrid}>
                     <label className={styles.profileField}>
                       Yrkesrubrik
@@ -199,7 +208,7 @@ export default async function CandidatePage({
                         type="text"
                         name="headline"
                         required
-                        defaultValue={profileResult.profile?.headline ?? ""}
+                        defaultValue={profileResult.profile?.headline === "Job seeker" ? "" : profileResult.profile?.headline ?? ""}
                         placeholder="Exempel: IT-supporttekniker"
                       />
                     </label>
@@ -455,6 +464,7 @@ export default async function CandidatePage({
                     Senast uppdaterat: {formatDate(baseCvResult.baseCv.updatedAt)}
                   </p>
 
+                  {profileCompletionIssues(baseCvResult.baseCv).length > 0 && <p role="status">Grund-CV:t behöver kompletteras eller kontrolleras: {profileCompletionIssues(baseCvResult.baseCv).join(", ")}. <a href="#profile-editor">Öppna profiluppgifterna</a>.</p>}
                   <div className={styles.baseCvContent}>
                     {baseCvResult.baseCv.visibility.headline ? (
                       <section>

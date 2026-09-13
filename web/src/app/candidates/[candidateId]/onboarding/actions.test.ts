@@ -42,6 +42,8 @@ const profile = {
   updatedAt: "2026-01-01T00:00:00.000Z",
 };
 let savedProfile = structuredClone(profile);
+let profileExists = true;
+let profileReadError: string | null = null;
 let savedBaseCv: Record<string, unknown> | null = {
   candidateId: "candidate-a",
   source: "candidateProfile",
@@ -59,9 +61,19 @@ let savedBaseCv: Record<string, unknown> | null = {
 };
 mock.module("../../../../../../.agents/job-search/cli/src/candidate-profile-file-repository", () => ({
   createFileCandidateProfileRepository: () => ({
-    getProfileByCandidateId: async () => ({ ok: true, value: { candidateId: "candidate-a", profile: structuredClone(savedProfile) } }),
-    saveProfile: async (_candidateId: string, next: typeof profile) => { savedProfile = structuredClone(next); return { ok: true, value: { candidateId: "candidate-a", profile: structuredClone(next) } }; },
-    listProfiles: async () => ({ ok: true, value: [] }),
+    getProfileByCandidateId: async () => profileReadError
+      ? { ok: false as const, error: { code: profileReadError, message: "Candidate profile storage could not be read." } }
+      : profileExists
+        ? { ok: true as const, value: { candidateId: "candidate-a", profile: structuredClone(savedProfile) } }
+        : { ok: false as const, error: { code: "NOT_FOUND", message: "Candidate profile was not found." } },
+    saveProfile: async (_candidateId: string, next: typeof profile) => {
+      savedProfile = structuredClone(next);
+      profileExists = true;
+      return { ok: true as const, value: { candidateId: "candidate-a", profile: structuredClone(next) } };
+    },
+    listProfiles: async () => profileExists
+      ? { ok: true as const, value: [{ candidateId: "candidate-a", profile: structuredClone(savedProfile) }] }
+      : { ok: true as const, value: [] },
   }),
 }));
 mock.module("@/lib/candidate-base-cv-file-repository", () => ({
@@ -138,6 +150,7 @@ describe("onboarding client data boundary", () => {
 
   it("completes approve/edit/reject/add through profile and Base CV boundaries", async () => {
     savedProfile = structuredClone(profile);
+    profileExists = true;
     const upload = new FormData();
     upload.set("candidateId", "candidate-a");
     upload.set("cv", new File(["synthetic"], "resume.pdf", { type: "application/pdf" }));
@@ -161,5 +174,57 @@ describe("onboarding client data boundary", () => {
     expect(savedProfile.skills.soft).toContain("Empathy");
     expect(savedBaseCv?.summary).toBe("Manual Base CV summary");
     expect(savedBaseCv?.technicalSkills).toContain("Kubernetes 1.30");
+  });
+
+  it("initializes, saves, and reads back a first-time profile before completing onboarding", async () => {
+    profileReadError = null;
+    profileExists = false;
+    savedBaseCv = null;
+    const upload = new FormData();
+    upload.set("candidateId", "candidate-a");
+    upload.set("cv", new File(["synthetic"], "resume.pdf", { type: "application/pdf" }));
+    const uploaded = await uploadCandidateOnboardingAction(upload);
+    expect(uploaded.ok).toBe(true);
+    if (!uploaded.ok || !("claims" in uploaded)) return;
+    const apply = new FormData();
+    apply.set("candidateId", "candidate-a");
+    apply.set("importId", uploaded.importId);
+    apply.set("documentId", uploaded.documentId);
+    apply.set("reviews", JSON.stringify([{ claimId: "claim-a", decision: "approved" }]));
+    apply.set("added", JSON.stringify([{ kind: "technicalSkill", value: "azur solution architect", decision: "approved" }]));
+    apply.set("structuredProfile", JSON.stringify({ headline: "Cloud Engineer", summary: "User-confirmed summary", workExperience: profile.workExperience, education: profile.education }));
+    const result = await (await import("./actions")).applyCandidateOnboardingAction(apply);
+    expect(result).toEqual({ ok: true, complete: true });
+    expect(profileExists).toBe(true);
+    expect(savedProfile.skills.technical).toEqual(["Kubernetes", "azur solution architect"]);
+    const repository = (await import("../../../../../../.agents/job-search/cli/src/candidate-profile-file-repository")).createFileCandidateProfileRepository("synthetic-profiles.json");
+    const records = await repository.listProfiles();
+    expect(records.ok && records.value).toHaveLength(1);
+    expect(savedBaseCv).not.toBeNull();
+    expect(savedProfile.headline).toBe("Cloud Engineer");
+    expect(savedProfile.workExperience).toEqual(profile.workExperience);
+    expect(savedProfile.education).toEqual(profile.education);
+    expect((savedBaseCv as Record<string, unknown> | null)?.workExperience).toEqual(profile.workExperience);
+    expect((savedBaseCv as Record<string, unknown> | null)?.education).toEqual(profile.education);
+  });
+
+  it("keeps profile repository read failures fatal", async () => {
+    profileExists = true;
+    profileReadError = "READ_FAILURE";
+    const upload = new FormData();
+    upload.set("candidateId", "candidate-a");
+    upload.set("cv", new File(["synthetic"], "resume.pdf", { type: "application/pdf" }));
+    const uploaded = await uploadCandidateOnboardingAction(upload);
+    expect(uploaded.ok).toBe(true);
+    if (!uploaded.ok || !("claims" in uploaded)) return;
+    const apply = new FormData();
+    apply.set("candidateId", "candidate-a");
+    apply.set("importId", uploaded.importId);
+    apply.set("documentId", uploaded.documentId);
+    apply.set("reviews", "[]");
+    apply.set("added", "[]");
+    const result = await (await import("./actions")).applyCandidateOnboardingAction(apply);
+    expect(result).toEqual({ ok: false, code: "PROFILE_READ_FAILED", message: "Din profil kunde inte läsas." });
+    profileReadError = null;
   });
 });
