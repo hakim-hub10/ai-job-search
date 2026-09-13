@@ -2,6 +2,7 @@ import { describe, expect, it, mock } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 
 mock.module("next/navigation", () => ({
+  redirect: (path: string) => { throw new Error(`REDIRECT:${path}`); },
   useRouter: () => ({ push: () => undefined, refresh: () => undefined }),
 }));
 mock.module("@/lib/auth-client", () => ({
@@ -22,9 +23,13 @@ describe("authentication pages", () => {
     expect(register).toContain("Skapa konto");
     expect(register).toContain("Bekräfta lösenord");
     expect(register).toContain('autoComplete="new-password"');
+    expect(register).toContain('method="post"');
+    expect(register).not.toContain('action="/register"');
     expect(login).toContain("Logga in");
     expect(login).not.toContain("DATABASE_URL");
     expect(login).toContain('autoComplete="current-password"');
+    expect(login).toContain('method="post"');
+    expect(login).not.toContain('action="/login"');
     expect(register).not.toContain("Candidate");
     expect(register).not.toContain("DATABASE_URL");
     expect(register).not.toContain("BETTER_AUTH_SECRET");

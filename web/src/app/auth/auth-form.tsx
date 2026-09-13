@@ -50,7 +50,7 @@ export default function AuthForm({ mode }: { mode: AuthMode }) {
         <p className={styles.eyebrow}>AI-jobbcoach</p>
         <h1>{isRegister ? "Skapa konto" : "Logga in"}</h1>
         <p className={styles.intro}>{isRegister ? "Skapa ett konto för att komma igång med din jobbsökning." : "Logga in för att fortsätta till din arbetsyta."}</p>
-        <form className={styles.form} onSubmit={submit} noValidate>
+        <form className={styles.form} method="post" onSubmit={submit} noValidate>
           {isRegister ? <><label htmlFor="name">Namn</label><input id="name" name="name" type="text" autoComplete="name" required value={name} onChange={(event) => setName(event.target.value)} /></> : null}
           <label htmlFor="email">E-post</label>
           <input id="email" name="email" type="email" autoComplete="email username" required value={email} onChange={(event) => setEmail(event.target.value)} />
