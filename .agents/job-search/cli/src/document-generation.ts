@@ -107,6 +107,7 @@ export type DocumentGenerationErrorCode =
   | "UNSUPPORTED_CLAIM"
   | "INVALID_NEUTRAL_CONTEXT"
   | "DUPLICATE_CLAIM_ID"
+  | "INVALID_COVER_LETTER_STRUCTURE"
   | "PHASE_4_1_VALIDATION_FAILED"
 
 export interface DocumentGenerationError {
@@ -234,6 +235,19 @@ export function validateGeneratedDocumentProposal(
   }
   if (proposal.applicationId !== request.applicationId || proposal.type !== request.type || proposal.language !== request.language) {
     errors.push(failure("WRONG_APPLICATION_CONTEXT", "Provider response does not preserve the requested application context."))
+  }
+  if (request.type === "coverLetter") {
+    // A cover letter must render as one prose section (the existing
+    // professional:letter/context representation, already produced by the
+    // deterministic generator's composeLetter) - never separate CV-style
+    // sections such as experience/skill/education, which would render with
+    // visible headings and bullet lists instead of a real letter.
+    const sections = proposal.sections
+    const isSingleProseSection = Array.isArray(sections) && sections.length === 1
+      && sections[0]?.id === "professional:letter" && sections[0]?.kind === "context"
+    if (!isSingleProseSection) {
+      errors.push(failure("INVALID_COVER_LETTER_STRUCTURE", "Cover letter proposals must contain exactly one professional:letter section with kind \"context\", rendered as prose - never separate CV-style sections."))
+    }
   }
   const approved = new Map(request.selectedEvidence.map((evidence) => [evidence.id, evidence]))
   const claimIds = new Set<string>()

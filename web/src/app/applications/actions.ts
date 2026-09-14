@@ -19,6 +19,7 @@ import { loadCandidateProfileRepository } from "@/lib/candidate-profiles";
 import { createTailoredCv } from "@/lib/tailored-cv";
 import { createCoverLetter } from "@/lib/cover-letter";
 import { documentLanguage } from "@/lib/document-language";
+import { PROFESSIONAL_WRITER_MAX_OUTPUT_TOKENS } from "@/lib/professional-writer";
 import {
   buildApplicationDocumentFoundation,
   createTailoringPlan,
@@ -383,7 +384,7 @@ export async function requestDocumentAiRewriteAction(formData: FormData) {
         remoteGenerationConsent: consent,
         apiKey,
         model: process.env.OPENAI_MODEL?.trim() || "gpt-4.1-mini",
-        maxOutputTokens: 1200,
+        maxOutputTokens: PROFESSIONAL_WRITER_MAX_OUTPUT_TOKENS,
         timeoutMs: 30_000,
       });
       const foundation = buildApplicationDocumentFoundation(request.application, {

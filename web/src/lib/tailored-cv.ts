@@ -1,21 +1,20 @@
 import { documentQualityProfile, documentQualityExclusions, createProfessionalDocumentGenerator, resolveDocumentLanguage } from "./professional-documents";
 import type { SkillReviewItem } from "./profile-quality";
 import type { DocumentLanguage } from "../../../.agents/job-search/cli/src/application-documents";
-import {
-  generateApplicationDocument,
-} from "../../../.agents/job-search/cli/src/index";
 import { createApplicationDocumentStorageWorkflow } from "../../../.agents/job-search/cli/src/application-document-storage-workflow";
+import { generateProfessionalDocument, type ProfessionalWriterGeneratorUsed, type ProfessionalWriterFallbackReason } from "./professional-writer";
 import type { ApplicationRepository } from "../../../.agents/job-search/cli/src/application-repository";
 import type { ApplicationDocumentRecord, ApplicationDocumentRepository } from "../../../.agents/job-search/cli/src/application-document-repository";
 import type { CandidateApplicationAssociationRepository } from "../../../.agents/job-search/cli/src/coach-application-association-repository";
 import type { CoachWorkspaceRepository } from "../../../.agents/job-search/cli/src/coach-workspace-repository";
 import type { CandidateProfileRepository } from "../../../.agents/job-search/cli/src/candidate-profile-repository";
-import type { CandidateProfile } from "../../../.agents/job-search/cli/src/profile";
-import type { CandidateBaseCv } from "./candidate-base-cv";
+import { mergeBaseCvIntoProfile, type CandidateBaseCv } from "./candidate-base-cv";
 
 export interface CreateTailoredCvInput {
   applicationId: string;
   language?: DocumentLanguage;
+  /** The authenticated account's own verified email, shown in the CV's contact details when supplied. Never invented when omitted. */
+  email?: string;
 }
 
 export type CreateTailoredCvFailureCode =
@@ -44,6 +43,10 @@ export interface CreateTailoredCvSuccess {
   document: ApplicationDocumentRecord;
   /** Approved profile evidence excluded from the CV as likely pollution (see documentQualityProfile), with the reason for each - never silently lost. */
   excludedProfileEvidence: SkillReviewItem[];
+  /** Which generator actually produced the saved document - never rendered into the CV itself, only for internal/UI diagnostics. */
+  generatorUsed: ProfessionalWriterGeneratorUsed;
+  /** Present only when the AI writer was tried and failed, and generation fell back to the deterministic generator. */
+  fallbackReason?: ProfessionalWriterFallbackReason;
 }
 
 export type CreateTailoredCvResult =
@@ -71,33 +74,6 @@ function failure(
   message: string,
 ): CreateTailoredCvFailure {
   return { ok: false, code, message };
-}
-
-function profileForBaseCv(
-  profile: CandidateProfile,
-  baseCv: CandidateBaseCv,
-): CandidateProfile {
-  return {
-    ...structuredClone(profile),
-    headline: baseCv.visibility.headline ? baseCv.headline : "",
-    ...(baseCv.visibility.summary
-      ? { summary: baseCv.summary }
-      : { summary: undefined }),
-    workExperience: baseCv.visibility.workExperience
-      ? structuredClone(baseCv.workExperience)
-      : [],
-    education: baseCv.visibility.education ? structuredClone(baseCv.education) : [],
-    skills: {
-      technical: baseCv.visibility.technicalSkills
-        ? [...baseCv.technicalSkills]
-        : [],
-      soft: baseCv.visibility.softSkills ? [...baseCv.softSkills] : [],
-    },
-    certifications: baseCv.visibility.certifications
-      ? [...baseCv.certifications]
-      : [],
-    languages: baseCv.visibility.languages ? structuredClone(baseCv.languages) : [],
-  };
 }
 
 /** Creates an application-scoped CV using only trusted profile/Base CV evidence. */
@@ -143,18 +119,17 @@ export async function createTailoredCv(
       : failure("BASE_CV_STORAGE_FAILURE", "Grund-CV-lagringen kunde inte läsas.");
   }
 
-  const sourceProfile = profileForBaseCv(profile.value.profile, baseCv.value);
+  const sourceProfile = mergeBaseCvIntoProfile(profile.value.profile, baseCv.value);
   const excludedProfileEvidence = documentQualityExclusions(sourceProfile);
-  const generated = await generateApplicationDocument({
+  const { result: generated, generatorUsed, fallbackReason } = await generateProfessionalDocument({
     application: application.value,
     candidateDocumentInput: {
       matchingProfile: documentQualityProfile(sourceProfile),
-      identity: { fullName: candidate.value.displayName },
+      identity: { fullName: candidate.value.displayName, ...(input.email?.trim() ? { email: input.email.trim() } : {}) },
     },
     tailoringOptions: { type: "cv", language: resolveDocumentLanguage(input.language, application.value.jobSnapshot.description), maxEvidenceItems: 200 },
-    generator: createProfessionalDocumentGenerator({ composeSummary: baseCv.value.visibility.summary || !baseCv.value.summary?.trim() }),
     generationOptions: { untrustedJobDescription: application.value.jobSnapshot.description ?? undefined },
-  });
+  }, createProfessionalDocumentGenerator({ composeSummary: baseCv.value.visibility.summary || !baseCv.value.summary?.trim() }));
 
   if (!generated.ok) {
     return failure("TAILORING_FAILED", "Det anpassade CV:t kunde inte skapas.");
@@ -174,5 +149,5 @@ export async function createTailoredCv(
     return failure("DOCUMENT_STORAGE_FAILURE", "Det anpassade CV:t kunde inte sparas.");
   }
 
-  return { ok: true, document: stored.value, excludedProfileEvidence };
+  return { ok: true, document: stored.value, excludedProfileEvidence, generatorUsed, ...(fallbackReason ? { fallbackReason } : {}) };
 }

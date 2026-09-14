@@ -1,13 +1,13 @@
 import type { ApplicationDocumentGenerator, DocumentGenerationRequest, GenerationEvidence, GeneratedDocumentClaim, GeneratedDocumentSection } from "../../../.agents/job-search/cli/src/document-generation";
 import type { CandidateProfile } from "../../../.agents/job-search/cli/src/profile";
 import type { DocumentLanguage } from "../../../.agents/job-search/cli/src/application-documents";
-import { looksLikeRawImportBlock, reviewProfileQuality, summaryReviewItem, type SkillReviewItem } from "./profile-quality";
+import { looksLikeRawImportBlock, reviewProfileQuality, summaryReviewItem, deepRepairMojibake, type SkillReviewItem } from "./profile-quality";
 import { skillConcept } from "./skill-presentation";
 
 /** Projection only: stored approved values are never mutated. */
 export function documentQualityProfile(profile: CandidateProfile): CandidateProfile {
-  const next = structuredClone(profile);
-  const review = reviewProfileQuality(profile);
+  const next = deepRepairMojibake(structuredClone(profile));
+  const review = reviewProfileQuality(next);
   for (const field of ["technical", "soft"] as const) next.skills[field] = review.filter(x => x.field === field && !x.suspicious).map(x => x.value);
   // A summary that reads like a pasted CV (dates, contact details,
   // certifications restated as prose) must not be dumped verbatim into a
@@ -26,8 +26,9 @@ export function documentQualityProfile(profile: CandidateProfile): CandidateProf
  * can surface this list to the candidate instead of just losing the data.
  */
 export function documentQualityExclusions(profile: CandidateProfile): SkillReviewItem[] {
-  const summaryExclusion = summaryReviewItem(profile);
-  return [...reviewProfileQuality(profile).filter(item => item.suspicious), ...(summaryExclusion ? [summaryExclusion] : [])];
+  const repaired = deepRepairMojibake(profile);
+  const summaryExclusion = summaryReviewItem(repaired);
+  return [...reviewProfileQuality(repaired).filter(item => item.suspicious), ...(summaryExclusion ? [summaryExclusion] : [])];
 }
 export function resolveDocumentLanguage(explicit: DocumentLanguage | undefined, description?: string | null): DocumentLanguage {
   if (explicit) return explicit;
@@ -36,10 +37,16 @@ export function resolveDocumentLanguage(explicit: DocumentLanguage | undefined, 
   const en = (text.match(/\b(?:and|you|we|experience|required|skills|role|the)\b/giu) ?? []).length;
   return en > sv ? "en" : "sv";
 }
+/** Significant (4+ letter) words from the job title/description, used to score evidence relevance without altering matching's own scoring. */
+function jobKeywords(request: DocumentGenerationRequest): Set<string> {
+  return new Set(`${request.applicationContext.jobTitle} ${request.untrustedJobContext.description ?? ""}`.toLocaleLowerCase().match(/[\p{L}\p{N}]{4,}/gu) ?? []);
+}
+function keywordOverlap(text: string, jobWords: Set<string>): number {
+  return [...new Set(text.toLocaleLowerCase().match(/[\p{L}\p{N}]{4,}/gu) ?? [])].filter(x => jobWords.has(x)).length;
+}
 function relevance(item: GenerationEvidence, request: DocumentGenerationRequest): number {
   const direct = request.matchedRequirementSupport.some(x => x.evidenceIds.includes(item.id)) ? 100 : 0;
-  const words = new Set(`${request.applicationContext.jobTitle} ${request.untrustedJobContext.description ?? ""}`.toLocaleLowerCase().match(/[\p{L}\p{N}]{4,}/gu) ?? []);
-  return direct + [...new Set(item.content.toLocaleLowerCase().match(/[\p{L}\p{N}]{4,}/gu) ?? [])].filter(x => words.has(x)).length;
+  return direct + keywordOverlap(item.content, jobKeywords(request));
 }
 export function selectProfessionalEvidence(request: DocumentGenerationRequest): GenerationEvidence[] {
   const limits: Partial<Record<GenerationEvidence["kind"], number>> = { skill: 12, experience: 3, education: 2, certification: 4, language: 4, summary: 2, identity: 4, project: 2, achievement: 2, motivation: 1, other: 1 };
@@ -54,25 +61,153 @@ export function selectProfessionalEvidence(request: DocumentGenerationRequest): 
     counts.set(group, count + 1); if (item.kind === "skill") concepts.add(key); return true;
   });
 }
-function fact(item: GenerationEvidence, text = item.content, extraEvidenceIds: readonly string[] = []): GeneratedDocumentClaim {
-  return { id: `professional:${item.id}`, kind: "candidateFact", provenance: text === item.content ? "verbatim" : "paraphrased", text, evidenceIds: [item.id, ...extraEvidenceIds] };
+/**
+ * Wraps any ApplicationDocumentGenerator so it only ever sees the same
+ * job-relevance-prioritized evidence subset the deterministic generator
+ * already writes from (selectProfessionalEvidence - reused, not duplicated,
+ * so this stays domain-agnostic with no IT-specific rules). This narrows what
+ * the wrapped generator is shown; validateGeneratedDocumentProposal still
+ * validates the returned proposal against the full original request it
+ * receives independently, so the trust boundary and approved-evidence set
+ * are unaffected - this only changes which verified evidence a writer is
+ * steered toward emphasizing for this specific job, never what is allowed.
+ */
+export function createJobAwareDocumentGenerator(generator: ApplicationDocumentGenerator): ApplicationDocumentGenerator {
+  return {
+    async generate(request) {
+      const selectedEvidence = selectProfessionalEvidence(request);
+      const prioritizedIds = new Set(selectedEvidence.map((item) => item.id));
+      const matchedRequirementSupport = request.matchedRequirementSupport.map((support) => ({
+        ...support,
+        evidenceIds: support.evidenceIds.filter((id) => prioritizedIds.has(id)),
+      }));
+      return generator.generate({ ...request, selectedEvidence, matchedRequirementSupport });
+    },
+  };
 }
-/** Existing user summary takes precedence. Otherwise compose at most four short factual lines. */
+/**
+ * Relevance-based selection (selectProfessionalEvidence) is not chronological
+ * - the strongest keyword match for a given job is not necessarily the most
+ * recent role or degree. A CV's experience and education must still read
+ * most-recent-first regardless of why each entry was selected, so this
+ * re-sorts only those two kinds after selection, purely for presentation.
+ */
+function mostRecentYear(item: GenerationEvidence): number {
+  if (item.kind === "experience") {
+    const year = Number.parseInt(item.context?.endDate ?? item.context?.startDate ?? "", 10);
+    return Number.isFinite(year) ? year : -Infinity;
+  }
+  const years = [...item.content.matchAll(/\d{4}/gu)].map((match) => Number.parseInt(match[0], 10));
+  return years.length ? Math.max(...years) : -Infinity;
+}
+function mostRecentFirst(items: GenerationEvidence[]): GenerationEvidence[] {
+  return [...items].sort((a, b) => mostRecentYear(b) - mostRecentYear(a));
+}
+function fact(item: GenerationEvidence, text = item.content, extraEvidenceIds: readonly string[] = [], idSuffix = ""): GeneratedDocumentClaim {
+  return { id: `professional:${item.id}${idSuffix}`, kind: "candidateFact", provenance: text === item.content ? "verbatim" : "paraphrased", text, evidenceIds: [item.id, ...extraEvidenceIds] };
+}
+const MAX_EXPERIENCE_BULLETS = 5;
+/**
+ * The evidence catalog joins "Title at Company · Location · Dates · Summary"
+ * into one content string (application-documents.ts, shared with matching -
+ * never edited here). Splitting on the same " · " delimiter used to build it
+ * (rather than re-parsing text) exactly separates the header fields, already
+ * available structured on item.context, from the verified description text -
+ * which is then split on genuine sentence boundaries into separate bullets,
+ * never rewritten or invented, so a role with real detail reads as several
+ * concise lines instead of one dense paragraph. When a role has more verified
+ * claims than fit (MAX_EXPERIENCE_BULLETS), the ones with the most keyword
+ * overlap with this specific job are kept - never dropping evidence just
+ * because it comes later in the stored description - and re-sorted back to
+ * their original order so the role still reads as a coherent narrative.
+ */
+function experienceClaims(item: GenerationEvidence, sv: boolean, jobWords: Set<string>): GeneratedDocumentClaim[] {
+  const parts = item.content.split(" · ");
+  const headerPartCount = 1 + (item.context?.location ? 1 : 0) + ((item.context?.startDate || item.context?.endDate) ? 1 : 0);
+  const role = item.context?.role;
+  const employer = item.context?.employer;
+  const dates = [item.context?.startDate, item.context?.endDate].filter(Boolean).join(" – ");
+  const header = [
+    role && employer ? `${role}${sv ? " hos " : " at "}${employer}` : parts[0],
+    item.context?.location,
+    dates || undefined,
+  ].filter(Boolean).join(" · ");
+  const bodySentences = parts.slice(headerPartCount)
+    .flatMap(part => part.split(/(?<=[.!?])\s+(?=\p{Lu})/u))
+    .map(sentence => sentence.trim())
+    .filter(Boolean);
+  const kept = bodySentences
+    .map((sentence, index) => ({ sentence, index, score: keywordOverlap(sentence, jobWords) }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, MAX_EXPERIENCE_BULLETS)
+    .sort((a, b) => a.index - b.index);
+  return [fact(item, header, [], ":header"), ...kept.map(({ sentence }, index) => fact(item, sentence, [], `:body:${index}`))];
+}
+/** Strips a trailing " · <year(s)>" date suffix so an education/experience content string reads as a clause, not a database row. */
+function withoutTrailingDates(content: string): string {
+  return content.replace(/\s*·\s*\d{4}[^·]*$/u, "").trim();
+}
+/** "A, B and C" rather than "A and B and C". */
+function joinNatural(items: readonly string[], conjunction: string): string {
+  if (items.length < 2) return items.join("");
+  return `${items.slice(0, -1).join(", ")} ${conjunction} ${items.at(-1)}`;
+}
+/**
+ * Existing user summary takes precedence. Otherwise composes one coherent
+ * paragraph (roughly 3-5 sentences) from verified evidence only - never
+ * "Label: value" lines, and never a language mention (languages belong only
+ * in the dedicated Languages section, never repeated in the profile).
+ */
 export function composeProfessionalSummary(evidence: GenerationEvidence[], language: DocumentLanguage): GeneratedDocumentClaim[] {
   const authored = evidence.find(x => x.id === "profile:summary");
   if (authored) return [fact(authored)];
   const sv = language === "sv";
-  const lines: GeneratedDocumentClaim[] = [];
+  const headline = evidence.find(x => x.id === "profile:headline");
   const role = evidence.find(x => x.kind === "experience");
-  const skills = evidence.filter(x => x.kind === "skill").slice(0, 3);
+  const technicalSkills = evidence.filter(x => x.kind === "skill" && !x.id.includes("soft-skill")).slice(0, 4);
+  const softSkills = evidence.filter(x => x.kind === "skill" && x.id.includes("soft-skill")).slice(0, 3);
   const education = evidence.find(x => x.kind === "education");
-  const languages = evidence.filter(x => x.kind === "language").slice(0, 2);
-  const add = (id: string, text: string, items: GenerationEvidence[]) => lines.push({ id, text, kind: "candidateFact", provenance: "paraphrased", evidenceIds: items.map(x => x.id) });
-  if (role) add("professional:summary:experience", `${sv ? "Erfarenhet" : "Experience"}: ${[role.context?.role, role.context?.employer].filter(Boolean).join(", ") || role.content}.`, [role]);
-  if (skills.length) add("professional:summary:skills", `${sv ? "Kompetenser" : "Skills"}: ${skills.map(x => skillConcept(x.content)).join(", ")}.`, skills);
-  if (education) add("professional:summary:education", `${sv ? "Utbildning" : "Education"}: ${education.content}.`, [education]);
-  if (languages.length) add("professional:summary:languages", `${sv ? "Språk" : "Languages"}: ${languages.map(x => x.content).join(", ")}.`, languages);
-  return lines;
+  const certifications = evidence.filter(x => x.kind === "certification").slice(0, 3);
+  const sentences: string[] = [];
+  const used: GenerationEvidence[] = [];
+  const roleTitle = role?.context?.role;
+  const employer = role?.context?.employer;
+  const headlineText = headline?.content?.trim();
+  // Opens with professional direction (headline) and strongest technical
+  // competencies - never with "role at employer", which reads as a
+  // mechanical database dump rather than a professional profile.
+  if (headlineText || technicalSkills.length) {
+    if (headline) used.push(headline);
+    const skillList = joinNatural(technicalSkills.map(x => skillConcept(x.content)), sv ? "och" : "and");
+    used.push(...technicalSkills);
+    if (headlineText && skillList) sentences.push(sv ? `${headlineText} med erfarenhet av ${skillList}.` : `${headlineText} with experience in ${skillList}.`);
+    else if (headlineText) sentences.push(`${headlineText}.`);
+    else sentences.push(sv ? `Erfarenhet av ${skillList}.` : `Experience with ${skillList}.`);
+  }
+  // Relevant verified experience follows as its own sentence, naming the role
+  // and employer in context rather than as the profile's opening subject.
+  if (role && roleTitle) {
+    used.push(role);
+    const roleClause = `${roleTitle}${employer ? (sv ? ` hos ${employer}` : ` at ${employer}`) : ""}`;
+    sentences.push(sv ? `Har arbetat som ${roleClause}.` : `Has worked as ${roleClause}.`);
+  }
+  if (education) {
+    used.push(education);
+    const educationClause = withoutTrailingDates(education.content);
+    sentences.push(sv ? `Har en utbildning inom ${educationClause}.` : `Holds an education in ${educationClause}.`);
+  }
+  if (certifications.length) {
+    used.push(...certifications);
+    const certList = joinNatural(certifications.map(x => x.content), sv ? "och" : "and");
+    sentences.push(sv ? `Innehar certifieringar som ${certList}.` : `Holds certifications including ${certList}.`);
+  }
+  if (softSkills.length) {
+    used.push(...softSkills);
+    const softList = joinNatural(softSkills.map(x => skillConcept(x.content)), sv ? "och" : "and");
+    sentences.push(sv ? `Van vid att arbeta med ${softList}.` : `Experienced in ${softList}.`);
+  }
+  if (!sentences.length) return [];
+  return [{ id: "professional:summary:composed", text: sentences.join(" "), kind: "candidateFact", provenance: "paraphrased", evidenceIds: used.map(x => x.id) }];
 }
 /**
  * Deterministic seed derived from stable, job-tied facts (never randomness):
@@ -171,10 +306,16 @@ export function createProfessionalDocumentGenerator(options: { composeSummary?: 
     let sections: GeneratedDocumentSection[];
     if (request.type === "coverLetter") sections = composeLetter(request, selected);
     else {
-      const order: GenerationEvidence["kind"][] = ["identity", "summary", "experience", "education", "skill", "certification", "language", "project", "achievement", "other"];
+      const order: GenerationEvidence["kind"][] = ["identity", "summary", "experience", "education", "skill", "certification", "project", "language", "achievement", "other"];
+      const sv = request.language === "sv";
+      const jobWords = jobKeywords(request);
       sections = order.flatMap((kind): GeneratedDocumentSection[] => {
-        const items = selected.filter(x => x.kind === kind);
-        const claims = kind === "summary" ? [...items.filter(x => x.id === "profile:headline").map(x => fact(x)), ...(options.composeSummary === false ? [] : composeProfessionalSummary(selected, request.language))] : items.map(x => fact(x, kind === "skill" ? skillConcept(x.content) : x.content));
+        const items = (kind === "experience" || kind === "education") ? mostRecentFirst(selected.filter(x => x.kind === kind)) : selected.filter(x => x.kind === kind);
+        const claims = kind === "summary"
+          ? [...items.filter(x => x.id === "profile:headline").map(x => fact(x)), ...(options.composeSummary === false ? [] : composeProfessionalSummary(selected, request.language))]
+          : kind === "experience"
+          ? items.flatMap(item => experienceClaims(item, sv, jobWords))
+          : items.map(x => fact(x, kind === "skill" ? skillConcept(x.content) : x.content));
         if (kind === "skill") return ["technicalSkills", "softSkills"].flatMap(group => {
           const grouped = items.filter(x => x.id.includes("soft-skill") === (group === "softSkills")).map(x => fact(x, skillConcept(x.content)));
           return grouped.length ? [{ id: `professional:${group}`, kind, claims: grouped }] : [];

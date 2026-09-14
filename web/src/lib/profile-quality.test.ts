@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { createDefaultCandidateProfile } from "../../../.agents/job-search/cli/src/profile";
-import { classifySkill, looksLikeRawImportBlock, previewSkillReview, reviewProfileQuality, summaryReviewItem } from "./profile-quality";
+import { classifySkill, deepRepairMojibake, looksLikeRawImportBlock, previewSkillReview, repairMojibake, reviewProfileQuality, summaryReviewItem } from "./profile-quality";
 import { presentSkills } from "./skill-presentation";
 
 test("flags pollution conservatively without mutating approved evidence", () => {
@@ -12,6 +12,45 @@ test("flags pollution conservatively without mutating approved evidence", () => 
   expect(report.map(x => x.classification)).toContain("LOCATION");
   expect(profile).toEqual(before);
   for (const value of ["C++", ".NET", "R", "TypeScript", "Public procurement", "Risk assessment", "Intune"]) expect(classifySkill(value).classification).toBe("VALID_SKILL");
+});
+test("catches real-world leaked dates and sentence fragments observed in imported skill lists", () => {
+  for (const value of ["(2021 – 2026)", "Jönköping (2022 – 2023)", "Stockholm (2019 – present)"]) {
+    expect(classifySkill(value).classification).toBe("DATE");
+  }
+  for (const value of ["Hantering av incidenter och tekniska problem", "Dokumentation av lösningar och incidenter", "Felsökning och drift av IT-miljöer i AWS"]) {
+    expect(classifySkill(value).classification).toBe("PROSE");
+  }
+  for (const value of ["Docker", "Kubernetes", "Nätverk"]) expect(classifySkill(value).classification).toBe("VALID_SKILL");
+});
+test("ServiceNow and similar tools/platforms are flagged when mis-filed under soft skills, but valid as technical skills", () => {
+  const profile = createDefaultCandidateProfile();
+  profile.skills.soft = ["ServiceNow", "Jira", "Communication"];
+  const report = reviewProfileQuality(profile);
+  expect(report.find((item) => item.value === "ServiceNow")).toMatchObject({ classification: "TECHNICAL_SKILL", suspicious: true });
+  expect(report.find((item) => item.value === "Jira")).toMatchObject({ classification: "TECHNICAL_SKILL", suspicious: true });
+  expect(report.find((item) => item.value === "Communication")).toMatchObject({ suspicious: false });
+  profile.skills.soft = [];
+  profile.skills.technical = ["ServiceNow"];
+  expect(reviewProfileQuality(profile).find((item) => item.value === "ServiceNow")).toMatchObject({ suspicious: false });
+});
+test("repairMojibake reverses UTF-8-as-Latin-1 corruption without touching clean text", () => {
+  expect(repairMojibake("GÃ¶teborg")).toBe("Göteborg");
+  expect(repairMojibake("sÃ¤kerhetsrutiner")).toBe("säkerhetsrutiner");
+  expect(repairMojibake("Ã¥tkomstkontroll")).toBe("åtkomstkontroll");
+  expect(repairMojibake("Göteborg")).toBe("Göteborg");
+  expect(repairMojibake("")).toBe("");
+  expect(repairMojibake("São Paulo")).toBe("São Paulo");
+});
+test("deepRepairMojibake repairs every string field of a profile without mutating the input", () => {
+  const profile = createDefaultCandidateProfile();
+  profile.workExperience = [{ title: "IT-support", company: "Rexett AB", location: "GÃ¶teborg", summary: "Felsökning och drift av tekniska miljÃ¶er." }];
+  const before = structuredClone(profile);
+  const repaired = deepRepairMojibake(profile);
+  expect(repaired.workExperience[0]!.location).toBe("Göteborg");
+  // Mixed already-correct and mojibake text within the same field must both
+  // resolve correctly - a single invalid byte must not abort the whole repair.
+  expect(repaired.workExperience[0]!.summary).toBe("Felsökning och drift av tekniska miljöer.");
+  expect(profile).toEqual(before);
 });
 test("explicit keep, move and removal produce a detached preview and reject stale decisions", () => {
   const profile = createDefaultCandidateProfile(); profile.skills.technical = ["SQL", "Worked with scheduling", "IT-"];

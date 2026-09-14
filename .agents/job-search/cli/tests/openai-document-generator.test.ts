@@ -8,7 +8,7 @@ import {
 } from "../src/index"
 
 const request: DocumentGenerationRequest = {
-  schemaVersion: "phase-4.4.1", applicationId: "application-1", type: "coverLetter", language: "en",
+  schemaVersion: "phase-4.4.1", applicationId: "application-1", type: "cv", language: "en",
   applicationContext: { jobTitle: "Coordinator", company: "Example" },
   selectedEvidence: [{ id: "schedule", kind: "experience", content: "Coordinated patient scheduling" }],
   approvedEvidenceIds: ["schedule"], matchedRequirementSupport: [{ requirementKey: "skill:scheduling", evidenceIds: ["schedule"] }],
@@ -17,7 +17,7 @@ const request: DocumentGenerationRequest = {
 }
 
 const proposal: GeneratedDocumentProposal = {
-  applicationId: "application-1", type: "coverLetter", language: "en",
+  applicationId: "application-1", type: "cv", language: "en",
   sections: [{ id: "experience", kind: "experience", claims: [{ id: "claim-1", kind: "candidateFact", provenance: "verbatim", text: "Coordinated patient scheduling", evidenceIds: ["schedule"] }] }],
 }
 

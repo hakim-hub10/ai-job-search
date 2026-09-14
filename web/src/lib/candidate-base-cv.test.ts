@@ -10,6 +10,7 @@ import type { CoachWorkspaceRepository } from "../../../.agents/job-search/cli/s
 import type { CandidateBaseCvRepository } from "./candidate-base-cv-repository";
 import {
   createCandidateBaseCvFromProfile,
+  mergeBaseCvIntoProfile,
   updateCandidateBaseCvPresentation,
 } from "./candidate-base-cv";
 import { createFileCandidateBaseCvRepository } from "./candidate-base-cv-file-repository";
@@ -132,6 +133,50 @@ describe("candidate Base CV domain and repository", () => {
     } finally {
       await rm(fixture.directory, { recursive: true, force: true });
     }
+  });
+});
+
+describe("mergeBaseCvIntoProfile - the single evidence-merge path shared by CV and cover letter generation", () => {
+  it("uses the Base CV's edited fields, not the raw profile's, when a section is visible", () => {
+    const base = createCandidateBaseCvFromProfile("candidate-a", profile(), timestamp);
+    if (!base.ok) throw new Error("fixture");
+    base.value.headline = "Edited headline";
+    base.value.summary = "Edited summary.";
+    base.value.workExperience = [{ ...base.value.workExperience[0], company: "Edited Employer AB" }];
+    base.value.technicalSkills = ["Edited Skill"];
+    const merged = mergeBaseCvIntoProfile(profile(), base.value);
+    expect(merged.headline).toBe("Edited headline");
+    expect(merged.summary).toBe("Edited summary.");
+    expect(merged.workExperience[0].company).toBe("Edited Employer AB");
+    expect(merged.skills.technical).toEqual(["Edited Skill"]);
+  });
+
+  it("empties every section whose visibility is turned off, regardless of raw profile content", () => {
+    const base = createCandidateBaseCvFromProfile("candidate-a", profile(), timestamp);
+    if (!base.ok) throw new Error("fixture");
+    for (const key of ["headline", "summary", "workExperience", "education", "technicalSkills", "softSkills", "certifications", "languages", "projects"] as const) {
+      base.value.visibility[key] = false;
+    }
+    const merged = mergeBaseCvIntoProfile(profile(), base.value);
+    expect(merged.headline).toBe("");
+    expect(merged.summary).toBeUndefined();
+    expect(merged.workExperience).toEqual([]);
+    expect(merged.education).toEqual([]);
+    expect(merged.skills).toEqual({ technical: [], soft: [] });
+    expect(merged.certifications).toEqual([]);
+    expect(merged.languages).toEqual([]);
+    expect(merged.projects).toEqual([]);
+  });
+
+  it("does not mutate the input profile or Base CV", () => {
+    const base = createCandidateBaseCvFromProfile("candidate-a", profile(), timestamp);
+    if (!base.ok) throw new Error("fixture");
+    const sourceProfile = profile();
+    const beforeProfile = structuredClone(sourceProfile);
+    const beforeBase = structuredClone(base.value);
+    mergeBaseCvIntoProfile(sourceProfile, base.value);
+    expect(sourceProfile).toEqual(beforeProfile);
+    expect(base.value).toEqual(beforeBase);
   });
 });
 

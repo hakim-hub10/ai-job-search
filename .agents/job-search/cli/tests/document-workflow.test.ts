@@ -39,6 +39,20 @@ function application(domain = "healthcare") {
 
 function proposal(request: DocumentGenerationRequest, paraphrased = false): GeneratedDocumentProposal {
   const matched = request.selectedEvidence.find((evidence) => evidence.id === "matched")!
+  if (request.type === "coverLetter") {
+    return {
+      applicationId: request.applicationId,
+      type: request.type,
+      language: request.language,
+      sections: [{
+        id: "professional:letter", kind: "context",
+        claims: [
+          { id: "context", kind: "neutralContext", provenance: "neutral", text: "Application context", evidenceIds: [] },
+          { id: "matched-claim", kind: "candidateFact", provenance: paraphrased ? "paraphrased" as const : "verbatim" as const, text: paraphrased ? "Experienced in coordinating scheduling." : matched.content, evidenceIds: [matched.id] },
+        ],
+      }],
+    }
+  }
   return {
     applicationId: request.applicationId,
     type: request.type,

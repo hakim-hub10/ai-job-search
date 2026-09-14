@@ -114,6 +114,31 @@ export function createCandidateBaseCvFromProfile(
   };
 }
 
+/**
+ * Merges Base CV fields into a profile per the candidate's visibility
+ * choices, so any document generator (CV or cover letter) that consumes the
+ * result sees exactly the same approved evidence universe - the candidate's
+ * Base CV edits and hidden sections, not the raw stored profile. Shared by
+ * every production and experimental document-generation path; do not
+ * duplicate this logic elsewhere.
+ */
+export function mergeBaseCvIntoProfile(profile: CandidateProfile, baseCv: CandidateBaseCv): CandidateProfile {
+  return {
+    ...structuredClone(profile),
+    headline: baseCv.visibility.headline ? baseCv.headline : "",
+    ...(baseCv.visibility.summary ? { summary: baseCv.summary } : { summary: undefined }),
+    workExperience: baseCv.visibility.workExperience ? structuredClone(baseCv.workExperience) : [],
+    education: baseCv.visibility.education ? structuredClone(baseCv.education) : [],
+    skills: {
+      technical: baseCv.visibility.technicalSkills ? [...baseCv.technicalSkills] : [],
+      soft: baseCv.visibility.softSkills ? [...baseCv.softSkills] : [],
+    },
+    certifications: baseCv.visibility.certifications ? [...baseCv.certifications] : [],
+    languages: baseCv.visibility.languages ? structuredClone(baseCv.languages) : [],
+    projects: baseCv.visibility.projects ? structuredClone(baseCv.projects ?? []) : [],
+  };
+}
+
 export function updateCandidateBaseCvPresentation(
   baseCv: CandidateBaseCv,
   input: CandidateBaseCvPresentationInput,
