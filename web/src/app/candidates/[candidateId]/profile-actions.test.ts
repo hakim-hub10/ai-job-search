@@ -101,3 +101,26 @@ describe("saveCandidateProfileAction multi-value field parsing", () => {
     expect(await savedTargetRoles("IT Support")).toEqual(["IT Support"]);
   });
 });
+
+describe("saveCandidateProfileAction profile-save return flow", () => {
+  it("redirects to the plain candidate page when no application/job context was supplied", async () => {
+    await expect(saveCandidateProfileAction(baseFormData("IT Support"))).rejects.toThrow("REDIRECT:/candidates/candidate-a");
+  });
+
+  it("preserves the originating application context through the redirect, so the candidate lands back on the same context with a save confirmation", async () => {
+    const data = baseFormData("IT Support");
+    data.set("fromApplication", "application-a");
+    data.set("fromJobTitle", "IT Support Technician");
+    await expect(saveCandidateProfileAction(data)).rejects.toThrow(
+      "REDIRECT:/candidates/candidate-a?fromApplication=application-a&profileSaved=1&fromJobTitle=IT+Support+Technician",
+    );
+  });
+
+  it("omits fromJobTitle from the redirect when it was not supplied, rather than inventing one", async () => {
+    const data = baseFormData("IT Support");
+    data.set("fromApplication", "application-a");
+    await expect(saveCandidateProfileAction(data)).rejects.toThrow(
+      "REDIRECT:/candidates/candidate-a?fromApplication=application-a&profileSaved=1",
+    );
+  });
+});

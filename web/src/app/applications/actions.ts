@@ -18,6 +18,7 @@ import { createFileCoachWorkspaceRepository } from "../../../../.agents/job-sear
 import { loadCandidateProfileRepository } from "@/lib/candidate-profiles";
 import { createTailoredCv } from "@/lib/tailored-cv";
 import { createCoverLetter } from "@/lib/cover-letter";
+import { reanalyzeApplicationJob } from "@/lib/application-reanalysis";
 import { documentLanguage } from "@/lib/document-language";
 import { PROFESSIONAL_WRITER_MAX_OUTPUT_TOKENS } from "@/lib/professional-writer";
 import {
@@ -320,6 +321,49 @@ export async function createCoverLetterAction(formData: FormData) {
   revalidatePath(`/applications/${encodeURIComponent(applicationId)}`);
   revalidatePath(`/applications/${encodeURIComponent(applicationId)}/documents/cover-letter`);
   redirect(`/applications/${encodeURIComponent(applicationId)}`);
+}
+
+export async function reanalyzeApplicationAction(formData: FormData) {
+  const applicationIdValue = formData.get("applicationId");
+  const applicationId =
+    typeof applicationIdValue === "string" ? applicationIdValue.trim() : "";
+  const coachDir = process.env.COACH_DIR?.trim();
+  const applicationRepositoryPath = process.env.APPLICATION_REPOSITORY?.trim();
+
+  if (!applicationId) throw new Error("Ansökans ID saknas.");
+  if (!(await authorizeApplication(applicationId)).ok) throw new Error("Ansökan kunde inte hittas.");
+  if (!coachDir || !applicationRepositoryPath) {
+    throw new Error("Ansökningsvyn är inte fullständigt konfigurerad.");
+  }
+
+  const paths = resolveCoachRepositoryPaths(resolve(coachDir));
+  const result = await reanalyzeApplicationJob(
+    { applicationId },
+    {
+      applicationRepository: createFileApplicationRepository(resolve(applicationRepositoryPath)),
+      associationRepository: createFileCandidateApplicationAssociationRepository(paths.associations),
+      candidateRepository: createFileCoachWorkspaceRepository(paths.candidates),
+      profileRepository: loadCandidateProfileRepository().repository!,
+    },
+  );
+
+  if (!result.ok) {
+    const messages: Record<string, string> = {
+      APPLICATION_NOT_FOUND: "Ansökan hittades inte.",
+      ASSOCIATION_NOT_FOUND: "Ansökan saknar kandidatkoppling.",
+      CANDIDATE_NOT_FOUND: "Den kopplade kandidaten hittades inte.",
+      PROFILE_NOT_FOUND: "Kandidatprofil saknas.",
+      APPLICATION_STORAGE_FAILURE: "Analysen kunde inte sparas.",
+      ASSOCIATION_STORAGE_FAILURE: "Kandidatkopplingen kunde inte läsas.",
+      CANDIDATE_STORAGE_FAILURE: "Kandidatregistret kunde inte läsas.",
+      PROFILE_STORAGE_FAILURE: "Kandidatprofilen kunde inte läsas.",
+      ANALYSIS_FAILED: "Jobbmatchningen kunde inte analyseras om.",
+    };
+    throw new Error(messages[result.code] ?? "Jobbmatchningen kunde inte analyseras om.");
+  }
+
+  revalidatePath(`/applications/${encodeURIComponent(applicationId)}`);
+  redirect(`/applications/${encodeURIComponent(applicationId)}?reanalyzed=1`);
 }
 
 export async function saveDocumentEditAction(formData: FormData) {

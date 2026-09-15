@@ -6,8 +6,10 @@ import {
   findDuplicateApplications,
   normalizeCandidateProfile,
   normalizeJob,
+  reanalyzeApplication,
   updateApplicationStatus,
   type ApplicationRecord,
+  type CandidateProfile,
   type NormalizedJob,
 } from "../src/index"
 
@@ -181,5 +183,73 @@ describe("application management foundation", () => {
     expect(first.ok && first.value.jobSnapshot).toMatchObject({ id: "sparse", url: null, applyUrl: null, company: null, location: null })
     expect(createApplication({ id: "healthcare", rankedJob: healthcare, createdAt }).ok).toBe(true)
     expect(createApplication({ id: "logistics", rankedJob: logistics, createdAt }).ok).toBe(true)
+  })
+
+  it("records candidateProfileUpdatedAt and analyzedAt at creation time, for later staleness detection", () => {
+    const rankedJob = ranked({ id: "operations", title: "Operations Coordinator" })
+    const result = createApplication({ id: "with-profile-timestamp", rankedJob, createdAt, candidateProfileUpdatedAt: "2026-08-15T09:00:00.000Z" })
+    expect(result).toMatchObject({ ok: true, value: { analysisSnapshot: { analyzedAt: createdAt, candidateProfileUpdatedAt: "2026-08-15T09:00:00.000Z" } } });
+    const withoutProfileTimestamp = createApplication({ id: "no-profile-timestamp", rankedJob, createdAt });
+    expect(withoutProfileTimestamp.ok && withoutProfileTimestamp.value.analysisSnapshot.candidateProfileUpdatedAt).toBeUndefined();
+  })
+
+  describe("re-analysis reuses the existing matching/scoring/gap pipeline and updates only the analysis snapshot", () => {
+    const reanalyzedAt = "2026-09-05T10:00:00.000Z"
+
+    function rankedFor(profile: CandidateProfile, overrides: Partial<NormalizedJob> & Pick<NormalizedJob, "id" | "title">) {
+      return analyzeJobs(profile, [job(overrides)]).rankedJobs[0]
+    }
+
+    it("replaces the analysis snapshot from a freshly computed RankedJob, preserving jobSnapshot and prior status/notes untouched", () => {
+      const original = created()
+      const improvedCandidate: CandidateProfile = { ...candidate(), skills: { technical: [...candidate().skills.technical, "Route planning"], soft: candidate().skills.soft } }
+      const freshRankedJob = rankedFor(improvedCandidate, { id: "operations", title: "Operations Coordinator" })
+      const result = reanalyzeApplication(original, { rankedJob: freshRankedJob, timestamp: reanalyzedAt, candidateProfileUpdatedAt: "2026-09-04T10:00:00.000Z" })
+      expect(result.ok).toBe(true)
+      if (!result.ok) throw new Error(result.error.message)
+      expect(result.value.jobSnapshot).toEqual(original.jobSnapshot)
+      expect(result.value.status).toBe(original.status)
+      expect(result.value.statusHistory).toEqual(original.statusHistory)
+      expect(result.value.createdAt).toBe(original.createdAt)
+      expect(result.value.updatedAt).toBe(reanalyzedAt)
+      expect(result.value.analysisSnapshot).toMatchObject({ analyzedAt: reanalyzedAt, candidateProfileUpdatedAt: "2026-09-04T10:00:00.000Z" })
+      expect(result.value.analysisSnapshot).not.toEqual(original.analysisSnapshot)
+      // The original record itself is never mutated.
+      expect(original.updatedAt).toBe(createdAt)
+    })
+
+    it("rejects a re-analysis timestamp that precedes the application's current updatedAt, exactly like status updates do", () => {
+      const original = created()
+      const freshRankedJob = ranked({ id: "operations", title: "Operations Coordinator" })
+      expect(reanalyzeApplication(original, { rankedJob: freshRankedJob, timestamp: "2026-08-31T10:00:00.000Z" })).toMatchObject({ ok: false, error: { code: "TIMESTAMP_OUT_OF_ORDER" } })
+    })
+
+    it("rejects a malformed RankedJob and an invalid application record, without touching the stored record", () => {
+      const original = created()
+      expect(reanalyzeApplication(original, { rankedJob: {} as never, timestamp: reanalyzedAt })).toMatchObject({ ok: false, error: { code: "MALFORMED_APPLICATION_INPUT" } })
+      const freshRankedJob = ranked({ id: "operations", title: "Operations Coordinator" })
+      expect(reanalyzeApplication({ ...original, id: "" }, { rankedJob: freshRankedJob, timestamp: reanalyzedAt })).toMatchObject({ ok: false, error: { code: "INVALID_APPLICATION_ID" } })
+    })
+
+    it("omits candidateProfileUpdatedAt entirely when not supplied, rather than inventing one", () => {
+      const original = created()
+      const freshRankedJob = ranked({ id: "operations", title: "Operations Coordinator" })
+      const result = reanalyzeApplication(original, { rankedJob: freshRankedJob, timestamp: reanalyzedAt })
+      expect(result.ok).toBe(true)
+      if (result.ok) expect(result.value.analysisSnapshot.candidateProfileUpdatedAt).toBeUndefined()
+    })
+
+    it("captures the replaced analysis as previousAnalysisSnapshot, so a before/after comparison always uses real stored results", () => {
+      const original = created()
+      expect(original.previousAnalysisSnapshot).toBeUndefined()
+      const freshRankedJob = ranked({ id: "operations", title: "Operations Coordinator" })
+      const result = reanalyzeApplication(original, { rankedJob: freshRankedJob, timestamp: reanalyzedAt })
+      expect(result.ok).toBe(true)
+      if (!result.ok) return
+      expect(result.value.previousAnalysisSnapshot).toEqual(original.analysisSnapshot)
+      const secondReanalysis = reanalyzeApplication(result.value, { rankedJob: freshRankedJob, timestamp: "2026-09-06T10:00:00.000Z" })
+      expect(secondReanalysis.ok).toBe(true)
+      if (secondReanalysis.ok) expect(secondReanalysis.value.previousAnalysisSnapshot).toEqual(result.value.analysisSnapshot)
+    })
   })
 })

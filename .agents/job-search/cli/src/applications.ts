@@ -34,6 +34,15 @@ export interface ApplicationAnalysisSnapshot {
   scoringResult: ScoringResult
   skillGapResult: SkillGapResult
   explanation: string
+  /**
+   * When this analysis was computed, and the candidate profile's own
+   * updatedAt at that moment - both optional so records stored before this
+   * field existed remain valid. Together they let a caller determine whether
+   * the candidate profile has changed since this historical snapshot was
+   * taken, without ever silently recomputing it.
+   */
+  analyzedAt?: string
+  candidateProfileUpdatedAt?: string
 }
 
 /** A durable, storage-neutral snapshot of one selected job opportunity. */
@@ -41,6 +50,14 @@ export interface ApplicationRecord {
   id: string
   jobSnapshot: NormalizedJob
   analysisSnapshot: ApplicationAnalysisSnapshot
+  /**
+   * The analysisSnapshot that was replaced by the current one, set only by
+   * reanalyzeApplication - one step of history, enough to show a
+   * before/after score and requirement comparison from actual stored
+   * results without ever recomputing or reinterpreting a score. Absent for
+   * an application that has never been re-analyzed.
+   */
+  previousAnalysisSnapshot?: ApplicationAnalysisSnapshot
   status: ApplicationStatus
   statusHistory: ApplicationStatusEvent[]
   notes: ApplicationNote[]
@@ -55,6 +72,15 @@ export interface CreateApplicationInput {
   initialStatus?: ApplicationStatus
   initialStatusNote?: string
   initialNote?: ApplicationNote
+  /** The candidate profile's own updatedAt at creation time, for later staleness detection - see ApplicationAnalysisSnapshot. */
+  candidateProfileUpdatedAt?: string
+}
+
+export interface ReanalyzeApplicationInput {
+  /** Re-ranked against the application's own existing jobSnapshot only - never a different job. */
+  rankedJob: RankedJob
+  timestamp: string
+  candidateProfileUpdatedAt?: string
 }
 
 export interface UpdateApplicationStatusInput {
@@ -116,16 +142,22 @@ function isRankedJob(value: unknown): value is RankedJob {
   return Boolean(candidate.job && hasText(candidate.job.id) && hasText(candidate.job.title))
 }
 
-function snapshotRankedJob(rankedJob: RankedJob): Pick<ApplicationRecord, "jobSnapshot" | "analysisSnapshot"> {
+function snapshotAnalysis(rankedJob: RankedJob, analyzedAt: string, candidateProfileUpdatedAt: string | undefined): ApplicationAnalysisSnapshot {
+  return structuredClone({
+    rank: rankedJob.rank,
+    matchingResult: rankedJob.matchingResult,
+    scoringResult: rankedJob.scoringBreakdown,
+    skillGapResult: rankedJob.skillGapResult,
+    explanation: rankedJob.explanation,
+    analyzedAt,
+    ...(candidateProfileUpdatedAt ? { candidateProfileUpdatedAt } : {}),
+  })
+}
+
+function snapshotRankedJob(rankedJob: RankedJob, analyzedAt: string, candidateProfileUpdatedAt: string | undefined): Pick<ApplicationRecord, "jobSnapshot" | "analysisSnapshot"> {
   return structuredClone({
     jobSnapshot: rankedJob.job,
-    analysisSnapshot: {
-      rank: rankedJob.rank,
-      matchingResult: rankedJob.matchingResult,
-      scoringResult: rankedJob.scoringBreakdown,
-      skillGapResult: rankedJob.skillGapResult,
-      explanation: rankedJob.explanation,
-    },
+    analysisSnapshot: snapshotAnalysis(rankedJob, analyzedAt, candidateProfileUpdatedAt),
   })
 }
 
@@ -160,7 +192,7 @@ export function createApplication(input: CreateApplicationInput): ApplicationRes
     if (noteError) return { ok: false, error: noteError }
   }
 
-  const snapshot = snapshotRankedJob(input.rankedJob)
+  const snapshot = snapshotRankedJob(input.rankedJob, input.createdAt, input.candidateProfileUpdatedAt)
   return {
     ok: true,
     value: {
@@ -171,6 +203,36 @@ export function createApplication(input: CreateApplicationInput): ApplicationRes
       notes: input.initialNote ? [structuredClone(input.initialNote)] : [],
       createdAt: input.createdAt,
       updatedAt: input.createdAt,
+    },
+  }
+}
+
+/**
+ * Re-runs analysis for an application's own existing jobSnapshot only - it
+ * never changes which job the application is for. Replaces analysisSnapshot
+ * only after the caller has already produced a successful RankedJob from the
+ * existing matchProfile/scoring/skill-gap pipeline; this function itself
+ * performs no matching or scoring, it only records the result.
+ */
+export function reanalyzeApplication(
+  record: ApplicationRecord,
+  input: ReanalyzeApplicationInput,
+): ApplicationResult<ApplicationRecord> {
+  const recordError = validateRecord(record)
+  if (recordError) return { ok: false, error: recordError }
+  if (!isRankedJob(input?.rankedJob)) return failure("MALFORMED_APPLICATION_INPUT", "Applications must be re-analyzed from a valid RankedJob.")
+  if (!isValidTimestamp(input.timestamp)) return failure("INVALID_TIMESTAMP", "Application re-analysis timestamps must be valid UTC ISO timestamps.")
+  if (Date.parse(input.timestamp) < Date.parse(record.updatedAt)) {
+    return failure("TIMESTAMP_OUT_OF_ORDER", "Application re-analysis timestamps cannot precede the current update timestamp.")
+  }
+
+  return {
+    ok: true,
+    value: {
+      ...record,
+      previousAnalysisSnapshot: record.analysisSnapshot,
+      analysisSnapshot: snapshotAnalysis(input.rankedJob, input.timestamp, input.candidateProfileUpdatedAt),
+      updatedAt: input.timestamp,
     },
   }
 }

@@ -24,7 +24,11 @@ import {
   updateBaseCvAction,
 } from "./base-cv-actions";
 import { loadCandidateNotes } from "@/lib/candidate-notes";
-import { configuredAuthorizationDependencies, requireOwnedCandidate } from "@/lib/authorization";
+import { configuredAuthorizationDependencies, requireOwnedApplication, requireOwnedCandidate } from "@/lib/authorization";
+import { buildProfileGapContext } from "@/lib/profile-gap-context";
+import ProfileGapPanel from "@/components/profile-gap-panel";
+import SubmitButton from "@/components/submit-button";
+import { reanalyzeApplicationAction } from "../../applications/actions";
 import styles from "../../page.module.css";
 
 export const dynamic = "force-dynamic";
@@ -32,6 +36,12 @@ export const dynamic = "force-dynamic";
 interface CandidatePageProps {
   params: Promise<{
     candidateId: string;
+  }>;
+  searchParams: Promise<{
+    fromJob?: string;
+    fromApplication?: string;
+    fromJobTitle?: string;
+    profileSaved?: string;
   }>;
 }
 
@@ -77,8 +87,10 @@ function formatDate(value?: string | null) {
 
 export default async function CandidatePage({
   params,
+  searchParams,
 }: CandidatePageProps) {
   const { candidateId } = await params;
+  const { fromJob, fromApplication, fromJobTitle, profileSaved } = await searchParams;
   const authorization = configuredAuthorizationDependencies();
   const owned = authorization.ok
     ? await requireOwnedCandidate(candidateId, authorization.value)
@@ -91,6 +103,13 @@ export default async function CandidatePage({
   const noteResult = await loadCandidateNotes(candidateId);
   const profileResult = await loadCandidateProfile(candidateId);
   const baseCvResult = await loadCandidateBaseCvState(candidateId);
+
+  const profileGapContext = await (async () => {
+    if (!fromApplication || !profileResult.profile) return null;
+    const ownedApplication = authorization.ok ? await requireOwnedApplication(fromApplication, authorization.value) : authorization;
+    if (!ownedApplication.ok || ownedApplication.value.context.candidate.id !== candidateId) return null;
+    return buildProfileGapContext(ownedApplication.value.application, profileResult.profile);
+  })();
 
   const candidate = result.candidate;
   const overview = result.overview;
@@ -114,6 +133,18 @@ export default async function CandidatePage({
             <p className={styles.subtitle}>
               Hantera din profil och ditt grund-CV för jobbsökningen.
             </p>
+            {fromJob || fromApplication ? (
+              <p role="status">
+                Du kom hit för att uppdatera din profil utifrån{" "}
+                {fromJobTitle ? <strong>{fromJobTitle}</strong> : "en jobbannons"}. Lägg bara till uppgifter du faktiskt har.
+                {fromApplication ? (
+                  <>
+                    {" "}
+                    <Link href={`/applications/${encodeURIComponent(fromApplication)}`}>Tillbaka till ansökan</Link>
+                  </>
+                ) : null}
+              </p>
+            ) : null}
           </div>
 
           <Link href="/" className={styles.secondaryButton}>
@@ -155,6 +186,27 @@ export default async function CandidatePage({
               </div>
             </section>
 
+            {profileGapContext ? <ProfileGapPanel context={profileGapContext} /> : null}
+
+            {profileSaved === "1" && fromApplication ? (
+              <section className={styles.panel} role="status">
+                <div className={styles.sectionHeading}>
+                  <div>
+                    <p className={styles.eyebrow}>Profil sparad</p>
+                    <h3>Profilen har uppdaterats.</h3>
+                    <p className={styles.formIntro}>
+                      Analysera jobbet igen för att se hur din uppdaterade profil påverkar matchningen.
+                    </p>
+                  </div>
+                </div>
+                <form action={reanalyzeApplicationAction} style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                  <input type="hidden" name="applicationId" value={fromApplication} />
+                  <SubmitButton pendingLabel="Analyserar jobbet igen…">Analysera om jobbet</SubmitButton>
+                  <Link href={`/applications/${encodeURIComponent(fromApplication)}`}>Tillbaka till ansökan</Link>
+                </form>
+              </section>
+            ) : null}
+
             <section className={styles.panel}>
               <div className={styles.sectionHeading}>
                 <div>
@@ -186,6 +238,8 @@ export default async function CandidatePage({
                     name="candidateId"
                     value={candidate.id}
                   />
+                  {fromApplication ? <input type="hidden" name="fromApplication" value={fromApplication} /> : null}
+                  {fromJobTitle ? <input type="hidden" name="fromJobTitle" value={fromJobTitle} /> : null}
 
                   {profileResult.profile && <details>
                     <summary>Granska kompetensernas datakvalitet</summary>
@@ -205,7 +259,7 @@ export default async function CandidatePage({
                       />
                     </label>
 
-                    <label className={styles.profileField}>
+                    <label className={styles.profileField} id="field-yearsOfExperience">
                       Antal års erfarenhet
                       <input
                         type="number"
@@ -219,7 +273,7 @@ export default async function CandidatePage({
                       />
                     </label>
 
-                    <label className={styles.profileField}>
+                    <label className={styles.profileField} id="field-workMode">
                       Arbetsform
                       <select
                         name="workMode"
@@ -249,7 +303,7 @@ export default async function CandidatePage({
                   </div>
 
                   <div className={styles.profileGrid}>
-                  <label className={styles.profileField}>
+                  <label className={styles.profileField} id="field-targetRoles">
                     Målroller
                     <textarea
                       name="targetRoles"
@@ -261,7 +315,7 @@ export default async function CandidatePage({
                     />
                   </label>
 
-                  <label className={styles.profileField}>
+                  <label className={styles.profileField} id="field-locationPreferences">
                     Önskade orter
                     <textarea
                       name="locationPreferences"
@@ -274,7 +328,7 @@ export default async function CandidatePage({
                     />
                   </label>
 
-                  <label className={styles.profileField}>
+                  <label className={styles.profileField} id="field-preferredIndustries">
                     Branscher
                     <textarea
                       name="preferredIndustries"
@@ -288,7 +342,7 @@ export default async function CandidatePage({
                   </label>
                   </div>
 
-                  <fieldset className={styles.profileFieldset}>
+                  <fieldset className={styles.profileFieldset} id="field-preferredEmploymentType">
                     <legend>Anställningsformer</legend>
 
                     <div className={styles.profileOptions}>
@@ -324,7 +378,7 @@ export default async function CandidatePage({
                   </fieldset>
 
                   <div className={styles.profileGrid}>
-                  <label className={`${styles.profileField} ${styles.profileFieldWide}`}>
+                  <label className={`${styles.profileField} ${styles.profileFieldWide}`} id="field-technicalSkills">
                     Tekniska kompetenser
                     <textarea
                       name="technicalSkills"
@@ -336,7 +390,7 @@ export default async function CandidatePage({
                     />
                   </label>
 
-                  <label className={styles.profileField}>
+                  <label className={styles.profileField} id="field-softSkills">
                     Mjuka kompetenser
                     <textarea
                       name="softSkills"
@@ -348,7 +402,7 @@ export default async function CandidatePage({
                     />
                   </label>
 
-                  <label className={styles.profileField}>
+                  <label className={styles.profileField} id="field-certifications">
                     Certifieringar
                     <textarea
                       name="certifications"
@@ -360,7 +414,7 @@ export default async function CandidatePage({
                     />
                   </label>
 
-                  <label className={styles.profileField}>
+                  <label className={styles.profileField} id="field-languages">
                     Språk
                     <textarea
                       name="languages"

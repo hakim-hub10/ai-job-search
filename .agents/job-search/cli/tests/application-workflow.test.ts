@@ -188,4 +188,42 @@ describe("application workflow", () => {
     const second = await createApplicationWorkflow(secondStore.repository).startApplication(input)
     expect(first).toEqual(second)
   })
+
+  describe("re-analysis loads, replaces only the analysis snapshot, and saves - through the same load/save persistence path as status updates", () => {
+    const reanalyzedAt = "2026-10-05T10:00:00.000Z"
+
+    it("persists the freshly computed analysis while preserving jobSnapshot, status, and notes", async () => {
+      const store = repository()
+      const workflow = createApplicationWorkflow(store.repository)
+      const started = await workflow.startApplication(startInput())
+      if (!started.ok) throw new Error("expected application")
+      await workflow.addApplicationNoteAndSave({ applicationId: "application-1", text: "Keep me", createdAt: appliedAt })
+
+      const improvedCandidate = { ...candidate(), skills: { technical: [...candidate().skills.technical, "Route planning"], soft: candidate().skills.soft } }
+      const freshRankedJob = analyzeJobs(improvedCandidate, [job({ id: "operations", title: "Operations Coordinator" })]).rankedJobs[0]
+      const result = await workflow.reanalyzeApplicationAndSave({ applicationId: "application-1", rankedJob: freshRankedJob, timestamp: reanalyzedAt, candidateProfileUpdatedAt: "2026-10-04T10:00:00.000Z" })
+      expect(result.ok).toBe(true)
+      if (!result.ok) throw new Error("expected re-analysis")
+      expect(result.value.jobSnapshot).toEqual(started.value.jobSnapshot)
+      expect(result.value.notes).toEqual([{ text: "Keep me", createdAt: appliedAt }])
+      expect(result.value.status).toBe("saved")
+      expect(result.value.analysisSnapshot).toMatchObject({ analyzedAt: reanalyzedAt, candidateProfileUpdatedAt: "2026-10-04T10:00:00.000Z" })
+      expect(result.value.analysisSnapshot).not.toEqual(started.value.analysisSnapshot)
+      expect(store.records.get("application-1")).toEqual(result.value)
+    })
+
+    it("propagates domain and missing-record errors without persisting anything", async () => {
+      const store = repository()
+      const workflow = createApplicationWorkflow(store.repository)
+      const started = await workflow.startApplication(startInput())
+      if (!started.ok) throw new Error("expected application")
+      const before = structuredClone(store.records.get("application-1"))
+
+      const freshRankedJob = ranked({ id: "operations", title: "Operations Coordinator" })
+      expect(await workflow.reanalyzeApplicationAndSave({ applicationId: "application-1", rankedJob: freshRankedJob, timestamp: "bad" })).toMatchObject({ ok: false, error: { kind: "domain", error: { code: "INVALID_TIMESTAMP" } } })
+      expect(await workflow.reanalyzeApplicationAndSave({ applicationId: "application-1", rankedJob: freshRankedJob, timestamp: "2026-09-30T10:00:00.000Z" })).toMatchObject({ ok: false, error: { kind: "domain", error: { code: "TIMESTAMP_OUT_OF_ORDER" } } })
+      expect(await workflow.reanalyzeApplicationAndSave({ applicationId: "missing", rankedJob: freshRankedJob, timestamp: reanalyzedAt })).toMatchObject({ ok: false, error: { kind: "repository", error: { code: "NOT_FOUND" } } })
+      expect(store.records.get("application-1")).toEqual(before)
+    })
+  })
 })

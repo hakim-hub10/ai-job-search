@@ -4,10 +4,15 @@ import { applicationInterviewPath } from "@/lib/interview-presentation";
 import { loadApplicationDetail } from "@/lib/application-detail";
 import { loadApplicationDocumentState } from "@/lib/application-documents";
 import { loadCandidateBaseCvState } from "@/lib/candidate-base-cv-state";
+import { loadCandidateProfile } from "@/lib/candidate-profiles";
+import { isApplicationAnalysisStale } from "@/lib/application-reanalysis";
+import { buildMatchComparison } from "@/lib/match-comparison";
+import SubmitButton from "@/components/submit-button";
 
 import {
   createCoverLetterAction,
   createTailoredCvAction,
+  reanalyzeApplicationAction,
   updateApplicationStatusAction,
 } from "../actions";
 import { configuredAuthorizationDependencies, requireOwnedApplication } from "@/lib/authorization";
@@ -54,10 +59,13 @@ const statuses = [
 
 export default async function ApplicationDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ applicationId: string }>;
+  searchParams: Promise<{ reanalyzed?: string }>;
 }) {
   const { applicationId } = await params;
+  const { reanalyzed } = await searchParams;
   const decodedId = decodeURIComponent(applicationId);
   const authorization = configuredAuthorizationDependencies();
   const owned = authorization.ok ? await requireOwnedApplication(decodedId, authorization.value) : authorization;
@@ -86,7 +94,13 @@ export default async function ApplicationDetailPage({
   }
 
   const application = result.application;
-  const baseCvResult = await loadCandidateBaseCvState(owned.value.context.candidate.id);
+  const candidateId = owned.value.context.candidate.id;
+  const baseCvResult = await loadCandidateBaseCvState(candidateId);
+  const currentProfile = await loadCandidateProfile(candidateId);
+  const analysisIsStale = isApplicationAnalysisStale(application, currentProfile.profile?.updatedAt);
+  const matchComparison = application.previousAnalysisSnapshot
+    ? buildMatchComparison(application.previousAnalysisSnapshot, application.analysisSnapshot, application.jobSnapshot)
+    : null;
 
   return (
     <main style={{ maxWidth: 900, margin: "0 auto", padding: "48px 24px" }}>
@@ -122,6 +136,84 @@ export default async function ApplicationDetailPage({
           </a>
         </p>
       ) : null}
+
+      <section style={{ marginTop: 40 }}>
+        <h2>Matchning</h2>
+
+        {reanalyzed === "1" ? (
+          <p role="status">Matchningen har uppdaterats utifrån din senaste profil.</p>
+        ) : null}
+
+        {analysisIsStale ? (
+          <p role="status">Din profil har ändrats sedan den senaste analysen.</p>
+        ) : null}
+
+        <form action={reanalyzeApplicationAction} style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+          <input type="hidden" name="applicationId" value={application.id} />
+          <SubmitButton pendingLabel="Analyserar jobbet igen…">Analysera om jobbet</SubmitButton>
+          <Link href={`/candidates/${encodeURIComponent(candidateId)}?fromApplication=${encodeURIComponent(application.id)}&fromJobTitle=${encodeURIComponent(application.jobSnapshot.title)}`}>
+            Uppdatera min profil
+          </Link>
+        </form>
+        <p style={{ marginTop: 8, fontSize: 13 }}>
+          Lägg endast till erfarenheter och kompetenser som du faktiskt har.
+        </p>
+
+        {matchComparison ? (
+          <div style={{ marginTop: 24 }}>
+            <p>Tidigare matchning: {matchComparison.previousScore}/100</p>
+            <p>Ny matchning: {matchComparison.currentScore}/100</p>
+            <p>
+              Förändring: {matchComparison.change > 0 ? "+" : ""}
+              {matchComparison.change}
+            </p>
+
+            {matchComparison.newMatches.length > 0 ? (
+              <div style={{ marginTop: 16 }}>
+                <strong>Nya matchningar</strong>
+                <ul>
+                  {matchComparison.newMatches.map((title) => (
+                    <li key={title}>✓ {title}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
+            {matchComparison.remainingMissing.length > 0 ? (
+              <div style={{ marginTop: 16 }}>
+                <strong>Kvarvarande saknade krav</strong>
+                <ul>
+                  {matchComparison.remainingMissing.map((item, index) => (
+                    <li key={`${item.title}:${index}`}>• {item.title}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
+            {matchComparison.remainingUncertain.length > 0 ? (
+              <div style={{ marginTop: 16 }}>
+                <strong>Kvarvarande osäkerheter</strong>
+                <ul>
+                  {matchComparison.remainingUncertain.map((item, index) => (
+                    <li key={`${item.title}:${index}`}>• {item.title}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
+            {matchComparison.remainingConflicting.length > 0 ? (
+              <div style={{ marginTop: 16 }}>
+                <strong>Kvarvarande konflikter</strong>
+                <ul>
+                  {matchComparison.remainingConflicting.map((item, index) => (
+                    <li key={`${item.title}:${index}`}>• {item.title}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </section>
 
       <section style={{ marginTop: 40 }}>
         <h2>Uppdatera status</h2>

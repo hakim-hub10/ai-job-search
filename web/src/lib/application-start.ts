@@ -125,6 +125,10 @@ export async function startApplicationFromJob(
     (candidateJob) => candidateJob.job.id === jobId,
   );
 
+  // Read-only, for staleness detection only (see ApplicationAnalysisSnapshot.candidateProfileUpdatedAt) - never used to alter matching/scoring.
+  const profileForTimestamp = await dependencies.profileRepository.getProfileByCandidateId(candidateId);
+  const candidateProfileUpdatedAt = profileForTimestamp.ok ? profileForTimestamp.value.profile.updatedAt : undefined;
+
   if (!rankedJob) {
     return failure("JOB_NOT_FOUND", "Det valda jobbet kunde inte hittas i den aktuella sökningen.");
   }
@@ -162,6 +166,7 @@ export async function startApplicationFromJob(
     id: applicationId,
     rankedJob,
     createdAt,
+    ...(candidateProfileUpdatedAt ? { candidateProfileUpdatedAt } : {}),
     // The candidate-scoped check above already ran; the workflow's own
     // duplicate check operates on the entire (cross-candidate) repository
     // and must not re-trigger for a different candidate's identical job.

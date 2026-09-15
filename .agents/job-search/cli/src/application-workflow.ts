@@ -2,6 +2,7 @@ import {
   addApplicationNote,
   createApplication,
   findDuplicateApplications,
+  reanalyzeApplication,
   updateApplicationStatus,
   type AddApplicationNoteInput,
   type ApplicationDomainError,
@@ -9,6 +10,7 @@ import {
   type ApplicationRecord,
   type ApplicationResult,
   type CreateApplicationInput,
+  type ReanalyzeApplicationInput,
   type UpdateApplicationStatusInput,
 } from "./applications"
 import type {
@@ -29,6 +31,10 @@ export interface AddApplicationNoteAndSaveInput extends AddApplicationNoteInput 
   applicationId: string
 }
 
+export interface ReanalyzeApplicationAndSaveInput extends ReanalyzeApplicationInput {
+  applicationId: string
+}
+
 export type ApplicationWorkflowError =
   | { kind: "duplicate_advisory"; duplicates: ApplicationDuplicateMatch[] }
   | { kind: "domain"; error: ApplicationDomainError }
@@ -42,6 +48,8 @@ export interface ApplicationWorkflow {
   startApplication(input: StartApplicationInput): Promise<ApplicationWorkflowResult<ApplicationRecord>>
   updateApplicationStatusAndSave(input: UpdateApplicationStatusAndSaveInput): Promise<ApplicationWorkflowResult<ApplicationRecord>>
   addApplicationNoteAndSave(input: AddApplicationNoteAndSaveInput): Promise<ApplicationWorkflowResult<ApplicationRecord>>
+  /** Loads the application, replaces only its analysisSnapshot via reanalyzeApplication, and saves - the application's jobSnapshot and status/notes history are always preserved untouched. */
+  reanalyzeApplicationAndSave(input: ReanalyzeApplicationAndSaveInput): Promise<ApplicationWorkflowResult<ApplicationRecord>>
 }
 
 function fromDomain<T>(result: ApplicationResult<T>): ApplicationWorkflowResult<T> {
@@ -84,6 +92,14 @@ export function createApplicationWorkflow(repository: ApplicationRepository): Ap
       const loaded = await repository.getById(input.applicationId)
       if (!loaded.ok) return fromRepository(loaded)
       const updated = addApplicationNote(loaded.value, input)
+      if (!updated.ok) return fromDomain(updated)
+      return fromRepository(await repository.save(updated.value))
+    },
+
+    async reanalyzeApplicationAndSave(input) {
+      const loaded = await repository.getById(input.applicationId)
+      if (!loaded.ok) return fromRepository(loaded)
+      const updated = reanalyzeApplication(loaded.value, input)
       if (!updated.ok) return fromDomain(updated)
       return fromRepository(await repository.save(updated.value))
     },

@@ -145,5 +145,13 @@ export async function saveCandidateProfileAction(formData: FormData) {
   revalidatePath(`/candidates/${candidateId}`);
   revalidatePath("/jobs");
 
+  const fromApplication = text(formData, "fromApplication");
+  const fromJobTitle = text(formData, "fromJobTitle");
+  if (fromApplication) {
+    const params = new URLSearchParams({ fromApplication, profileSaved: "1" });
+    if (fromJobTitle) params.set("fromJobTitle", fromJobTitle);
+    redirect(`/candidates/${encodeURIComponent(candidateId)}?${params.toString()}`);
+  }
+
   redirect(`/candidates/${encodeURIComponent(candidateId)}`);
 }
