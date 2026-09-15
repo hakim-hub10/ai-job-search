@@ -1,7 +1,7 @@
 import type { CandidateProfile } from "./profile"
 import type { NormalizedJob } from "./types"
 import { LANGUAGE_REQUIREMENTS, candidateHasLanguage, jobLanguageEvidenceText, jobRequiresLanguage } from "./language-normalization"
-import { SOFT_SKILL_CONCEPTS, SUPPORT_ROLE_CONCEPTS, TECHNICAL_CONCEPTS, canonicalConcept, conceptAliasInText, equivalentConcepts, normalizedConceptText } from "./concept-normalization"
+import { SOFT_SKILL_CONCEPTS, SUPPORT_ROLE_CONCEPTS, TECHNICAL_CONCEPTS, canonicalConcept, conceptAliasInText, coreRoleTitle, equivalentConcepts, normalizedConceptText } from "./concept-normalization"
 
 export type MatchDimension =
   | "targetRole"
@@ -298,9 +298,20 @@ function checkTargetRole(candidate: CandidateProfile, job: NormalizedJob): Match
   // "Assistant" target role against a job titled "Assistant Nurse") is not
   // evidence the roles are equivalent and must never fabricate a "matched"
   // targetRole.
-  const roleMatch = candidate.targetRoles.some((role) =>
-    equivalentConcepts(role, job.title, SUPPORT_ROLE_CONCEPTS) || conceptAliasInText(role, job.title, SUPPORT_ROLE_CONCEPTS),
-  )
+  //
+  // A third, still-conservative check: compare the same two titles again
+  // after stripping only a punctuation-delimited annotation and/or a generic
+  // seniority modifier (see coreRoleTitle) - e.g. "Data Analyst" against
+  // "Data Analyst (Junior)", or "Systemutvecklare" against "Systemutvecklare
+  // - Java". This never performs bare substring matching, so it cannot
+  // reintroduce the "Assistant Nurse" problem: that title has no punctuation
+  // boundary between "Assistant" and "Nurse" for anything to strip.
+  const roleMatch = candidate.targetRoles.some((role) => {
+    if (equivalentConcepts(role, job.title, SUPPORT_ROLE_CONCEPTS) || conceptAliasInText(role, job.title, SUPPORT_ROLE_CONCEPTS)) return true
+    const coreRole = coreRoleTitle(role)
+    const coreJobTitle = coreRoleTitle(job.title)
+    return Boolean(coreRole) && Boolean(coreJobTitle) && (equivalentConcepts(coreRole, coreJobTitle, SUPPORT_ROLE_CONCEPTS) || conceptAliasInText(coreRole, coreJobTitle, SUPPORT_ROLE_CONCEPTS))
+  })
 
   if (roleMatch) {
     return {

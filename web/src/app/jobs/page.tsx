@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { MatchConfidenceSummary } from "@/components/match-confidence-summary";
-import { unknownEvidenceLabel } from "@/lib/match-confidence";
+import { buildMatchExplanationSummary, conflictingGapItems, deriveActionableRecommendations, formatDimension, missingGapItems, unknownEvidenceCase, unknownEvidenceLabel } from "@/lib/match-confidence";
 import PersonalNavigation from "@/components/personal-navigation";
 
 import { analyzeJobsForCandidate } from "@/lib/candidate-job-matching";
@@ -60,29 +60,12 @@ function formatSourceName(source: string): string {
   return labels[source] ?? source;
 }
 
-const dimensionLabels: Record<string, string> = {
-  targetRole: "Målroll",
-  technicalSkills: "Tekniska kompetenser",
-  softSkills: "Mjuka kompetenser",
-  location: "Plats",
-  remotePreference: "Arbetsform",
-  employmentType: "Anställningsform",
-  yearsOfExperience: "Erfarenhet",
-  certifications: "Certifieringar",
-  languages: "Språk",
-  preferredIndustries: "Bransch",
-};
-
 const severityLabels: Record<string, string> = {
   critical: "Kritisk",
   high: "Hög",
   medium: "Medel",
   low: "Låg",
 };
-
-function formatDimension(dimension: string): string {
-  return dimensionLabels[dimension] ?? dimension;
-}
 
 function formatSeverity(severity: string): string {
   return severityLabels[severity] ?? severity;
@@ -389,6 +372,21 @@ export default async function JobsPage({ searchParams }: JobsPageProps) {
                         <details className={styles.analysisDetails}>
                           <summary>Visa matchningsanalys</summary>
 
+                          {(() => {
+                            const matchExplanation = buildMatchExplanationSummary(ranked, job);
+                            return (
+                              <section className={styles.analysisSection} aria-label="Matchningsförklaring">
+                                <h4>Matchningsförklaring</h4>
+                                <p>Matchningsgrad: {matchExplanation.scoreLabel}</p>
+                                {matchExplanation.matched.length > 0 ? <p>Matchar: {matchExplanation.matched.join(", ")}</p> : null}
+                                {matchExplanation.missingVerified.length > 0 ? <p>Saknade verifierade krav: {matchExplanation.missingVerified.join(", ")}</p> : null}
+                                {matchExplanation.candidateUncertain.length > 0 ? <p>Osäkert kandidatunderlag: {matchExplanation.candidateUncertain.join(", ")}</p> : null}
+                                {matchExplanation.jobUnspecified.length > 0 ? <p>Ej angivet i annonsen: {matchExplanation.jobUnspecified.join(", ")}</p> : null}
+                                {matchExplanation.conflicting.length > 0 ? <p>Motstridigt: {matchExplanation.conflicting.join(", ")}</p> : null}
+                              </section>
+                            );
+                          })()}
+
                           <div className={styles.analysisGrid}>
                             <section className={styles.analysisSection}>
                               <h4>Varför jobbet matchar</h4>
@@ -401,19 +399,12 @@ export default async function JobsPage({ searchParams }: JobsPageProps) {
 
                             <section className={styles.analysisSection}>
                               <h4>Saknade krav / utvecklingsområden</h4>
+                              <p className={styles.analysisSectionHint}>Krav som annonsen uttryckligen ställer och som saknas i din verifierade profil.</p>
                               <ul>
-                                {ranked.matchingResult.missing.flatMap(formatEvidence).map((item, index) => (
-                                  <li key={`${item}:${index}`}>{item}</li>
-                                ))}
-                              </ul>
-                            </section>
-
-                            <section className={styles.analysisSection}>
-                              <h4>Information som saknas för bedömning</h4>
-                              <ul>
-                                {ranked.matchingResult.unknown.map((evidence, index) => (
-                                  <li key={`${evidence.dimension}:match:${index}`}>
-                                    {formatDimension(evidence.dimension)}: {unknownEvidenceLabel(evidence, job)}
+                                {ranked.matchingResult.missing.flatMap(missingGapItems).map((item, index) => (
+                                  <li key={`${item.title}:${index}`}>
+                                    <strong>{item.title}</strong>
+                                    <span>{item.description}</span>
                                   </li>
                                 ))}
                               </ul>
@@ -421,9 +412,39 @@ export default async function JobsPage({ searchParams }: JobsPageProps) {
 
                             <section className={styles.analysisSection}>
                               <h4>Motstridig information</h4>
+                              <p className={styles.analysisSectionHint}>Annonsen ställer krav som din verifierade profil direkt motsäger.</p>
                               <ul>
-                                {ranked.matchingResult.conflicting.flatMap(formatEvidence).map((item, index) => (
-                                  <li key={`${item}:${index}`}>{item}</li>
+                                {ranked.matchingResult.conflicting.flatMap(conflictingGapItems).map((item, index) => (
+                                  <li key={`${item.title}:${index}`}>
+                                    <strong>{item.title}</strong>
+                                    <span>{item.description}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </section>
+
+                            <section className={styles.analysisSection}>
+                              <h4>Osäkert kandidatunderlag</h4>
+                              <p className={styles.analysisSectionHint}>Annonsen nämner kravet, men din profil ger inte tillräckligt underlag för en säker bedömning.</p>
+                              <ul>
+                                {ranked.matchingResult.unknown.filter((evidence) => unknownEvidenceCase(evidence, job) === "candidateUncertain").map((evidence, index) => (
+                                  <li key={`${evidence.dimension}:uncertain:${index}`}>
+                                    <strong>{formatDimension(evidence.dimension)}</strong>
+                                    <span>{unknownEvidenceLabel(evidence, job)}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </section>
+
+                            <section className={styles.analysisSection}>
+                              <h4>Ej angivet i annonsen</h4>
+                              <p className={styles.analysisSectionHint}>Annonsen ställer inget krav här - detta är aldrig en brist hos dig.</p>
+                              <ul>
+                                {ranked.matchingResult.unknown.filter((evidence) => unknownEvidenceCase(evidence, job) === "jobUnspecified").map((evidence, index) => (
+                                  <li key={`${evidence.dimension}:unspecified:${index}`}>
+                                    <strong>{formatDimension(evidence.dimension)}</strong>
+                                    <span>{unknownEvidenceLabel(evidence, job)}</span>
+                                  </li>
                                 ))}
                               </ul>
                             </section>
@@ -445,13 +466,10 @@ export default async function JobsPage({ searchParams }: JobsPageProps) {
                             <section className={styles.analysisSection}>
                               <h4>Rekommenderad utveckling</h4>
                               <ol>
-                                {ranked.skillGapResult.recommendations.map((recommendation) => (
+                                {deriveActionableRecommendations(ranked.matchingResult, ranked.skillGapResult).map((recommendation) => (
                                   <li key={recommendation.title}>
-                                    Fokusera på {recommendation.targetGaps
-                                      .map((targetGap) => ranked.skillGapResult.gaps.find((gap) => gap.title === targetGap))
-                                      .filter((gap): gap is NonNullable<typeof gap> => Boolean(gap))
-                                      .map((gap) => formatRequirement(gap.jobRequirement))
-                                      .join(", ") || "identifierade kompetensgap"}
+                                    <strong>{recommendation.title}</strong>
+                                    <span>{recommendation.description}</span>
                                   </li>
                                 ))}
                               </ol>
@@ -460,6 +478,12 @@ export default async function JobsPage({ searchParams }: JobsPageProps) {
 
                           <p className={styles.analysisConfidence}>
                             Underlagets täckning: {Math.round(ranked.scoringBreakdown.confidence * 100)}% · {formatSeverity(ranked.scoringBreakdown.confidenceLabel)}
+                          </p>
+
+                          <p className={styles.updateProfileAction}>
+                            <Link href={`/candidates/${encodeURIComponent(selectedCandidate.id)}?fromJob=${encodeURIComponent(job.id)}&fromJobTitle=${encodeURIComponent(job.title)}`}>
+                              Uppdatera min profil
+                            </Link>
                           </p>
                         </details>
 

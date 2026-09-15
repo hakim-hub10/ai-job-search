@@ -491,6 +491,36 @@ describe("job matching engine", () => {
     expect(result.missingDimensions).toContain("targetRole")
   })
 
+  it("recognizes a target role behind a punctuation-delimited job-title annotation, without domain-specific aliases", () => {
+    setup()
+    const dashSuffix = matchProfile(
+      normalizeCandidateProfile({ ...defaultCandidate, targetRoles: ["Systemutvecklare"] }),
+      normalizeJob({ id: "core-1", source: "test", title: "Systemutvecklare - Java", company: "Corp", skills: [] }),
+    )
+    expect(dashSuffix.matchedDimensions).toContain("targetRole")
+
+    const parenthetical = matchProfile(
+      normalizeCandidateProfile({ ...defaultCandidate, targetRoles: ["Data Analyst"] }),
+      normalizeJob({ id: "core-2", source: "test", title: "Data Analyst (Junior)", company: "Corp", skills: [] }),
+    )
+    expect(parenthetical.matchedDimensions).toContain("targetRole")
+
+    const seniorityPrefix = matchProfile(
+      normalizeCandidateProfile({ ...defaultCandidate, targetRoles: ["Data Analyst"] }),
+      normalizeJob({ id: "core-3", source: "test", title: "Junior Data Analyst", company: "Corp", skills: [] }),
+    )
+    expect(seniorityPrefix.matchedDimensions).toContain("targetRole")
+  })
+
+  it("still does not fabricate a targetRole match from an unpunctuated compound title, even after annotation stripping is applied", () => {
+    setup()
+    const candidate = normalizeCandidateProfile({ ...defaultCandidate, targetRoles: ["Assistant"] })
+    const job = normalizeJob({ id: "core-4", source: "test", title: "Assistant Nurse", company: "Hospital", skills: [] })
+    const result = matchProfile(candidate, job)
+    expect(result.matchedDimensions).not.toContain("targetRole")
+    expect(result.missingDimensions).toContain("targetRole")
+  })
+
   it("does not fabricate a technicalSkills match from a substring of a compound term", () => {
     setup()
     const candidate = normalizeCandidateProfile({

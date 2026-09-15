@@ -25,7 +25,7 @@ test("diagnostics separate extraction review, missing description and known low 
   expect(presentMatch(analyzeJobs(profile, [job]).rankedJobs[0]).diagnosis).toBe("EXTRACTION_FAILED");
   const rich = normalizeJob({ ...job, title: "Surgeon", skills: ["Surgery"], location: "Elsewhere", remote: "onsite", employmentType: "full-time", seniority: "principal", description: "Surgery required. English required. Communication required.", category: "Medicine" });
   expect(presentMatch(analyzeJobs(profile, [rich]).rankedJobs[0]).diagnosis).toBe("GENUINE_LOW_MATCH");
-  expect(unknownEvidenceLabel({ dimension: "certifications", status: "unknown", detail: "No specific certification match found" }, job)).toBe("Ej angivet i annonsen");
+  expect(unknownEvidenceLabel({ dimension: "certifications", status: "unknown", detail: "No specific certification match found" }, job)).toBe("Inget certifieringskrav anges i annonsen.");
 });
 test("title-only role evidence never creates technology, language or experience requirements", () => {
   const profile = createDefaultCandidateProfile(); profile.targetRoles = ["IT Support"];
@@ -34,4 +34,23 @@ test("title-only role evidence never creates technology, language or experience 
   expect(match.matchingResult.matchedDimensions).toContain("targetRole");
   for (const dimension of ["technicalSkills", "yearsOfExperience", "certifications", "languages"] as const) expect(match.matchingResult.unknownDimensions).toContain(dimension);
   expect(auditJobRequirements(job).technicalRequirements).toBe(0);
+});
+test("a job that never states a language or industry requirement never presents that as a candidate deficiency", () => {
+  const job = normalizeJob({ id: "no-language-or-industry", title: "IT Support Technician", source: "linkedin", description: "Requirements: Windows and networking troubleshooting. Experience required." });
+  expect(unknownEvidenceLabel({ dimension: "languages", status: "unknown", detail: "unused" }, job)).toBe("Inget språkkrav anges i annonsen.");
+  expect(unknownEvidenceLabel({ dimension: "preferredIndustries", status: "unknown", detail: "does not directly match preferences" }, job)).toBe("Ingen särskild branscherfarenhet anges som krav.");
+});
+test("a job that does state a language requirement is distinguished from one that does not", () => {
+  const job = normalizeJob({ id: "states-language", title: "IT Support Technician", source: "linkedin", description: "Requirements: English and Swedish required. Windows troubleshooting." });
+  expect(unknownEvidenceLabel({ dimension: "languages", status: "unknown", detail: "unused" }, job)).toBe("Språkkrav nämns i annonsen; det kunde inte säkert matchas mot din profil");
+});
+test("experience requirement wording distinguishes 'not stated' from 'stated but unclear'", () => {
+  const noExperience = normalizeJob({ id: "no-experience", title: "IT Support Technician", source: "linkedin", description: "Windows and networking troubleshooting." });
+  expect(unknownEvidenceLabel({ dimension: "yearsOfExperience", status: "unknown", detail: "unused" }, noExperience)).toBe("Annonsen anger inget tydligt erfarenhetskrav.");
+  const vagueExperience = normalizeJob({ id: "vague-experience", title: "IT Support Technician", source: "linkedin", description: "Some experience preferred but not strictly required." });
+  expect(unknownEvidenceLabel({ dimension: "yearsOfExperience", status: "unknown", detail: "unused" }, vagueExperience)).toBe("Ett erfarenhetskrav nämns men kunde inte säkert tolkas.");
+});
+test("certification requirement wording distinguishes 'not stated' from 'stated but unclear'", () => {
+  const noCert = normalizeJob({ id: "no-cert", title: "IT Support Technician", source: "linkedin", description: "Windows and networking troubleshooting." });
+  expect(unknownEvidenceLabel({ dimension: "certifications", status: "unknown", detail: "unused" }, noCert)).toBe("Inget certifieringskrav anges i annonsen.");
 });

@@ -561,10 +561,44 @@
   font-size: 12px;
 }
 
+.analysisSection li a {
+  display: inline-block;
+  margin-top: 6px;
+  color: #1849a9;
+  font-size: 12px;
+  font-weight: 600;
+}
+
 .analysisConfidence {
   margin-top: 18px;
   color: #667085;
   font-size: 12px;
+}
+
+.analysisSectionHint {
+  margin: 4px 0 0;
+  color: #98a2b3;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.updateProfileAction {
+  margin-top: 14px;
+}
+
+.updateProfileAction a {
+  display: inline-block;
+  padding: 8px 14px;
+  border: 1px solid #1849a9;
+  border-radius: 8px;
+  color: #1849a9;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.updateProfileAction a:hover {
+  background: #eff4ff;
 }
 
 .learningPlan {

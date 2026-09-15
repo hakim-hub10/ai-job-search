@@ -73,3 +73,51 @@ export const SOFT_SKILL_CONCEPTS: readonly ConceptDefinition[] = [
 export function normalizedConceptText(value: string): string {
   return surface(value)
 }
+
+// Job-ad titles routinely append or prepend a punctuation-delimited
+// annotation - seniority, location, department, employment type - to an
+// otherwise plain core title: "Data Analyst (Junior)", "Systemutvecklare -
+// Java", "Ekonomiassistent, Stockholm". Stripping only a *punctuation
+// bounded* segment (never a bare space-separated word) is safe for any
+// domain: it can never turn an unrelated compound title into a false match,
+// because a title like "Assistant Nurse" has no such delimiter between
+// "Assistant" and "Nurse" and is left untouched.
+const TRAILING_PARENTHETICAL = /\s*\([^()]*\)\s*$/u
+const LEADING_PARENTHETICAL = /^\s*\([^()]*\)\s*/u
+const TRAILING_DELIMITED_CLAUSE = /\s+[-–|,]\s+\S.*$/u
+
+function stripDelimitedAnnotations(value: string): string {
+  return value.trim().replace(TRAILING_PARENTHETICAL, "").replace(LEADING_PARENTHETICAL, "").replace(TRAILING_DELIMITED_CLAUSE, "").trim()
+}
+
+// A seniority modifier describes level, not role identity, and is
+// universal across every industry - not specific to any one domain. Unlike
+// a role-name alias (which asserts two different words mean the same job),
+// this only ever removes a level qualifier that applies equally to a Nurse,
+// an Analyst, or a Systemutvecklare, so it carries no domain-specific
+// assumption about what the role itself is.
+const SENIORITY_MODIFIERS: readonly string[] = [
+  "junior", "senior", "lead", "principal", "entry level", "entry-level", "trainee", "biträdande", "ledande",
+]
+
+function stripSeniorityModifier(value: string): string {
+  const normalized = value.trim()
+  for (const modifier of SENIORITY_MODIFIERS) {
+    const leading = new RegExp(`^${modifier}\\b\\s+`, "iu")
+    const trailing = new RegExp(`\\s+${modifier}\\b$`, "iu")
+    if (leading.test(normalized)) return normalized.replace(leading, "").trim()
+    if (trailing.test(normalized)) return normalized.replace(trailing, "").trim()
+  }
+  return normalized
+}
+
+/**
+ * The "core" of a job or role title with one punctuation-delimited
+ * annotation and/or one generic seniority modifier removed. Used only to
+ * offer a second, still-conservative comparison alongside the existing
+ * equivalentConcepts/conceptAliasInText checks - never as a replacement for
+ * them, and never as bare substring matching on unpunctuated free text.
+ */
+export function coreRoleTitle(value: string): string {
+  return stripSeniorityModifier(stripDelimitedAnnotations(value))
+}
