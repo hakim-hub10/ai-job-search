@@ -9,6 +9,7 @@ import type { CandidateApplicationAssociationRepository } from "../../../.agents
 import type { CoachWorkspaceRepository } from "../../../.agents/job-search/cli/src/coach-workspace-repository";
 import type { CandidateProfileRepository } from "../../../.agents/job-search/cli/src/candidate-profile-repository";
 import { mergeBaseCvIntoProfile, type CandidateBaseCv } from "./candidate-base-cv";
+import { isApplicationAnalysisStale } from "./application-reanalysis";
 
 export interface CreateTailoredCvInput {
   applicationId: string;
@@ -29,6 +30,7 @@ export type CreateTailoredCvFailureCode =
   | "PROFILE_STORAGE_FAILURE"
   | "BASE_CV_NOT_FOUND"
   | "BASE_CV_STORAGE_FAILURE"
+  | "STALE_ANALYSIS"
   | "TAILORING_FAILED"
   | "DOCUMENT_STORAGE_FAILURE";
 
@@ -110,6 +112,18 @@ export async function createTailoredCv(
     return profile.error.code === "NOT_FOUND"
       ? failure("PROFILE_NOT_FOUND", "Kandidatprofil saknas.")
       : failure("PROFILE_STORAGE_FAILURE", "Kandidatprofilen kunde inte läsas.");
+  }
+
+  // A stale analysisSnapshot cannot be used to create or regenerate a job-tailored document -
+  // document-requirement support is deliberately read from the stored analysis (see
+  // application-documents.ts), so a profile change not yet reflected there could otherwise
+  // silently exclude a skill the candidate has just confirmed. Applies equally to a brand new
+  // document and to a regenerated version - there is exactly one rule, not two.
+  if (isApplicationAnalysisStale(application.value, profile.value.profile.updatedAt)) {
+    return failure(
+      "STALE_ANALYSIS",
+      "Din profil har ändrats sedan den senaste analysen. Analysera om jobbet först för att använda din senaste profil i de anpassade dokumenten.",
+    );
   }
 
   const baseCv = await dependencies.baseCvRepository.getByCandidateId(candidate.value.id);

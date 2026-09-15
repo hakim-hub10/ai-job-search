@@ -101,6 +101,11 @@ export default async function ApplicationDetailPage({
   const matchComparison = application.previousAnalysisSnapshot
     ? buildMatchComparison(application.previousAnalysisSnapshot, application.analysisSnapshot, application.jobSnapshot)
     : null;
+  const profileChangedSinceLastAnalysis = Boolean(
+    !analysisIsStale
+      && application.previousAnalysisSnapshot
+      && application.previousAnalysisSnapshot.candidateProfileUpdatedAt !== application.analysisSnapshot.candidateProfileUpdatedAt,
+  );
 
   return (
     <main style={{ maxWidth: 900, margin: "0 auto", padding: "48px 24px" }}>
@@ -211,6 +216,28 @@ export default async function ApplicationDetailPage({
                 </ul>
               </div>
             ) : null}
+
+            {profileChangedSinceLastAnalysis ? (
+              <section style={{ marginTop: 24, padding: 16, border: "1px solid #ccd2dc", borderRadius: 8 }}>
+                <h3>Uppdatera dina ansökningsdokument</h3>
+                <p>
+                  Din profil och matchningsanalys har uppdaterats. Du kan nu skapa nya versioner av ditt anpassade CV och personliga brev.
+                </p>
+                <p style={{ fontSize: 13 }}>Lägg endast till erfarenheter och kompetenser som du faktiskt har.</p>
+                <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                  {baseCvResult?.ok && baseCvResult.baseCv ? (
+                    <form action={createTailoredCvAction}>
+                      <input type="hidden" name="applicationId" value={application.id} />
+                      <SubmitButton pendingLabel="Skapar ny CV-version med AI…">Skapa ny CV-version</SubmitButton>
+                    </form>
+                  ) : null}
+                  <form action={createCoverLetterAction}>
+                    <input type="hidden" name="applicationId" value={application.id} />
+                    <SubmitButton pendingLabel="Skapar nytt personligt brev med AI…">Skapa ny version av personligt brev</SubmitButton>
+                  </form>
+                </div>
+              </section>
+            ) : null}
           </div>
         ) : null}
       </section>
@@ -259,78 +286,64 @@ export default async function ApplicationDetailPage({
           <p>Dokumentstatus kunde inte laddas just nu.</p>
         ) : (
           <>
-            <p>Skapa och granska dokument som hör till den här ansökan.</p>
+            <p>Skapa och granska dokument som hör till den här ansökan. Tidigare versioner tas aldrig bort.</p>
+            {analysisIsStale ? (
+              <section style={{ padding: 16, border: "1px solid #ccd2dc", borderRadius: 8 }} role="status">
+                <p>Din profil har ändrats sedan den senaste analysen.</p>
+                <p>Analysera om jobbet först för att använda din senaste profil i de anpassade dokumenten.</p>
+                <form action={reanalyzeApplicationAction}>
+                  <input type="hidden" name="applicationId" value={application.id} />
+                  <SubmitButton pendingLabel="Analyserar jobbet igen…">Analysera om jobbet</SubmitButton>
+                </form>
+              </section>
+            ) : null}
             {(["cv", "coverLetter"] as const).map((documentType) => {
-              const latest = [...documentResult.documents]
+              const versions = [...documentResult.documents]
                 .filter((document) => document.documentType === documentType)
-                .sort((a, b) => b.version - a.version)[0];
-
-              if (documentType === "cv") {
-                return (
-                  <div key={documentType}>
-                    <p>
-                      CV: {latest
-                        ? `Version ${latest.version} · Skapad: ${latest.createdAt}`
-                        : "Inte skapat"}
-                    </p>
-                    {latest ? (
-                      <>
-                        <p><Link href={`/applications/${encodeURIComponent(application.id)}/documents/cv`}>Visa anpassat CV</Link></p>
-                        <form action={createTailoredCvAction}>
-                          <label>Dokumentspråk <select name="documentLanguage" defaultValue="auto"><option value="auto">Annonsens språk</option><option value="sv">Svenska</option><option value="en">English</option></select></label>
-                          <input type="hidden" name="applicationId" value={application.id} />
-                          <button type="submit">Skapa ny version</button>
-                        </form>
-                      </>
-                    ) : baseCvResult?.ok && baseCvResult.baseCv ? (
-                      <form action={createTailoredCvAction}>
-                          <label>Dokumentspråk <select name="documentLanguage" defaultValue="auto"><option value="auto">Annonsens språk</option><option value="sv">Svenska</option><option value="en">English</option></select></label>
-                        <input type="hidden" name="applicationId" value={application.id} />
-                        <button type="submit">Skapa anpassat CV</button>
-                      </form>
-                    ) : (
-                      <p>
-                        Grund-CV saknas. Skapa ett grund-CV innan du skapar ett anpassat CV.
-                      </p>
-                    )}
-                  </div>
-                );
-              }
-
-              if (documentType === "coverLetter") {
-                return (
-                  <div key={documentType}>
-                    <p>
-                      Personligt brev: {latest
-                        ? `Version ${latest.version} · Skapad: ${latest.createdAt}`
-                        : "Inte skapat"}
-                    </p>
-                    {latest ? (
-                      <>
-                        <p><Link href={`/applications/${encodeURIComponent(application.id)}/documents/cover-letter`}>Visa personligt brev</Link></p>
-                        <form action={createCoverLetterAction}>
-                          <label>Dokumentspråk <select name="documentLanguage" defaultValue="auto"><option value="auto">Annonsens språk</option><option value="sv">Svenska</option><option value="en">English</option></select></label>
-                          <input type="hidden" name="applicationId" value={application.id} />
-                          <button type="submit">Skapa ny version</button>
-                        </form>
-                      </>
-                    ) : (
-                      <form action={createCoverLetterAction}>
-                          <label>Dokumentspråk <select name="documentLanguage" defaultValue="auto"><option value="auto">Annonsens språk</option><option value="sv">Svenska</option><option value="en">English</option></select></label>
-                        <input type="hidden" name="applicationId" value={application.id} />
-                        <button type="submit">Skapa personligt brev</button>
-                      </form>
-                    )}
-                  </div>
-                );
-              }
+                .sort((a, b) => b.version - a.version);
+              const latest = versions[0];
+              const viewHref = documentType === "cv"
+                ? `/applications/${encodeURIComponent(application.id)}/documents/cv`
+                : `/applications/${encodeURIComponent(application.id)}/documents/cover-letter`;
+              const createAction = documentType === "cv" ? createTailoredCvAction : createCoverLetterAction;
+              const newVersionPendingLabel = documentType === "cv" ? "Skapar ny CV-version med AI…" : "Skapar nytt personligt brev med AI…";
+              const firstVersionPendingLabel = documentType === "cv" ? "Skapar anpassat CV med AI…" : "Skapar personligt brev med AI…";
+              const viewLabel = documentType === "cv" ? "Visa anpassat CV" : "Visa personligt brev";
+              const createLabel = documentType === "cv" ? "Skapa anpassat CV" : "Skapa personligt brev";
 
               return (
-                <p key={documentType}>
-                  {formatDocumentType(documentType)}: {latest
-                    ? `Utkast finns (version ${latest.version})`
-                    : "Inte skapat"}
-                </p>
+                <div key={documentType}>
+                  <p>
+                    <strong>{formatDocumentType(documentType)}</strong>
+                  </p>
+                  {versions.length > 0 ? (
+                    <ul>
+                      {versions.map((document, index) => (
+                        <li key={document.version}>
+                          Version {document.version} — {index === 0 ? "senaste" : "tidigare"} · Skapad: {document.createdAt}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p>Inte skapat</p>
+                  )}
+                  {latest ? <p><Link href={viewHref}>{viewLabel}</Link></p> : null}
+                  {analysisIsStale ? null : latest ? (
+                    <form action={createAction}>
+                      <label>Dokumentspråk <select name="documentLanguage" defaultValue="auto"><option value="auto">Annonsens språk</option><option value="sv">Svenska</option><option value="en">English</option></select></label>
+                      <input type="hidden" name="applicationId" value={application.id} />
+                      <SubmitButton pendingLabel={newVersionPendingLabel}>Skapa ny version</SubmitButton>
+                    </form>
+                  ) : !latest && documentType === "cv" && !(baseCvResult?.ok && baseCvResult.baseCv) ? (
+                    <p>Grund-CV saknas. Skapa ett grund-CV innan du skapar ett anpassat CV.</p>
+                  ) : !latest ? (
+                    <form action={createAction}>
+                      <label>Dokumentspråk <select name="documentLanguage" defaultValue="auto"><option value="auto">Annonsens språk</option><option value="sv">Svenska</option><option value="en">English</option></select></label>
+                      <input type="hidden" name="applicationId" value={application.id} />
+                      <SubmitButton pendingLabel={firstVersionPendingLabel}>{createLabel}</SubmitButton>
+                    </form>
+                  ) : null}
+                </div>
               );
             })}
           </>

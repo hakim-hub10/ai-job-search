@@ -4,6 +4,7 @@ import {
   analyzeJobs,
   createApplication,
   normalizeJob,
+  reanalyzeApplication,
   type ApplicationRecord,
   type ApplicationRepository,
   type CandidateApplicationAssociationRepository,
@@ -210,6 +211,22 @@ describe("tailored CV boundary", () => {
     expect(content).not.toContain("Unsupported job skill");
   });
 
+  it("uses the Base CV's projects and its visibility toggle, not the raw profile's", async () => {
+    const withProject: CandidateProfile = { ...profile(), projects: [{ title: "Internal ticketing tool", description: "Built a support ticketing tool." }] };
+    const base = createCandidateBaseCvFromProfile(candidateId, withProject, timestamp);
+    if (!base.ok) throw new Error("fixture");
+    const store = stores({ profileResult: { ok: true, value: { candidateId, profile: withProject } } });
+
+    const shown = await createTailoredCv({ applicationId }, { ...store, baseCvRepository: baseCvRepository({ ok: true, value: base.value }), createId: () => "project-shown", now: () => timestamp });
+    expect(shown.ok).toBe(true);
+    if (shown.ok) expect(shown.document.renderedDocument.content).toContain("Internal ticketing tool");
+
+    base.value.visibility.projects = false;
+    const hidden = await createTailoredCv({ applicationId }, { ...store, baseCvRepository: baseCvRepository({ ok: true, value: base.value }), createId: () => "project-hidden", now: () => timestamp });
+    expect(hidden.ok).toBe(true);
+    if (hidden.ok) expect(hidden.document.renderedDocument.content).not.toContain("Internal ticketing tool");
+  });
+
   it("respects an explicitly hidden authored Base CV summary", async () => {
     const store = stores();
     const base = createCandidateBaseCvFromProfile(candidateId, profile(), timestamp);
@@ -235,6 +252,17 @@ describe("tailored CV boundary", () => {
     expect(store.documents).toHaveLength(1);
   });
 
+  it("includes the authenticated account's email in the CV's contact details when supplied, and omits it entirely when not", async () => {
+    const store = stores();
+    const withEmail = await createTailoredCv({ applicationId, email: "candidate-a@example.test" }, { ...store, createId: () => "document-email", now: () => timestamp });
+    expect(withEmail.ok).toBe(true);
+    if (withEmail.ok) expect(withEmail.document.renderedDocument.content).toContain("candidate-a@example.test");
+
+    const withoutEmail = await createTailoredCv({ applicationId }, { ...store, createId: () => "document-no-email", now: () => timestamp });
+    expect(withoutEmail.ok).toBe(true);
+    if (withoutEmail.ok) expect(withoutEmail.document.renderedDocument.content).not.toContain("@example.test");
+  });
+
   it("creates the next version and preserves the previous record", async () => {
     const store = stores();
     const first = await createTailoredCv({ applicationId }, { ...store, createId: () => "document-1", now: () => timestamp });
@@ -243,6 +271,60 @@ describe("tailored CV boundary", () => {
     expect(first).toMatchObject({ ok: true, document: { version: 1, id: "document-1" } });
     expect(second).toMatchObject({ ok: true, document: { version: 2, id: "document-2" } });
     expect(store.documents.map((document) => document.version)).toEqual([1, 2]);
+  });
+
+  it("regenerates a new version from the latest saved profile evidence, while the previous version keeps what it was created from", async () => {
+    const store = stores();
+    const first = await createTailoredCv({ applicationId }, { ...store, createId: () => "document-1", now: () => timestamp });
+    expect(first).toMatchObject({ ok: true, document: { version: 1 } });
+    if (!first.ok) throw new Error(first.message);
+    expect(first.document.renderedDocument.content).not.toContain("Ansible");
+
+    const updatedProfile: CandidateProfile = { ...profile(), skills: { technical: ["Microsoft 365", "Ansible"], soft: ["Kommunikation"] }, updatedAt: "2026-09-06T10:30:00.000Z" };
+    const updatedBase = createCandidateBaseCvFromProfile(candidateId, updatedProfile, updatedProfile.updatedAt!);
+    if (!updatedBase.ok) throw new Error("fixture");
+    const second = await createTailoredCv(
+      { applicationId },
+      { ...store, profileRepository: profileRepository({ ok: true, value: { candidateId, profile: updatedProfile } }), baseCvRepository: baseCvRepository({ ok: true, value: updatedBase.value }), createId: () => "document-2", now: () => "2026-09-06T11:00:00.000Z" },
+    );
+    expect(second).toMatchObject({ ok: true, document: { version: 2 } });
+    if (!second.ok) throw new Error(second.message);
+    expect(second.document.renderedDocument.content).toContain("Ansible");
+
+    const preservedFirstVersion = store.documents.find((document) => document.version === 1);
+    expect(preservedFirstVersion?.renderedDocument.content).not.toContain("Ansible");
+  });
+
+  it("only promotes a newly added skill that happens to match a job requirement into a new document version after re-analysis has refreshed which requirements are matched", async () => {
+    // Not a design flaw introduced by this phase: application-documents.ts deliberately keeps a
+    // document's requirement-support claims consistent with the application's own stored
+    // analysisSnapshot (see technicalRequirementStatus/buildRequirementContext), so a job-required
+    // skill only "counts" once re-analysis has recorded it as matched - exactly the re-analyze-then-
+    // regenerate order this phase's UI enforces for its prominent "Uppdatera dina ansökningsdokument"
+    // call to action. A profile fact unrelated to any job requirement (the test above) is never
+    // subject to this and always reflects the latest profile immediately.
+    const store = stores();
+    const updatedProfile: CandidateProfile = { ...profile(), skills: { technical: ["Microsoft 365", "Kubernetes"], soft: ["Kommunikation"] }, updatedAt: "2026-09-06T10:30:00.000Z" };
+    const updatedBase = createCandidateBaseCvFromProfile(candidateId, updatedProfile, updatedProfile.updatedAt!);
+    if (!updatedBase.ok) throw new Error("fixture");
+    const storeWithUpdatedProfile = { ...store, profileRepository: profileRepository({ ok: true, value: { candidateId, profile: updatedProfile } }), baseCvRepository: baseCvRepository({ ok: true, value: updatedBase.value }) };
+
+    const beforeReanalysis = await createTailoredCv({ applicationId }, { ...storeWithUpdatedProfile, createId: () => "document-stale", now: () => "2026-09-06T10:45:00.000Z" });
+    expect(beforeReanalysis).toMatchObject({ ok: true });
+    if (!beforeReanalysis.ok) throw new Error(beforeReanalysis.message);
+    expect(beforeReanalysis.document.renderedDocument.content).not.toContain("Kubernetes");
+
+    const freshRankedJob = analyzeJobs(updatedProfile, [job()]).rankedJobs[0];
+    const stored = await store.applicationRepository.getById(applicationId);
+    if (!stored.ok) throw new Error("fixture");
+    const reanalyzed = reanalyzeApplication(stored.value, { rankedJob: freshRankedJob, timestamp: "2026-09-06T10:50:00.000Z", candidateProfileUpdatedAt: updatedProfile.updatedAt });
+    if (!reanalyzed.ok) throw new Error(reanalyzed.error.message);
+    await store.applicationRepository.save(reanalyzed.value);
+
+    const afterReanalysis = await createTailoredCv({ applicationId }, { ...storeWithUpdatedProfile, createId: () => "document-fresh", now: () => "2026-09-06T11:00:00.000Z" });
+    expect(afterReanalysis).toMatchObject({ ok: true });
+    if (!afterReanalysis.ok) throw new Error(afterReanalysis.message);
+    expect(afterReanalysis.document.renderedDocument.content).toContain("Kubernetes");
   });
 
   it("honors an explicit Swedish selection over English auto-detection from the job description", async () => {
@@ -300,5 +382,90 @@ describe("tailored CV boundary", () => {
 
     expect(result.ok).toBe(true);
     expect(before).toEqual(after);
+  });
+});
+
+describe("a stale analysis blocks CV generation - one rule for both first creation and regeneration", () => {
+  function applicationWithAnalyzedProfileTimestamp(candidateProfileUpdatedAt: string): ApplicationRecord {
+    const rankedJob = analyzeJobs(profile(), [job()]).rankedJobs[0];
+    const created = createApplication({ id: applicationId, rankedJob, createdAt: timestamp, candidateProfileUpdatedAt });
+    if (!created.ok) throw new Error(created.error.message);
+    return created.value;
+  }
+
+  it("blocks first-time CV creation when the profile changed after the stored analysis, and creates no document", async () => {
+    const staleApplication = applicationWithAnalyzedProfileTimestamp(timestamp);
+    const editedProfile = { ...profile(), updatedAt: "2026-09-06T10:30:00.000Z" };
+    const store = stores({ applicationResult: { ok: true, value: staleApplication }, profileResult: { ok: true, value: { candidateId, profile: editedProfile } } });
+
+    const result = await createTailoredCv({ applicationId }, { ...store, createId: () => "document-1", now: () => "2026-09-06T10:45:00.000Z" });
+
+    expect(result).toMatchObject({ ok: false, code: "STALE_ANALYSIS" });
+    expect(store.documents).toHaveLength(0);
+  });
+
+  it("blocks regeneration of a new version when the profile changed after the stored analysis, and preserves the existing version untouched", async () => {
+    const staleApplication = applicationWithAnalyzedProfileTimestamp(timestamp);
+    const store = stores({ applicationResult: { ok: true, value: staleApplication } });
+    const first = await createTailoredCv({ applicationId }, { ...store, createId: () => "document-1", now: () => timestamp });
+    expect(first).toMatchObject({ ok: true, document: { version: 1 } });
+    if (!first.ok) throw new Error(first.message);
+    const firstContentBefore = first.document.renderedDocument.content;
+
+    const editedProfile = { ...profile(), updatedAt: "2026-09-06T10:30:00.000Z" };
+    const blocked = await createTailoredCv(
+      { applicationId },
+      { ...store, profileRepository: profileRepository({ ok: true, value: { candidateId, profile: editedProfile } } ), createId: () => "document-2", now: () => "2026-09-06T10:45:00.000Z" },
+    );
+
+    expect(blocked).toMatchObject({ ok: false, code: "STALE_ANALYSIS" });
+    expect(store.documents).toHaveLength(1);
+    expect(store.documents[0].renderedDocument.content).toBe(firstContentBefore);
+  });
+
+  it("cannot be bypassed by calling createTailoredCv directly with a stale application/profile pair, even without going through any UI form", async () => {
+    // The guard lives inside createTailoredCv itself - the shared boundary both the "Dina
+    // dokument" and "Uppdatera dina ansökningsdokument" UI call into - so there is no direct
+    // dependency-level call path that skips it.
+    const staleApplication = applicationWithAnalyzedProfileTimestamp(timestamp);
+    const editedProfile = { ...profile(), updatedAt: "2026-09-06T10:30:00.000Z" };
+    const store = stores({ applicationResult: { ok: true, value: staleApplication }, profileResult: { ok: true, value: { candidateId, profile: editedProfile } } });
+    const result = await createTailoredCv({ applicationId, email: "direct-submission@example.test" }, store);
+    expect(result).toMatchObject({ ok: false, code: "STALE_ANALYSIS" });
+  });
+
+  it("unblocks generation once re-analysis records the same profile timestamp, and the new document reflects the newly verified skill", async () => {
+    const staleApplication = applicationWithAnalyzedProfileTimestamp(timestamp);
+    const updatedProfile: CandidateProfile = { ...profile(), skills: { technical: ["Microsoft 365", "Kubernetes"], soft: ["Kommunikation"] }, updatedAt: "2026-09-06T10:30:00.000Z" };
+    const updatedBase = createCandidateBaseCvFromProfile(candidateId, updatedProfile, updatedProfile.updatedAt!);
+    if (!updatedBase.ok) throw new Error("fixture");
+    const freshRankedJob = analyzeJobs(updatedProfile, [job()]).rankedJobs[0];
+    const reanalyzed = reanalyzeApplication(staleApplication, { rankedJob: freshRankedJob, timestamp: "2026-09-06T10:50:00.000Z", candidateProfileUpdatedAt: updatedProfile.updatedAt });
+    if (!reanalyzed.ok) throw new Error(reanalyzed.error.message);
+
+    const store = stores({
+      applicationResult: { ok: true, value: reanalyzed.value },
+      profileResult: { ok: true, value: { candidateId, profile: updatedProfile } },
+      baseCvResult: { ok: true, value: updatedBase.value },
+    });
+    const result = await createTailoredCv({ applicationId }, { ...store, createId: () => "document-1", now: () => "2026-09-06T11:00:00.000Z" });
+
+    expect(result).toMatchObject({ ok: true, document: { version: 1 } });
+    if (!result.ok) throw new Error(result.message);
+    expect(result.document.renderedDocument.content).toContain("Kubernetes");
+  });
+
+  it("re-blocks generation after another profile edit that postdates the just-completed re-analysis", async () => {
+    const staleApplication = applicationWithAnalyzedProfileTimestamp(timestamp);
+    const analyzedProfile = { ...profile(), updatedAt: "2026-09-06T10:30:00.000Z" };
+    const freshRankedJob = analyzeJobs(analyzedProfile, [job()]).rankedJobs[0];
+    const reanalyzed = reanalyzeApplication(staleApplication, { rankedJob: freshRankedJob, timestamp: "2026-09-06T10:50:00.000Z", candidateProfileUpdatedAt: analyzedProfile.updatedAt });
+    if (!reanalyzed.ok) throw new Error(reanalyzed.error.message);
+
+    const editedAgain = { ...profile(), updatedAt: "2026-09-06T11:15:00.000Z" };
+    const store = stores({ applicationResult: { ok: true, value: reanalyzed.value }, profileResult: { ok: true, value: { candidateId, profile: editedAgain } } });
+    const result = await createTailoredCv({ applicationId }, { ...store, createId: () => "document-1", now: () => "2026-09-06T11:30:00.000Z" });
+
+    expect(result).toMatchObject({ ok: false, code: "STALE_ANALYSIS" });
   });
 });

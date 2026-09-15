@@ -4,6 +4,7 @@ import {
   analyzeJobs,
   createApplication,
   normalizeJob,
+  reanalyzeApplication,
   type ApplicationRecord,
   type ApplicationRepository,
   type CandidateApplicationAssociationRepository,
@@ -13,7 +14,10 @@ import {
 import type { CandidateProfile } from "../../../.agents/job-search/cli/src/profile";
 import type { CandidateProfileRepository } from "../../../.agents/job-search/cli/src/candidate-profile-repository";
 import type { ApplicationDocumentRecord, ApplicationDocumentRepository } from "../../../.agents/job-search/cli/src/application-document-repository";
+import type { CandidateBaseCvRepository } from "./candidate-base-cv-repository";
+import { createCandidateBaseCvFromProfile } from "./candidate-base-cv";
 import { createCoverLetter } from "./cover-letter";
+import { createTailoredCv } from "./tailored-cv";
 
 const timestamp = "2026-09-06T10:00:00.000Z";
 const candidateId = "candidate-a";
@@ -40,8 +44,8 @@ function profile(): CandidateProfile {
   };
 }
 
-function application(): ApplicationRecord {
-  const job: NormalizedJob = normalizeJob({
+function job(): NormalizedJob {
+  return normalizeJob({
     id: "job-a",
     title: "IT Support",
     source: "jobtech",
@@ -56,9 +60,24 @@ function application(): ApplicationRecord {
     employmentType: "full-time",
     seniority: "mid",
   });
-  const created = createApplication({ id: applicationId, rankedJob: analyzeJobs(profile(), [job]).rankedJobs[0], createdAt: timestamp });
+}
+
+function application(candidateProfileUpdatedAt?: string): ApplicationRecord {
+  const created = createApplication({ id: applicationId, rankedJob: analyzeJobs(profile(), [job()]).rankedJobs[0], createdAt: timestamp, ...(candidateProfileUpdatedAt ? { candidateProfileUpdatedAt } : {}) });
   if (!created.ok) throw new Error(created.error.message);
   return created.value;
+}
+
+function baseCvRepository(result?: Awaited<ReturnType<CandidateBaseCvRepository["getByCandidateId"]>>): CandidateBaseCvRepository {
+  const fallback = (() => {
+    const created = createCandidateBaseCvFromProfile(candidateId, profile(), timestamp);
+    if (!created.ok) throw new Error(created.error.message);
+    return { ok: true, value: created.value } as const;
+  })();
+  return {
+    async save(value) { return { ok: true, value }; },
+    async getByCandidateId() { return result ?? fallback; },
+  };
 }
 
 function stores(options: {
@@ -66,8 +85,11 @@ function stores(options: {
   associationMissing?: boolean;
   profileMissing?: boolean;
   documentError?: boolean;
+  baseCvResult?: Awaited<ReturnType<CandidateBaseCvRepository["getByCandidateId"]>>;
+  applicationOverride?: ApplicationRecord;
+  profileOverride?: CandidateProfile;
 } = {}) {
-  const app = application();
+  const app = options.applicationOverride ?? application();
   const documents: ApplicationDocumentRecord[] = [];
   const applicationRepository: ApplicationRepository = {
     async create(value) { return { ok: true, value }; },
@@ -89,7 +111,7 @@ function stores(options: {
   };
   const profileRepository: CandidateProfileRepository = {
     async saveProfile() { throw new Error("not used"); },
-    async getProfileByCandidateId() { return options.profileMissing ? { ok: false, error: { code: "NOT_FOUND", message: "missing" } } : { ok: true, value: { candidateId, profile: profile() } }; },
+    async getProfileByCandidateId() { return options.profileMissing ? { ok: false, error: { code: "NOT_FOUND", message: "missing" } } : { ok: true, value: { candidateId, profile: options.profileOverride ?? profile() } }; },
     async listProfiles() { return { ok: true, value: [] }; },
   };
   const documentRepository: ApplicationDocumentRepository = {
@@ -100,7 +122,7 @@ function stores(options: {
     async getLatest() { throw new Error("not used"); },
     async deleteByApplication() { throw new Error("not used"); },
   };
-  return { applicationRepository, associationRepository, candidateRepository, profileRepository, documentRepository, documents };
+  return { applicationRepository, associationRepository, candidateRepository, profileRepository, baseCvRepository: baseCvRepository(options.baseCvResult), documentRepository, documents };
 }
 
 describe("cover letter boundary", () => {
@@ -115,6 +137,17 @@ describe("cover letter boundary", () => {
     expect(result.document.renderedDocument.content).toContain("Microsoft 365");
     expect(result.document.renderedDocument.content).not.toContain("Kubernetes");
     expect(store.documents).toHaveLength(1);
+  });
+
+  it("includes the authenticated account's email in the cover letter's contact details when supplied, and omits it entirely when not", async () => {
+    const store = stores();
+    const withEmail = await createCoverLetter({ applicationId, email: "candidate-a@example.test" }, { ...store, createId: () => "letter-email", now: () => timestamp });
+    expect(withEmail.ok).toBe(true);
+    if (withEmail.ok) expect(withEmail.document.renderedDocument.content).toContain("candidate-a@example.test");
+
+    const withoutEmail = await createCoverLetter({ applicationId }, { ...store, createId: () => "letter-no-email", now: () => timestamp });
+    expect(withoutEmail.ok).toBe(true);
+    if (withoutEmail.ok) expect(withoutEmail.document.renderedDocument.content).not.toContain("@example.test");
   });
 
   it("creates version two without changing CV documents", async () => {
@@ -155,16 +188,51 @@ describe("cover letter boundary", () => {
       .toEqual(first.document.generatedDocument.sections.flatMap((section) => section.claims.flatMap((claim) => claim.evidenceIds)).sort());
   });
 
-  it("fails safely for missing inputs and corrupt document storage", async () => {
+  it("fails safely for missing inputs, missing/corrupt Base CV, and corrupt document storage", async () => {
     const missingApplication = await createCoverLetter({ applicationId }, stores({ applicationMissing: true }));
     const missingAssociation = await createCoverLetter({ applicationId }, stores({ associationMissing: true }));
     const missingProfile = await createCoverLetter({ applicationId }, stores({ profileMissing: true }));
+    const missingBaseCv = await createCoverLetter({ applicationId }, stores({ baseCvResult: { ok: false, error: { code: "NOT_FOUND", message: "missing" } } }));
+    const corruptBaseCv = await createCoverLetter({ applicationId }, stores({ baseCvResult: { ok: false, error: { code: "CORRUPT_STORAGE", message: "corrupt" } } }));
     const corruptDocuments = await createCoverLetter({ applicationId }, stores({ documentError: true }));
 
     expect(missingApplication).toMatchObject({ ok: false, code: "APPLICATION_NOT_FOUND" });
     expect(missingAssociation).toMatchObject({ ok: false, code: "ASSOCIATION_NOT_FOUND" });
     expect(missingProfile).toMatchObject({ ok: false, code: "PROFILE_NOT_FOUND" });
+    expect(missingBaseCv).toMatchObject({ ok: false, code: "BASE_CV_NOT_FOUND" });
+    expect(corruptBaseCv).toMatchObject({ ok: false, code: "BASE_CV_STORAGE_FAILURE" });
     expect(corruptDocuments).toMatchObject({ ok: false, code: "DOCUMENT_STORAGE_FAILURE" });
+  });
+
+  it("respects Base CV visibility and edits, not the raw profile - an edited employer is used, and hiding work experience removes it", async () => {
+    const base = createCandidateBaseCvFromProfile(candidateId, profile(), timestamp);
+    if (!base.ok) throw new Error("fixture");
+    base.value.workExperience = [{ ...base.value.workExperience[0], company: "Base CV Edited Employer AB" }];
+    const store = stores({ baseCvResult: { ok: true, value: base.value } });
+
+    const edited = await createCoverLetter({ applicationId }, { ...store, createId: () => "letter-edited", now: () => timestamp });
+    expect(edited.ok).toBe(true);
+    if (edited.ok) expect(edited.document.renderedDocument.content).toContain("Base CV Edited Employer AB");
+
+    base.value.visibility.workExperience = false;
+    const hidden = await createCoverLetter({ applicationId }, { ...store, baseCvRepository: baseCvRepository({ ok: true, value: base.value }), createId: () => "letter-hidden", now: () => "2026-09-06T11:00:00.000Z" });
+    expect(hidden.ok).toBe(true);
+    if (hidden.ok) expect(hidden.document.renderedDocument.content).not.toContain("Base CV Edited Employer AB");
+  });
+
+  it("shares the same approved candidate + Base CV evidence universe as the CV: a Base-CV-hidden certification never appears in either document", async () => {
+    const base = createCandidateBaseCvFromProfile(candidateId, profile(), timestamp);
+    if (!base.ok) throw new Error("fixture");
+    base.value.visibility.certifications = false;
+    const store = stores({ baseCvResult: { ok: true, value: base.value } });
+
+    const letter = await createCoverLetter({ applicationId }, { ...store, createId: () => "letter-1", now: () => timestamp });
+    const cv = await createTailoredCv({ applicationId }, { ...store, createId: () => "cv-1", now: () => timestamp });
+
+    expect(letter.ok).toBe(true);
+    expect(cv.ok).toBe(true);
+    if (letter.ok) expect(letter.document.renderedDocument.content).not.toContain("AZ-900");
+    if (cv.ok) expect(cv.document.renderedDocument.content).not.toContain("AZ-900");
   });
 
   it("does not change the application or invent personal motivation", async () => {
@@ -176,5 +244,72 @@ describe("cover letter boundary", () => {
     expect(result.ok).toBe(true);
     expect(before).toEqual(after);
     if (result.ok) expect(result.document.renderedDocument.content).not.toContain("alltid drömt");
+  });
+});
+
+describe("a stale analysis blocks cover-letter generation - the same shared rule as the CV", () => {
+  it("blocks first-time cover-letter creation when the profile changed after the stored analysis, and creates no document", async () => {
+    const staleApplication = application(timestamp);
+    const editedProfile = { ...profile(), updatedAt: "2026-09-06T10:30:00.000Z" };
+    const store = stores({ applicationOverride: staleApplication, profileOverride: editedProfile });
+
+    const result = await createCoverLetter({ applicationId }, { ...store, createId: () => "letter-1", now: () => "2026-09-06T10:45:00.000Z" });
+
+    expect(result).toMatchObject({ ok: false, code: "STALE_ANALYSIS" });
+    expect(store.documents).toHaveLength(0);
+  });
+
+  it("blocks regeneration of a new cover-letter version when the profile changed after the stored analysis, and preserves the existing version untouched", async () => {
+    const staleApplication = application(timestamp);
+    const store = stores({ applicationOverride: staleApplication });
+    const first = await createCoverLetter({ applicationId }, { ...store, createId: () => "letter-1", now: () => timestamp });
+    expect(first).toMatchObject({ ok: true, document: { version: 1 } });
+    if (!first.ok) throw new Error(first.message);
+    const firstContentBefore = first.document.renderedDocument.content;
+
+    const editedProfile = { ...profile(), updatedAt: "2026-09-06T10:30:00.000Z" };
+    const blocked = await createCoverLetter(
+      { applicationId },
+      { ...store, profileRepository: { ...store.profileRepository, getProfileByCandidateId: async () => ({ ok: true, value: { candidateId, profile: editedProfile } }) }, createId: () => "letter-2", now: () => "2026-09-06T10:45:00.000Z" },
+    );
+
+    expect(blocked).toMatchObject({ ok: false, code: "STALE_ANALYSIS" });
+    expect(store.documents).toHaveLength(1);
+    expect(store.documents[0].renderedDocument.content).toBe(firstContentBefore);
+  });
+
+  it("cannot be bypassed by calling createCoverLetter directly with a stale application/profile pair", async () => {
+    const staleApplication = application(timestamp);
+    const editedProfile = { ...profile(), updatedAt: "2026-09-06T10:30:00.000Z" };
+    const store = stores({ applicationOverride: staleApplication, profileOverride: editedProfile });
+    const result = await createCoverLetter({ applicationId, email: "direct-submission@example.test" }, store);
+    expect(result).toMatchObject({ ok: false, code: "STALE_ANALYSIS" });
+  });
+
+  it("unblocks cover-letter generation once re-analysis records the same profile timestamp", async () => {
+    const staleApplication = application(timestamp);
+    const updatedProfile: CandidateProfile = { ...profile(), updatedAt: "2026-09-06T10:30:00.000Z" };
+    const freshRankedJob = analyzeJobs(updatedProfile, [job()]).rankedJobs[0];
+    const reanalyzed = reanalyzeApplication(staleApplication, { rankedJob: freshRankedJob, timestamp: "2026-09-06T10:50:00.000Z", candidateProfileUpdatedAt: updatedProfile.updatedAt });
+    if (!reanalyzed.ok) throw new Error(reanalyzed.error.message);
+
+    const store = stores({ applicationOverride: reanalyzed.value, profileOverride: updatedProfile });
+    const result = await createCoverLetter({ applicationId }, { ...store, createId: () => "letter-1", now: () => "2026-09-06T11:00:00.000Z" });
+
+    expect(result).toMatchObject({ ok: true, document: { version: 1 } });
+  });
+
+  it("re-blocks cover-letter generation after another profile edit that postdates the just-completed re-analysis", async () => {
+    const staleApplication = application(timestamp);
+    const analyzedProfile = { ...profile(), updatedAt: "2026-09-06T10:30:00.000Z" };
+    const freshRankedJob = analyzeJobs(analyzedProfile, [job()]).rankedJobs[0];
+    const reanalyzed = reanalyzeApplication(staleApplication, { rankedJob: freshRankedJob, timestamp: "2026-09-06T10:50:00.000Z", candidateProfileUpdatedAt: analyzedProfile.updatedAt });
+    if (!reanalyzed.ok) throw new Error(reanalyzed.error.message);
+
+    const editedAgain = { ...profile(), updatedAt: "2026-09-06T11:15:00.000Z" };
+    const store = stores({ applicationOverride: reanalyzed.value, profileOverride: editedAgain });
+    const result = await createCoverLetter({ applicationId }, { ...store, createId: () => "letter-1", now: () => "2026-09-06T11:30:00.000Z" });
+
+    expect(result).toMatchObject({ ok: false, code: "STALE_ANALYSIS" });
   });
 });

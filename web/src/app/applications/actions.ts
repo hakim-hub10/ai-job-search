@@ -235,14 +235,15 @@ export async function createTailoredCvAction(formData: FormData) {
   const documentRepositoryPath = process.env.APPLICATION_DOCUMENT_REPOSITORY?.trim();
 
   if (!applicationId) throw new Error("Ansökans ID saknas.");
-  if (!(await authorizeApplication(applicationId)).ok) throw new Error("Ansökan kunde inte hittas.");
+  const owned = await authorizeApplication(applicationId);
+  if (!owned.ok) throw new Error("Ansökan kunde inte hittas.");
   if (!coachDir || !applicationRepositoryPath || !documentRepositoryPath) {
     throw new Error("Dokumentvyn är inte fullständigt konfigurerad.");
   }
 
   const paths = resolveCoachRepositoryPaths(resolve(coachDir));
   const result = await createTailoredCv(
-    { applicationId, language: documentLanguage(formData) },
+    { applicationId, language: documentLanguage(formData), email: owned.value.context.user.email },
     {
       applicationRepository: createFileApplicationRepository(resolve(applicationRepositoryPath)),
       associationRepository: createFileCandidateApplicationAssociationRepository(paths.associations),
@@ -265,6 +266,7 @@ export async function createTailoredCvAction(formData: FormData) {
       CANDIDATE_STORAGE_FAILURE: "Kandidatregistret kunde inte läsas.",
       PROFILE_STORAGE_FAILURE: "Kandidatprofilen kunde inte läsas.",
       BASE_CV_STORAGE_FAILURE: "Grund-CV-lagringen kunde inte läsas.",
+      STALE_ANALYSIS: "Din profil har ändrats sedan den senaste analysen. Analysera om jobbet först för att använda din senaste profil i de anpassade dokumenten.",
       TAILORING_FAILED: "Det anpassade CV:t kunde inte skapas.",
       DOCUMENT_STORAGE_FAILURE: "Det anpassade CV:t kunde inte sparas.",
     };
@@ -285,19 +287,21 @@ export async function createCoverLetterAction(formData: FormData) {
   const documentRepositoryPath = process.env.APPLICATION_DOCUMENT_REPOSITORY?.trim();
 
   if (!applicationId) throw new Error("Ansökans ID saknas.");
-  if (!(await authorizeApplication(applicationId)).ok) throw new Error("Ansökan kunde inte hittas.");
+  const owned = await authorizeApplication(applicationId);
+  if (!owned.ok) throw new Error("Ansökan kunde inte hittas.");
   if (!coachDir || !applicationRepositoryPath || !documentRepositoryPath) {
     throw new Error("Dokumentvyn är inte fullständigt konfigurerad.");
   }
 
   const paths = resolveCoachRepositoryPaths(resolve(coachDir));
   const result = await createCoverLetter(
-    { applicationId, language: documentLanguage(formData) },
+    { applicationId, language: documentLanguage(formData), email: owned.value.context.user.email },
     {
       applicationRepository: createFileApplicationRepository(resolve(applicationRepositoryPath)),
       associationRepository: createFileCandidateApplicationAssociationRepository(paths.associations),
       candidateRepository: createFileCoachWorkspaceRepository(paths.candidates),
       profileRepository: loadCandidateProfileRepository().repository!,
+      baseCvRepository: createFileCandidateBaseCvRepository(resolve(coachDir, "candidate-cvs.json")),
       documentRepository: createFileApplicationDocumentRepository(resolve(documentRepositoryPath)),
     },
   );
@@ -308,10 +312,13 @@ export async function createCoverLetterAction(formData: FormData) {
       ASSOCIATION_NOT_FOUND: "Ansökan saknar kandidatkoppling.",
       CANDIDATE_NOT_FOUND: "Den kopplade kandidaten hittades inte.",
       PROFILE_NOT_FOUND: "Kandidatprofil saknas.",
+      BASE_CV_NOT_FOUND: "Grund-CV saknas. Skapa ett grund-CV innan du skapar ett personligt brev.",
       APPLICATION_STORAGE_FAILURE: "Ansökningsarkivet kunde inte läsas.",
       ASSOCIATION_STORAGE_FAILURE: "Kandidatkopplingen kunde inte läsas.",
       CANDIDATE_STORAGE_FAILURE: "Kandidatregistret kunde inte läsas.",
       PROFILE_STORAGE_FAILURE: "Kandidatprofilen kunde inte läsas.",
+      BASE_CV_STORAGE_FAILURE: "Grund-CV-lagringen kunde inte läsas.",
+      STALE_ANALYSIS: "Din profil har ändrats sedan den senaste analysen. Analysera om jobbet först för att använda din senaste profil i de anpassade dokumenten.",
       TAILORING_FAILED: "Det personliga brevet kunde inte skapas.",
       DOCUMENT_STORAGE_FAILURE: "Det personliga brevet kunde inte sparas.",
     };
