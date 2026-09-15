@@ -134,6 +134,17 @@ export type SkillReviewDecision = { field: "technical" | "soft" | "certification
   | { action: "move"; destination: "technical" | "soft" | "certifications" }
   | { action: "move"; destination: "experience"; experienceIndex: number }
   | { action: "move"; destination: "projects" }
+  /**
+   * The Education model requires degree/field/institution as non-optional
+   * strings (see CandidateProfile in .agents/job-search/cli/src/profile.ts) -
+   * a flagged free-text value like "Gränsälvsgymnasiet (2016–2018)" cannot be
+   * split into those three fields without guessing which part is which, and
+   * this system never invents institution, degree, or dates. The candidate
+   * must therefore supply the structured education fields themselves as part
+   * of this decision; the flagged value only explains why the correction is
+   * being offered, it is never itself parsed into education.
+   */
+  | { action: "move"; destination: "education"; education: { degree: string; field: string; institution: string; startYear?: number; endYear?: number } }
 );
 /** Pure preview: caller must authorize, explicitly confirm and save through the existing profile workflow. */
 export function previewSkillReview(profile: CandidateProfile, decisions: SkillReviewDecision[]): CandidateProfile {
@@ -154,6 +165,24 @@ export function previewSkillReview(profile: CandidateProfile, decisions: SkillRe
       } else if (decision.destination === "certifications") {
         if (decision.field === "certifications") throw new Error("Choose a different destination");
         next.certifications.push(decision.expectedValue);
+      } else if (decision.destination === "education") {
+        const { degree, field, institution, startYear, endYear } = decision.education;
+        if (!degree.trim() || !field.trim() || !institution.trim()) {
+          throw new Error("Degree, field, and institution are required to move an item into education");
+        }
+        // Never invented from the flagged string - these are the candidate's
+        // own explicitly-typed values, supplied as part of this decision.
+        const duplicate = next.education.some((entry) =>
+          normalizedConceptText(entry.institution) === normalizedConceptText(institution)
+          && normalizedConceptText(entry.degree) === normalizedConceptText(degree),
+        );
+        if (!duplicate) {
+          next.education.push({
+            degree: degree.trim(), field: field.trim(), institution: institution.trim(),
+            ...(startYear !== undefined ? { startYear } : {}),
+            ...(endYear !== undefined ? { endYear } : {}),
+          });
+        }
       } else if (decision.destination !== decision.field) {
         next.skills[decision.destination].push(decision.expectedValue);
       } else {

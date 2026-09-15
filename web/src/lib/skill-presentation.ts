@@ -13,12 +13,28 @@ const aliases: readonly ConceptDefinition[] = [
 ];
 export interface SkillPresentationGroup { id: string; label: string; concepts: readonly string[] }
 export function skillConcept(value: string): string { return canonicalConcept(value, aliases); }
-export function presentSkills(values: readonly string[], groups: readonly SkillPresentationGroup[] = [], limit = 12) {
+/**
+ * Conservative, domain-agnostic deduplication: two values collapse only when
+ * they are the same after (a) the presentation alias canonicalization above
+ * (so "AD" and "Active Directory" - an already-proven-safe equivalence -
+ * collapse) and (b) normalizing case/whitespace/diacritics via the same
+ * normalizedConceptText matching already trusts elsewhere. This never merges
+ * two genuinely different phrases (e.g. "Firewall-konfiguration" and
+ * "konfiguration & analys" stay distinct) - it only catches exact and
+ * safe case/whitespace-equivalent repeats. Keeps the first occurrence,
+ * preserving the caller's own ordering.
+ */
+export function dedupeNormalized(values: readonly string[]): string[] {
   const seen = new Set<string>();
-  const selected = values.flatMap(value => {
-    if (!["VALID_SKILL", "SOFT_SKILL"].includes(classifySkill(value).classification)) return [];
-    const label = skillConcept(value); const key = normalizedConceptText(label);
-    if (seen.has(key)) return []; seen.add(key); return [label];
-  }).slice(0, limit);
+  return values.filter(value => {
+    const key = normalizedConceptText(skillConcept(value));
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+export function presentSkills(values: readonly string[], groups: readonly SkillPresentationGroup[] = [], limit = 12) {
+  const valid = values.filter(value => ["VALID_SKILL", "SOFT_SKILL"].includes(classifySkill(value).classification));
+  const selected = dedupeNormalized(valid).map(skillConcept).slice(0, limit);
   return selected.map(label => ({ label, group: groups.find(g => g.concepts.some(c => normalizedConceptText(skillConcept(c)) === normalizedConceptText(label)))?.id ?? "other" }));
 }

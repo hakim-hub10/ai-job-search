@@ -110,6 +110,54 @@ test("moving a flagged certification into projects creates a minimal structured 
   expect(next.projects).toEqual([{ title: "GITHUB-PROJEKT: Migrated 200 users to Microsoft 365" }]);
   expect(profile.certifications).toHaveLength(2);
 });
+test("moving an education-like flagged certification requires the candidate's own structured education fields - never invented from the flagged string", () => {
+  const profile = createDefaultCandidateProfile();
+  profile.certifications = ["AWS Certified Solutions Architect", "Gränsälvsgymnasiet (2016–2018)"];
+  const before = structuredClone(profile);
+  const report = reviewProfileQuality(profile).find(x => x.field === "certifications" && x.value.startsWith("Gränsälvsgymnasiet"));
+  expect(report).toMatchObject({ suspicious: true, classification: "DATE" });
+
+  const next = previewSkillReview(profile, [
+    { field: "certifications", index: 0, expectedValue: "AWS Certified Solutions Architect", action: "keep" },
+    {
+      field: "certifications", index: 1, expectedValue: "Gränsälvsgymnasiet (2016–2018)", action: "move", destination: "education",
+      education: { degree: "Naturvetenskapsprogrammet", field: "Naturvetenskap", institution: "Gränsälvsgymnasiet", startYear: 2016, endYear: 2018 },
+    },
+  ]);
+  expect(next.certifications).toEqual(["AWS Certified Solutions Architect"]);
+  expect(next.education).toContainEqual({ degree: "Naturvetenskapsprogrammet", field: "Naturvetenskap", institution: "Gränsälvsgymnasiet", startYear: 2016, endYear: 2018 });
+  expect(next.education).toHaveLength(profile.education.length + 1);
+  // The stored profile itself is never mutated by a preview.
+  expect(profile).toEqual(before);
+});
+
+test("moving a flagged item into education never creates a duplicate when an equivalent entry already exists", () => {
+  const profile = createDefaultCandidateProfile();
+  profile.education = [{ degree: "Naturvetenskapsprogrammet", field: "Naturvetenskap", institution: "Gränsälvsgymnasiet", startYear: 2016, endYear: 2018 }];
+  profile.certifications = ["Gränsälvsgymnasiet (2016–2018)"];
+  const next = previewSkillReview(profile, [
+    {
+      field: "certifications", index: 0, expectedValue: "Gränsälvsgymnasiet (2016–2018)", action: "move", destination: "education",
+      education: { degree: "naturvetenskapsprogrammet", field: "Naturvetenskap", institution: "gränsälvsgymnasiet " },
+    },
+  ]);
+  expect(next.education).toHaveLength(1);
+});
+
+test("moving a flagged item into education rejects a missing degree, field, or institution rather than inventing a blank entry", () => {
+  const profile = createDefaultCandidateProfile();
+  profile.certifications = ["Gränsälvsgymnasiet (2016–2018)"];
+  expect(() => previewSkillReview(profile, [
+    { field: "certifications", index: 0, expectedValue: "Gränsälvsgymnasiet (2016–2018)", action: "move", destination: "education", education: { degree: "", field: "Naturvetenskap", institution: "Gränsälvsgymnasiet" } },
+  ])).toThrow("Degree, field, and institution are required");
+  expect(() => previewSkillReview(profile, [
+    { field: "certifications", index: 0, expectedValue: "Gränsälvsgymnasiet (2016–2018)", action: "move", destination: "education", education: { degree: "Naturvetenskapsprogrammet", field: "", institution: "Gränsälvsgymnasiet" } },
+  ])).toThrow("Degree, field, and institution are required");
+  expect(() => previewSkillReview(profile, [
+    { field: "certifications", index: 0, expectedValue: "Gränsälvsgymnasiet (2016–2018)", action: "move", destination: "education", education: { degree: "Naturvetenskapsprogrammet", field: "Naturvetenskap", institution: "   " } },
+  ])).toThrow("Degree, field, and institution are required");
+});
+
 test("presentation aliases preserve distinct identity systems and Intune, with configurable groups", () => {
   const items = presentSkills(["AD", "Active Directory", "Azure AD / Entra ID", "Entra ID", "M365", "Office 365", "Intune", "IT-"], [{ id: "tools", label: "Tools", concepts: ["Intune"] }]);
   expect(items.map(x => x.label)).toEqual(["Active Directory", "Microsoft Entra ID", "Microsoft 365", "Intune"]);

@@ -1,14 +1,33 @@
 import type { ApplicationDocumentGenerator, DocumentGenerationRequest, GenerationEvidence, GeneratedDocumentClaim, GeneratedDocumentSection } from "../../../.agents/job-search/cli/src/document-generation";
 import type { CandidateProfile } from "../../../.agents/job-search/cli/src/profile";
 import type { DocumentLanguage } from "../../../.agents/job-search/cli/src/application-documents";
+import { normalizedConceptText } from "../../../.agents/job-search/cli/src/concept-normalization";
 import { looksLikeRawImportBlock, reviewProfileQuality, summaryReviewItem, deepRepairMojibake, type SkillReviewItem } from "./profile-quality";
-import { skillConcept } from "./skill-presentation";
+import { dedupeNormalized, skillConcept } from "./skill-presentation";
 
-/** Projection only: stored approved values are never mutated. */
+/**
+ * Projection only: stored approved values are never mutated. Applies the
+ * exact same reviewProfileQuality classification to every field it covers
+ * (technical/soft skills, certifications, summary) - certifications were
+ * previously exempt from this filtering even though reviewProfileQuality
+ * already classified suspicious entries there, which let a misclassified
+ * value (e.g. a school name with a trailing date range that reads as
+ * education-like/DATE-suspicious, not a certification) reach a generated
+ * document unfiltered. Reused identically by both the AI and deterministic
+ * generation paths, since both call this function to build their shared
+ * "matchingProfile" input.
+ */
 export function documentQualityProfile(profile: CandidateProfile): CandidateProfile {
   const next = deepRepairMojibake(structuredClone(profile));
   const review = reviewProfileQuality(next);
-  for (const field of ["technical", "soft"] as const) next.skills[field] = review.filter(x => x.field === field && !x.suspicious).map(x => x.value);
+  // Conservative, normalization-only deduplication (see dedupeNormalized) -
+  // never merges two genuinely different skill phrases, only exact and safe
+  // case/whitespace-equivalent repeats. Applied after classification so a
+  // suspicious entry can never "win" a dedup slot over a legitimate one.
+  for (const field of ["technical", "soft"] as const) {
+    next.skills[field] = dedupeNormalized(review.filter(x => x.field === field && !x.suspicious).map(x => x.value));
+  }
+  next.certifications = review.filter(x => x.field === "certifications" && !x.suspicious).map(x => x.value);
   // A summary that reads like a pasted CV (dates, contact details,
   // certifications restated as prose) must not be dumped verbatim into a
   // generated document - dropping it here lets composeProfessionalSummary
@@ -52,7 +71,7 @@ export function selectProfessionalEvidence(request: DocumentGenerationRequest): 
   const limits: Partial<Record<GenerationEvidence["kind"], number>> = { skill: 12, experience: 3, education: 2, certification: 4, language: 4, summary: 2, identity: 4, project: 2, achievement: 2, motivation: 1, other: 1 };
   const counts = new Map<string, number>(); const concepts = new Set<string>();
   return [...request.selectedEvidence].sort((a, b) => relevance(b, request) - relevance(a, request)).filter(item => {
-    const key = skillConcept(item.content).toLocaleLowerCase();
+    const key = normalizedConceptText(skillConcept(item.content));
     if (item.kind === "skill" && concepts.has(key)) return false;
     const group = item.kind === "skill" ? item.id.includes("soft-skill") ? "softSkills" : "technicalSkills" : item.kind;
     const groupLimit = group === "softSkills" ? 3 : group === "technicalSkills" ? 9 : limits[item.kind] ?? 1;
@@ -153,6 +172,18 @@ function joinNatural(items: readonly string[], conjunction: string): string {
   return `${items.slice(0, -1).join(", ")} ${conjunction} ${items.at(-1)}`;
 }
 /**
+ * The stored headline can be a single professional title ("IT-supporttekniker",
+ * which already reads as a natural sentence subject) or a multi-value visual
+ * tagline for the CV header, delimited with "|" ("IT-support | IT Coordinator
+ * | Nätverk | Cloud | Cybersäkerhet"). Both places that render the headline
+ * (the composed summary sentence, and the Profil section's own headline
+ * claim) must agree on this split so a multi-value headline is represented
+ * exactly once, never leaking its raw "|" delimiter into either.
+ */
+function headlineDirections(headlineText: string): string[] {
+  return headlineText.split("|").map((part) => part.trim()).filter(Boolean);
+}
+/**
  * Existing user summary takes precedence. Otherwise composes one coherent
  * paragraph (roughly 3-5 sentences) from verified evidence only - never
  * "Label: value" lines, and never a language mention (languages belong only
@@ -173,15 +204,23 @@ export function composeProfessionalSummary(evidence: GenerationEvidence[], langu
   const roleTitle = role?.context?.role;
   const employer = role?.context?.employer;
   const headlineText = headline?.content?.trim();
+  // The raw "|" delimiter must never leak into prose - a multi-value headline
+  // is instead phrased as a natural list of the same stated directions (never
+  // translated, never invented), exactly like any other evidence list here
+  // (see joinNatural). A single-value headline is left exactly as before.
+  const headlineParts = headlineText ? headlineDirections(headlineText) : [];
+  const headlineSubject = headlineParts.length > 1
+    ? (sv ? `Professionell inriktning mot ${joinNatural(headlineParts, "och")}` : `Professional focus on ${joinNatural(headlineParts, "and")}`)
+    : headlineText;
   // Opens with professional direction (headline) and strongest technical
   // competencies - never with "role at employer", which reads as a
   // mechanical database dump rather than a professional profile.
-  if (headlineText || technicalSkills.length) {
+  if (headlineSubject || technicalSkills.length) {
     if (headline) used.push(headline);
     const skillList = joinNatural(technicalSkills.map(x => skillConcept(x.content)), sv ? "och" : "and");
     used.push(...technicalSkills);
-    if (headlineText && skillList) sentences.push(sv ? `${headlineText} med erfarenhet av ${skillList}.` : `${headlineText} with experience in ${skillList}.`);
-    else if (headlineText) sentences.push(`${headlineText}.`);
+    if (headlineSubject && skillList) sentences.push(sv ? `${headlineSubject} med erfarenhet av ${skillList}.` : `${headlineSubject} with experience in ${skillList}.`);
+    else if (headlineSubject) sentences.push(`${headlineSubject}.`);
     else sentences.push(sv ? `Erfarenhet av ${skillList}.` : `Experience with ${skillList}.`);
   }
   // Relevant verified experience follows as its own sentence, naming the role
@@ -312,7 +351,15 @@ export function createProfessionalDocumentGenerator(options: { composeSummary?: 
       sections = order.flatMap((kind): GeneratedDocumentSection[] => {
         const items = (kind === "experience" || kind === "education") ? mostRecentFirst(selected.filter(x => x.kind === kind)) : selected.filter(x => x.kind === kind);
         const claims = kind === "summary"
-          ? [...items.filter(x => x.id === "profile:headline").map(x => fact(x)), ...(options.composeSummary === false ? [] : composeProfessionalSummary(selected, request.language))]
+          ? [
+              // A multi-value headline is represented only once, by the composed
+              // summary sentence below (see headlineDirections) - emitting it here
+              // too would reintroduce the raw "|"-delimited string verbatim as its
+              // own bullet. A single-value headline keeps its existing standalone
+              // tagline claim, unchanged.
+              ...items.filter(x => x.id === "profile:headline" && headlineDirections(x.content).length <= 1).map(x => fact(x)),
+              ...(options.composeSummary === false ? [] : composeProfessionalSummary(selected, request.language)),
+            ]
           : kind === "experience"
           ? items.flatMap(item => experienceClaims(item, sv, jobWords))
           : items.map(x => fact(x, kind === "skill" ? skillConcept(x.content) : x.content));

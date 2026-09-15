@@ -85,27 +85,6 @@ function formatEvidence(evidence: {
     : [formatDimension(evidence.dimension)];
 }
 
-function formatGapType(type: string): string {
-  const labels: Record<string, string> = {
-    missing_skill: "Saknad kompetens",
-    insufficient_skill: "Otillräcklig kompetens",
-    missing_certification: "Saknad certifiering",
-    missing_language: "Saknat språk",
-    experience_gap: "Erfarenhetsgap",
-    education_gap: "Utbildningsgap",
-    other: "Övrigt gap",
-  };
-
-  return labels[type] ?? type;
-}
-
-function formatRequirement(requirement: string): string {
-  const separator = requirement.indexOf(":");
-  return separator >= 0
-    ? requirement.slice(separator + 1).trim()
-    : requirement;
-}
-
 export default async function JobsPage({ searchParams }: JobsPageProps) {
   const params = await searchParams;
 
@@ -397,82 +376,112 @@ export default async function JobsPage({ searchParams }: JobsPageProps) {
                               </ul>
                             </section>
 
-                            <section className={styles.analysisSection}>
-                              <h4>Saknade krav / utvecklingsområden</h4>
-                              <p className={styles.analysisSectionHint}>Krav som annonsen uttryckligen ställer och som saknas i din verifierade profil.</p>
-                              <ul>
-                                {ranked.matchingResult.missing.flatMap(missingGapItems).map((item, index) => (
-                                  <li key={`${item.title}:${index}`}>
-                                    <strong>{item.title}</strong>
-                                    <span>{item.description}</span>
-                                  </li>
-                                ))}
-                              </ul>
-                            </section>
+                            {(() => {
+                              // One unified, candidate-facing area for everything the
+                              // candidate could act on - built only from the existing
+                              // MatchingResult-derived helpers (missingGapItems,
+                              // conflictingGapItems, unknownEvidenceCase), never a
+                              // parallel analysis pipeline. SkillGapResult's own gap
+                              // list is not repeated here: for the dimensions it
+                              // covers, MatchingResult's missing/unknown evidence
+                              // already carries the same (and, for targetRole/location/
+                              // remotePreference/employmentType/preferredIndustries,
+                              // strictly more complete) information - showing both
+                              // would duplicate the same issue in two cards.
+                              const missingItems = ranked.matchingResult.missing.flatMap(missingGapItems);
+                              const conflictingItems = ranked.matchingResult.conflicting.flatMap(conflictingGapItems);
+                              const uncertainEvidence = ranked.matchingResult.unknown.filter((evidence) => unknownEvidenceCase(evidence, job) === "candidateUncertain");
+                              const unspecifiedEvidence = ranked.matchingResult.unknown.filter((evidence) => unknownEvidenceCase(evidence, job) === "jobUnspecified");
+                              const hasActionableGaps = missingItems.length > 0 || conflictingItems.length > 0 || uncertainEvidence.length > 0;
+                              return (
+                                <>
+                                  <section className={styles.analysisSection} aria-label="Vad behöver du komplettera eller verifiera?">
+                                    <h4>Vad behöver du komplettera eller verifiera?</h4>
+                                    {!hasActionableGaps ? (
+                                      <p className={styles.analysisSectionHint}>Inga kandidatsidiga gap eller osäkerheter identifierades för den här annonsen, utifrån din verifierade profil.</p>
+                                    ) : (
+                                      <>
+                                        {missingItems.length > 0 ? (
+                                          <div>
+                                            <p className={styles.analysisSectionHint}><strong>Saknade verifierade krav</strong> - annonsen ställer detta krav uttryckligen, och det saknas i din verifierade profil.</p>
+                                            <ul>
+                                              {missingItems.map((item, index) => (
+                                                <li key={`missing:${item.title}:${index}`}>
+                                                  <strong>{item.title}</strong>
+                                                  <span>{item.description}</span>
+                                                </li>
+                                              ))}
+                                            </ul>
+                                          </div>
+                                        ) : null}
+                                        {conflictingItems.length > 0 ? (
+                                          <div>
+                                            <p className={styles.analysisSectionHint}><strong>Motstridig information</strong> - din verifierade profil motsäger direkt vad annonsen anger.</p>
+                                            <ul>
+                                              {conflictingItems.map((item, index) => (
+                                                <li key={`conflicting:${item.title}:${index}`}>
+                                                  <strong>{item.title}</strong>
+                                                  <span>{item.description}</span>
+                                                </li>
+                                              ))}
+                                            </ul>
+                                          </div>
+                                        ) : null}
+                                        {uncertainEvidence.length > 0 ? (
+                                          <div>
+                                            <p className={styles.analysisSectionHint}><strong>Osäkert kandidatunderlag</strong> - annonsen nämner kravet, men din profil ger inte tillräckligt underlag för en säker bedömning.</p>
+                                            <ul>
+                                              {uncertainEvidence.map((evidence, index) => (
+                                                <li key={`uncertain:${evidence.dimension}:${index}`}>
+                                                  <strong>{formatDimension(evidence.dimension)}</strong>
+                                                  <span>{unknownEvidenceLabel(evidence, job)}</span>
+                                                </li>
+                                              ))}
+                                            </ul>
+                                          </div>
+                                        ) : null}
+                                      </>
+                                    )}
+                                  </section>
 
-                            <section className={styles.analysisSection}>
-                              <h4>Motstridig information</h4>
-                              <p className={styles.analysisSectionHint}>Annonsen ställer krav som din verifierade profil direkt motsäger.</p>
-                              <ul>
-                                {ranked.matchingResult.conflicting.flatMap(conflictingGapItems).map((item, index) => (
-                                  <li key={`${item.title}:${index}`}>
-                                    <strong>{item.title}</strong>
-                                    <span>{item.description}</span>
-                                  </li>
-                                ))}
-                              </ul>
-                            </section>
-
-                            <section className={styles.analysisSection}>
-                              <h4>Osäkert kandidatunderlag</h4>
-                              <p className={styles.analysisSectionHint}>Annonsen nämner kravet, men din profil ger inte tillräckligt underlag för en säker bedömning.</p>
-                              <ul>
-                                {ranked.matchingResult.unknown.filter((evidence) => unknownEvidenceCase(evidence, job) === "candidateUncertain").map((evidence, index) => (
-                                  <li key={`${evidence.dimension}:uncertain:${index}`}>
-                                    <strong>{formatDimension(evidence.dimension)}</strong>
-                                    <span>{unknownEvidenceLabel(evidence, job)}</span>
-                                  </li>
-                                ))}
-                              </ul>
-                            </section>
-
-                            <section className={styles.analysisSection}>
-                              <h4>Ej angivet i annonsen</h4>
-                              <p className={styles.analysisSectionHint}>Annonsen ställer inget krav här - detta är aldrig en brist hos dig.</p>
-                              <ul>
-                                {ranked.matchingResult.unknown.filter((evidence) => unknownEvidenceCase(evidence, job) === "jobUnspecified").map((evidence, index) => (
-                                  <li key={`${evidence.dimension}:unspecified:${index}`}>
-                                    <strong>{formatDimension(evidence.dimension)}</strong>
-                                    <span>{unknownEvidenceLabel(evidence, job)}</span>
-                                  </li>
-                                ))}
-                              </ul>
-                            </section>
-
-                            <section className={styles.analysisSection}>
-                              <h4>Kompetensgap</h4>
-                              <ul>
-                                {ranked.skillGapResult.gaps.map((gap) => (
-                                  <li key={`${gap.type}:${gap.jobRequirement}`}>
-                                    <strong>{formatRequirement(gap.jobRequirement)}</strong>
-                                    <span>
-                                      {formatGapType(gap.type)} · {formatSeverity(gap.severity)}
-                                    </span>
-                                  </li>
-                                ))}
-                              </ul>
-                            </section>
+                                  <section className={styles.analysisSection}>
+                                    <h4>Ej angivet i annonsen</h4>
+                                    <p className={styles.analysisSectionHint}>Annonsen ställer inget krav här - detta är aldrig en brist hos dig.</p>
+                                    {unspecifiedEvidence.length === 0 ? (
+                                      <p className={styles.analysisSectionHint}>Annonsen tog upp allt underlag som kunde bedömas.</p>
+                                    ) : (
+                                      <ul>
+                                        {unspecifiedEvidence.map((evidence, index) => (
+                                          <li key={`unspecified:${evidence.dimension}:${index}`}>
+                                            <strong>{formatDimension(evidence.dimension)}</strong>
+                                            <span>{unknownEvidenceLabel(evidence, job)}</span>
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    )}
+                                  </section>
+                                </>
+                              );
+                            })()}
 
                             <section className={styles.analysisSection}>
                               <h4>Rekommenderad utveckling</h4>
-                              <ol>
-                                {deriveActionableRecommendations(ranked.matchingResult, ranked.skillGapResult).map((recommendation) => (
-                                  <li key={recommendation.title}>
-                                    <strong>{recommendation.title}</strong>
-                                    <span>{recommendation.description}</span>
-                                  </li>
-                                ))}
-                              </ol>
+                              {(() => {
+                                const recommendations = deriveActionableRecommendations(ranked.matchingResult, ranked.skillGapResult);
+                                if (recommendations.length === 0) {
+                                  return <p className={styles.analysisSectionHint}>Inga rekommendationer just nu - inga verifierade kompetensgap identifierades.</p>;
+                                }
+                                return (
+                                  <ol>
+                                    {recommendations.map((recommendation) => (
+                                      <li key={recommendation.title}>
+                                        <strong>{recommendation.title}</strong>
+                                        <span>{recommendation.description}</span>
+                                      </li>
+                                    ))}
+                                  </ol>
+                                );
+                              })()}
                             </section>
                           </div>
 

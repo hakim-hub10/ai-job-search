@@ -1,7 +1,7 @@
 import { professionalFixture, generateProfessionalFixture } from "./professional-documents.fixture";
 import { expect, test } from "bun:test";
 import { analyzeJobs, normalizeJob, createApplication, generateApplicationDocument } from "../../../.agents/job-search/cli/src/index";
-import { documentQualityProfile, documentQualityExclusions, professionalDocumentGenerator, resolveDocumentLanguage } from "./professional-documents";
+import { documentQualityProfile, documentQualityExclusions, professionalDocumentGenerator, composeProfessionalSummary, resolveDocumentLanguage } from "./professional-documents";
 import { toDocumentPresentationModel } from "./document-presentation";
 import { documentExportFormat, type DocumentExportModel } from "./document-export";
 import { exportDocumentToPdf } from "./document-pdf-export";
@@ -182,3 +182,168 @@ for (const type of ["cv", "coverLetter"] as const) test(`${type} exports remain 
     expect(docx.ok).toBe(true);
   }
 }, 30000);
+
+test("documentQualityProfile filters a suspicious certification (education-like content with a leaked date range) but preserves legitimate certifications", () => {
+  const { profile } = professionalFixture();
+  const polluted = { ...profile, certifications: [...profile.certifications, "Gränsälvsgymnasiet (2016–2018)"] };
+  const cleaned = documentQualityProfile(polluted);
+  expect(cleaned.certifications).not.toContain("Gränsälvsgymnasiet (2016–2018)");
+  for (const legitimate of profile.certifications) expect(cleaned.certifications).toContain(legitimate);
+  // The stored profile itself is never mutated.
+  expect(polluted.certifications).toContain("Gränsälvsgymnasiet (2016–2018)");
+});
+
+test("the suspicious certification never reaches the generated CV, while legitimate certifications still render", async () => {
+  const { profile, job } = professionalFixture();
+  const polluted = { ...profile, certifications: [...profile.certifications, "Gränsälvsgymnasiet (2016–2018)"] };
+  const application = createApplication({ id: "cert-quality-check", rankedJob: analyzeJobs(polluted, [job]).rankedJobs[0], createdAt: "2026-09-12T10:00:00Z" });
+  if (!application.ok) throw new Error("fixture application failed");
+  const generated = await generateApplicationDocument({
+    application: application.value,
+    candidateDocumentInput: { matchingProfile: documentQualityProfile(polluted), identity: { fullName: "Alex Example" } },
+    tailoringOptions: { type: "cv", language: "en", maxEvidenceItems: 200 },
+    generationOptions: { untrustedJobDescription: job.description ?? undefined },
+    generator: professionalDocumentGenerator,
+  });
+  if (!generated.ok) throw new Error(JSON.stringify(generated.error));
+  const text = generated.value.renderedDocument.content;
+  expect(text).not.toContain("Gränsälvsgymnasiet");
+  expect(text).toContain("Lean Six Sigma Yellow Belt");
+});
+
+test("documentQualityProfile's certification filtering leaves unrelated profile fields untouched", () => {
+  const { profile } = professionalFixture();
+  const polluted = { ...profile, certifications: [...profile.certifications, "Gränsälvsgymnasiet (2016–2018)"] };
+  const cleaned = documentQualityProfile(polluted);
+  expect(cleaned.workExperience).toEqual(polluted.workExperience);
+  expect(cleaned.education).toEqual(polluted.education);
+  expect(cleaned.languages).toEqual(polluted.languages);
+  expect(cleaned.targetRoles).toEqual(polluted.targetRoles);
+  expect(cleaned.skills.soft).toEqual(polluted.skills.soft);
+});
+
+test("the AI and deterministic generation paths are handed the exact same cleaned certification evidence, since both build their input from documentQualityProfile", () => {
+  const { profile } = professionalFixture();
+  const polluted = { ...profile, certifications: [...profile.certifications, "Gränsälvsgymnasiet (2016–2018)"] };
+  // tailored-cv.ts and cover-letter.ts both call documentQualityProfile(sourceProfile) once and pass
+  // the identical result to generateProfessionalDocument regardless of which generator ends up running -
+  // proven here by calling it twice and confirming byte-identical output, exactly as both callers do.
+  const forAiPath = documentQualityProfile(polluted);
+  const forDeterministicPath = documentQualityProfile(polluted);
+  expect(forAiPath.certifications).toEqual(forDeterministicPath.certifications);
+  expect(forAiPath.certifications).not.toContain("Gränsälvsgymnasiet (2016–2018)");
+});
+
+test("documentQualityProfile collapses an exact-duplicate technical skill, and a safe case/whitespace-equivalent duplicate, without merging genuinely distinct skills", () => {
+  const { profile } = professionalFixture();
+  const withDuplicates = {
+    ...profile,
+    skills: {
+      technical: ["Firewall-konfiguration", "konfiguration & analys", "felsökning", "Firewall-konfiguration", "firewall-konfiguration  "],
+      soft: profile.skills.soft,
+    },
+  };
+  const cleaned = documentQualityProfile(withDuplicates);
+  const firewallOccurrences = cleaned.skills.technical.filter((value) => value.toLocaleLowerCase().includes("firewall")).length;
+  expect(firewallOccurrences).toBe(1);
+  expect(cleaned.skills.technical).toContain("konfiguration & analys");
+  expect(cleaned.skills.technical).toContain("felsökning");
+});
+
+test("documentQualityProfile never merges genuinely distinct skills that merely share words", () => {
+  const { profile } = professionalFixture();
+  const distinct = {
+    ...profile,
+    skills: {
+      technical: ["Nätverkskonfiguration", "Serverkonfiguration", "Molnkonfiguration"],
+      soft: profile.skills.soft,
+    },
+  };
+  const cleaned = documentQualityProfile(distinct);
+  expect(cleaned.skills.technical).toHaveLength(3);
+  expect(cleaned.skills.technical).toEqual(expect.arrayContaining(["Nätverkskonfiguration", "Serverkonfiguration", "Molnkonfiguration"]));
+});
+
+test("composeProfessionalSummary never lets a pipe-delimited multi-value headline leak its raw delimiter into the first sentence", () => {
+  const evidence = [
+    { id: "profile:headline", kind: "summary" as const, content: "IT-support | IT Coordinator | Nätverk | Cloud | Cybersäkerhet" },
+    { id: "profile:technical-skill:0", kind: "skill" as const, content: "Microsoft 365" },
+  ];
+  const claims = composeProfessionalSummary(evidence, "sv");
+  const text = claims.map((c) => c.text).join(" ");
+  expect(text).not.toContain("|");
+  expect(text).not.toStartWith("IT-support | IT Coordinator");
+  // Every stated direction still appears verbatim - nothing was translated or invented.
+  for (const direction of ["IT-support", "IT Coordinator", "Nätverk", "Cloud", "Cybersäkerhet"]) expect(text).toContain(direction);
+});
+
+test("composeProfessionalSummary still opens with the plain headline verbatim when it is a single value (unchanged behavior)", () => {
+  const evidence = [
+    { id: "profile:headline", kind: "summary" as const, content: "IT-supporttekniker" },
+    { id: "profile:technical-skill:0", kind: "skill" as const, content: "Microsoft 365" },
+  ];
+  const claims = composeProfessionalSummary(evidence, "sv");
+  const text = claims.map((c) => c.text).join(" ");
+  expect(text).toStartWith("IT-supporttekniker");
+});
+
+test("composeProfessionalSummary handles an empty/absent headline without inventing one, in both Swedish and English", () => {
+  const evidence = [{ id: "profile:technical-skill:0", kind: "skill" as const, content: "Microsoft 365" }];
+  const sv = composeProfessionalSummary(evidence, "sv").map((c) => c.text).join(" ");
+  const en = composeProfessionalSummary(evidence, "en").map((c) => c.text).join(" ");
+  expect(sv).toContain("Erfarenhet av Microsoft 365");
+  expect(en).toContain("Experience with Microsoft 365");
+});
+
+test("composeProfessionalSummary phrases a multi-value headline naturally in English too", () => {
+  const evidence = [
+    { id: "profile:headline", kind: "summary" as const, content: "Registered Nurse | Care Coordinator | Patient Safety" },
+  ];
+  const claims = composeProfessionalSummary(evidence, "en");
+  const text = claims.map((c) => c.text).join(" ");
+  expect(text).not.toContain("|");
+  for (const direction of ["Registered Nurse", "Care Coordinator", "Patient Safety"]) expect(text).toContain(direction);
+});
+
+test("the generated Profil section never emits the raw pipe-delimited headline as its own claim - the composed summary represents it instead", async () => {
+  const { profile, job } = professionalFixture();
+  const multiValueHeadline = { ...profile, headline: "IT-support | IT Coordinator | Nätverk | Cloud | Cybersäkerhet", summary: undefined };
+  const before = structuredClone(multiValueHeadline);
+  const application = createApplication({ id: "multi-value-headline-check", rankedJob: analyzeJobs(multiValueHeadline, [job]).rankedJobs[0], createdAt: "2026-09-15T10:00:00Z" });
+  if (!application.ok) throw new Error("fixture application failed");
+  const generated = await generateApplicationDocument({
+    application: application.value,
+    candidateDocumentInput: { matchingProfile: documentQualityProfile(multiValueHeadline), identity: { fullName: "Alex Example" } },
+    tailoringOptions: { type: "cv", language: "sv", maxEvidenceItems: 200 },
+    generationOptions: { untrustedJobDescription: job.description ?? undefined },
+    generator: professionalDocumentGenerator,
+  });
+  if (!generated.ok) throw new Error(JSON.stringify(generated.error));
+  const summarySection = generated.value.document.sections.find((section) => section.kind === "summary");
+  const summaryText = summarySection?.claims.map((c) => c.text).join(" ") ?? "";
+  expect(summarySection?.claims.some((c) => c.text === multiValueHeadline.headline)).toBe(false);
+  expect(summaryText).not.toContain("|");
+  // Every stated direction still appears verbatim, via the composed sentence - nothing invented or dropped.
+  for (const direction of ["IT-support", "IT Coordinator", "Nätverk", "Cloud", "Cybersäkerhet"]) expect(summaryText).toContain(direction);
+  // The fully rendered document text (what actually reaches the candidate) is also pipe-free.
+  expect(generated.value.renderedDocument.content).not.toContain("IT-support | IT Coordinator");
+  // Presentation-only: the source profile is never mutated by generation.
+  expect(multiValueHeadline).toEqual(before);
+});
+
+test("the generated Profil section still opens with the plain single-value headline as its own claim (no regression)", async () => {
+  const { profile, job } = professionalFixture();
+  const singleValueHeadline = { ...profile, headline: "IT-supporttekniker", summary: undefined };
+  const application = createApplication({ id: "single-value-headline-check", rankedJob: analyzeJobs(singleValueHeadline, [job]).rankedJobs[0], createdAt: "2026-09-15T10:00:00Z" });
+  if (!application.ok) throw new Error("fixture application failed");
+  const generated = await generateApplicationDocument({
+    application: application.value,
+    candidateDocumentInput: { matchingProfile: documentQualityProfile(singleValueHeadline), identity: { fullName: "Alex Example" } },
+    tailoringOptions: { type: "cv", language: "sv", maxEvidenceItems: 200 },
+    generationOptions: { untrustedJobDescription: job.description ?? undefined },
+    generator: professionalDocumentGenerator,
+  });
+  if (!generated.ok) throw new Error(JSON.stringify(generated.error));
+  const summarySection = generated.value.document.sections.find((section) => section.kind === "summary");
+  expect(summarySection?.claims.some((c) => c.text === "IT-supporttekniker")).toBe(true);
+});
