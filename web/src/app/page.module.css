@@ -1087,6 +1087,43 @@
     color: #f8fafc;
   }
 
+  .modernCvIdentity {
+    margin-bottom: 28px;
+    padding-bottom: 24px;
+    border-bottom: 1px solid #d9e0e2;
+  }
+
+  .modernCvIdentity h1 {
+    color: #1b2528;
+    font-size: 26px;
+    font-weight: 750;
+    letter-spacing: -0.01em;
+    line-height: 1.15;
+    overflow-wrap: anywhere;
+  }
+
+  .modernCvContactList {
+    display: grid;
+    gap: 7px;
+    margin: 16px 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .modernCvContactList li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #c4d0d0;
+    font-size: 11.5px;
+    overflow-wrap: anywhere;
+  }
+
+  .modernCvContactList svg {
+    flex-shrink: 0;
+    color: #9db3ac;
+  }
+
   .modernCvSidebarSection {
     margin-top: 32px;
   }
@@ -1096,6 +1133,9 @@
   }
 
   .modernCvSidebarSection h2 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     padding-bottom: 9px;
     border-bottom: 1px solid rgba(248, 250, 252, 0.3);
     color: #dce9e5;
@@ -1103,6 +1143,10 @@
     font-weight: 700;
     letter-spacing: 0.14em;
     text-transform: uppercase;
+  }
+
+  .modernCvSidebarSection h2 svg {
+    flex-shrink: 0;
   }
 
   .modernCvSidebarSection ul {
@@ -1121,15 +1165,16 @@
   }
 
   .modernCvPills {
-    grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+    display: flex;
+    flex-wrap: wrap;
     gap: 7px;
   }
 
   .modernCvPills li {
-    padding: 6px 8px;
+    padding: 6px 11px;
     border: 1px solid rgba(220, 233, 229, 0.35);
-    border-radius: 4px;
-    background: rgba(255, 255, 255, 0.06);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
     font-size: 11px;
     line-height: 1.35;
   }
@@ -1159,14 +1204,11 @@
     letter-spacing: 0.2em;
   }
 
-  .modernCvHeader h1 {
-    max-width: 100%;
-    color: #1c2b31;
-    font-size: clamp(28px, 4vw, 42px);
-    font-weight: 750;
-    letter-spacing: -0.02em;
-    line-height: 1.08;
-    overflow-wrap: anywhere;
+  .modernCvIdentity .modernCvHeadline {
+    margin-top: 6px;
+    color: #3f8a6c;
+    font-size: 13.5px;
+    font-weight: 600;
   }
 
   .modernCvMeta {
@@ -1182,11 +1224,16 @@
   .modernCvSection h2 {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
     color: #24343b;
     font-size: 15px;
     font-weight: 750;
     letter-spacing: 0.01em;
+  }
+
+  .modernCvSection h2 svg {
+    flex-shrink: 0;
+    color: #3f8a6c;
   }
 
   .modernCvSection h2::after {
@@ -1293,6 +1340,19 @@
       overflow-wrap: anywhere;
     }
 
+    .classicCvHeadline {
+      margin-top: 8px;
+      color: #344054;
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .classicCvContact {
+      margin-top: 8px;
+      color: #667085;
+      font-size: 12px;
+    }
+
     .classicCvHeader p:last-child {
       margin-top: 12px;
       color: #667085;
@@ -1346,7 +1406,21 @@
       overflow-wrap: anywhere;
     }
 
-    .minimalCvHeader p {
+    .minimalCvHeadline {
+      margin-top: 10px;
+      color: #475467;
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    .minimalCvContact {
+      margin-top: 8px;
+      color: #98a2b3;
+      font-size: 11px;
+      letter-spacing: 0.04em;
+    }
+
+    .minimalCvHeader p:last-child {
       margin-top: 16px;
       color: #98a2b3;
       font-size: 11px;
@@ -1423,24 +1497,33 @@
     }
 
     .modernLetterHeader,
-    .classicLetterHeader {
+    .classicLetterHeader,
+    .minimalLetterHeader {
       padding-bottom: 26px;
+      margin-bottom: 8px;
       border-bottom: 1px solid #d9e0e2;
     }
 
-    .modernLetterHeader p:first-child,
-    .classicLetterHeader p:first-child {
-      color: #718087;
-      font-size: 10px;
+    .modernLetterHeaderName,
+    .classicLetterHeaderName,
+    .minimalLetterHeaderName {
+      color: #17202a;
+      font-size: 20px;
       font-weight: 700;
-      letter-spacing: 0.2em;
     }
 
-    .modernLetterHeader p:last-child,
-    .classicLetterHeader p:last-child {
-      margin-top: 12px;
-      color: #98a2b3;
-      font-size: 11px;
+    .modernLetterHeader p,
+    .classicLetterHeader p,
+    .minimalLetterHeader p {
+      margin-top: 6px;
+      color: #67717d;
+      font-size: 12px;
+    }
+
+    .modernLetterHeader p:first-child,
+    .classicLetterHeader p:first-child,
+    .minimalLetterHeader p:first-child {
+      margin-top: 0;
     }
 
     .modernLetterSection,
@@ -1496,23 +1579,6 @@
       padding: 82px 86px;
       border-top: 5px solid #17202a;
       box-shadow: 0 12px 32px rgba(16, 24, 40, 0.08);
-    }
-
-    .minimalLetterHeader {
-      padding-bottom: 34px;
-    }
-
-    .minimalLetterHeader h1 {
-      color: #17202a;
-      font-size: 32px;
-      font-weight: 650;
-      letter-spacing: -0.025em;
-    }
-
-    .minimalLetterHeader p {
-      margin-top: 12px;
-      color: #98a2b3;
-      font-size: 11px;
     }
 
     .minimalLetterBody {

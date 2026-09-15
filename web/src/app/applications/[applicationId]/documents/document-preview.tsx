@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { coverLetterRendererForTemplate, cvRendererForTemplate, type DocumentPresentationModel, type DocumentTemplateDefinition } from "@/lib/document-presentation";
+import { coverLetterRendererForTemplate, cvRendererForTemplate, type CoverLetterHeaderInfo, type DocumentPresentationModel, type DocumentTemplateDefinition } from "@/lib/document-presentation";
 import TemplateSelector from "./template-selector";
 import ModernCvPreview from "./modern-cv-preview";
 import ClassicCvPreview from "./classic-cv-preview";
@@ -14,11 +14,13 @@ export function DocumentPreview({
   presentation,
   template,
   editPath,
+  coverLetterHeader,
 }: {
   applicationId: string;
   presentation: DocumentPresentationModel;
   template: DocumentTemplateDefinition;
   editPath: string;
+  coverLetterHeader?: CoverLetterHeaderInfo;
 }) {
   const renderer = cvRendererForTemplate(presentation.documentType, template.id);
 
@@ -41,9 +43,9 @@ export function DocumentPreview({
   }
 
   const coverLetterRenderer = coverLetterRendererForTemplate(presentation.documentType, template.id);
-  if (coverLetterRenderer === "modern") return <ModernCoverLetterPreview applicationId={applicationId} presentation={presentation} template={template} />;
-  if (coverLetterRenderer === "classic") return <ClassicCoverLetterPreview applicationId={applicationId} presentation={presentation} template={template} />;
-  if (coverLetterRenderer === "minimal") return <MinimalCoverLetterPreview applicationId={applicationId} presentation={presentation} template={template} />;
+  if (coverLetterRenderer === "modern") return <ModernCoverLetterPreview applicationId={applicationId} presentation={presentation} template={template} header={coverLetterHeader} />;
+  if (coverLetterRenderer === "classic") return <ClassicCoverLetterPreview applicationId={applicationId} presentation={presentation} template={template} header={coverLetterHeader} />;
+  if (coverLetterRenderer === "minimal") return <MinimalCoverLetterPreview applicationId={applicationId} presentation={presentation} template={template} header={coverLetterHeader} />;
 
   return (
     <main className={`documentPage documentPage-${template.layout}`}>

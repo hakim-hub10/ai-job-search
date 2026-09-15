@@ -9,6 +9,12 @@ export interface DocumentDownloadRequest {
   documentType: unknown;
   templateId: unknown;
   format: unknown;
+  /** Cover-letter header only - see DocumentExportRequest. */
+  jobTitle?: unknown;
+  employerName?: unknown;
+  employerLocation?: unknown;
+  candidateName?: unknown;
+  candidateEmail?: unknown;
 }
 
 export interface DocumentDownloadDependencies {
@@ -65,6 +71,11 @@ export async function downloadDocument(
     documentType: request.documentType,
     templateId: request.templateId,
     format: request.format,
+    ...(typeof request.jobTitle === "string" ? { jobTitle: request.jobTitle } : {}),
+    ...(typeof request.employerName === "string" ? { employerName: request.employerName } : {}),
+    ...(typeof request.employerLocation === "string" ? { employerLocation: request.employerLocation } : {}),
+    ...(typeof request.candidateName === "string" ? { candidateName: request.candidateName } : {}),
+    ...(typeof request.candidateEmail === "string" ? { candidateEmail: request.candidateEmail } : {}),
   }, { documentRepository: dependencies.documentRepository });
   if (!prepared.ok) {
     return prepared.error.code === "DOCUMENT_NOT_FOUND"

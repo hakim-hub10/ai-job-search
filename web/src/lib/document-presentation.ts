@@ -6,6 +6,49 @@ export type CvRendererId = "modern" | "classic" | "minimal" | "shared";
 
 export type CoverLetterRendererId = "modern" | "classic" | "minimal";
 
+/** "Ansökan"/"Application" - the cover-letter header label preceding the target job title, which always comes from the actual application and is never invented. */
+export function coverLetterApplicationLabel(language: "sv" | "en" | undefined): string {
+  return language === "en" ? "Application" : "Ansökan";
+}
+
+/** Today's date, formatted for the cover-letter header in the document's own language. Never a candidate/job fact - purely a presentation timestamp. */
+export function coverLetterDate(language: "sv" | "en" | undefined, now: Date = new Date()): string {
+  return now.toLocaleDateString(language === "en" ? "en-US" : "sv-SE", { year: "numeric", month: "long", day: "numeric" });
+}
+
+export type ContactFieldKind = "email" | "phone" | "linkedin" | "github" | "location";
+
+/** A phone number: digits with only spaces/+/-/() punctuation, no letters. */
+function looksLikePhoneNumber(text: string): boolean {
+  return /^[+()\d][\d\s()+-]{5,}$/u.test(text.trim());
+}
+
+/** Classifies one contact-details segment (a single item from documentContactForCv's " · "-joined string) for icon/labeling purposes. Order matters: checked most-specific first. */
+export function classifyContactField(text: string): ContactFieldKind {
+  if (text.includes("@")) return "email";
+  const lower = text.toLowerCase();
+  if (lower.includes("linkedin.com")) return "linkedin";
+  if (lower.includes("github.com")) return "github";
+  if (looksLikePhoneNumber(text)) return "phone";
+  return "location";
+}
+
+/**
+ * Cover-letter header only - all optional and never invented when
+ * unavailable: verified candidate name/email, today's date, and the actual
+ * target job's title/employer/city as stated on the job posting. There is no
+ * employer street address anywhere in this domain model, so it is never
+ * shown - only the city-level location the job posting itself states.
+ */
+export interface CoverLetterHeaderInfo {
+  candidateName?: string;
+  candidateEmail?: string;
+  date?: string;
+  jobTitle?: string;
+  employerName?: string;
+  employerLocation?: string;
+}
+
 export function coverLetterRendererForTemplate(
   documentType: PresentationDocumentType,
   templateId: DocumentTemplateId,
@@ -44,12 +87,33 @@ function normalizedHeading(heading: string): string {
 export function classifyCvSection(section: DocumentPresentationSection): CvSectionColumn {
   const sidebarHeadings = new Set([
     "kontakt", "contact", "kontakta", "kompetenser", "kompetens", "skills", "skill",
-    "certifieringar", "certifiering", "certifications", "certification", "sprak", "languages",
+    "sprak", "languages",
     "links", "lankar", "lankar / links", "yrkeskompetenser", "professional skills", "personliga kompetenser", "interpersonal skills",
   ]);
   return sidebarHeadings.has(normalizedHeading(section.heading)) ? "sidebar" : "main";
 }
 
+/**
+ * A short professional title (e.g. "IT-supporttekniker", or a multi-role
+ * tagline such as "IT-support | IT Coordinator | Cloud | Cybersäkerhet"), not
+ * a multi-sentence paragraph. Titles never contain sentence-ending
+ * punctuation; a real profile paragraph always does.
+ */
+function looksLikeShortHeadline(text: string): boolean {
+  return text.length <= 100 && !/[.!?]/u.test(text);
+}
+
+/**
+ * A short sidebar subtitle under the candidate's name - never the full
+ * professional profile paragraph. The deterministic generator's Profil/
+ * Summary section carries the headline and the composed paragraph as two
+ * separate items ([headline, paragraph]), so item[0] is a genuine short
+ * headline there. A section with only one item is ambiguous by shape alone:
+ * it may be just a short headline (e.g. sparse evidence, deterministic path)
+ * or a full profile paragraph (the AI writer's normal shape) - only the
+ * former is promoted here; a real paragraph belongs in the main content
+ * under its own heading, never duplicated into the sidebar.
+ */
 export function documentTitleForCv(
   sections: DocumentPresentationSection[],
 ): string | undefined {
@@ -57,7 +121,9 @@ export function documentTitleForCv(
     const heading = section.heading.toLocaleLowerCase("sv-SE").replace(/[åä]/gu, "a").replace(/ö/gu, "o").trim();
     return heading === "profil" || heading === "summary" || heading === "professional summary" || heading === "headline";
   });
-  return titleSection?.items[0];
+  if (!titleSection?.items.length) return undefined;
+  if (titleSection.items.length >= 2) return titleSection.items[0];
+  return looksLikeShortHeadline(titleSection.items[0]) ? titleSection.items[0] : undefined;
 }
 
 /** The identity header line is "Name | email | phone | ..." (name first, see compareEvidence in the CLI's document-tailoring.ts) - only the name belongs in the large CV heading. */

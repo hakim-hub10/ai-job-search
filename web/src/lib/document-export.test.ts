@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 
 import type { ApplicationDocumentRecord } from "../../../.agents/job-search/cli/src/application-document-repository";
 import type { ApplicationDocumentRepository } from "../../../.agents/job-search/cli/src/application-document-repository";
-import { MAX_DOCUMENT_EXPORT_LENGTH, prepareDocumentExport, suggestedDocumentFilename } from "./document-export";
+import { MAX_DOCUMENT_EXPORT_LENGTH, prepareDocumentExport, sanitizedDocumentExportModel, suggestedDocumentFilename } from "./document-export";
 
 const content = "## Profil\n- Supporttekniker\n## Kompetenser\n- Microsoft 365\n";
 
@@ -94,5 +94,83 @@ describe("Phase 11.7A document export preparation", () => {
     const wrongApplication = record(3);
     wrongApplication.applicationId = "another-application";
     expect(await prepareDocumentExport({ applicationId: "application-1", documentType: "cv", templateId: "modern", format: "pdf" }, { documentRepository: repository([wrongApplication]) })).toMatchObject({ ok: false, error: { code: "EXPORT_PREPARATION_FAILED" } });
+  });
+
+  it("threads the cover-letter header fields (job title, candidate name, candidate email) through when supplied", async () => {
+    const result = await prepareDocumentExport(
+      { applicationId: "application-1", documentType: "coverLetter", templateId: "modern", format: "pdf", jobTitle: "IT-support, 1st line", candidateName: "Abdi Hakim Faizal", candidateEmail: "abdi.faizal@example.com" },
+      { documentRepository: repository([record(1, "coverLetter")]) },
+    );
+    expect(result).toMatchObject({ ok: true, value: { jobTitle: "IT-support, 1st line", candidateName: "Abdi Hakim Faizal", candidateEmail: "abdi.faizal@example.com" } });
+  });
+
+  it("omits the cover-letter header fields entirely when not supplied - never invents a job title or contact detail", async () => {
+    const result = await prepareDocumentExport(
+      { applicationId: "application-1", documentType: "coverLetter", templateId: "modern", format: "pdf" },
+      { documentRepository: repository([record(1, "coverLetter")]) },
+    );
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.jobTitle).toBeUndefined();
+      expect(result.value.candidateName).toBeUndefined();
+      expect(result.value.candidateEmail).toBeUndefined();
+    }
+  });
+
+  it("trims whitespace-only header fields down to omitted, and sanitizes XML-invalid control characters", async () => {
+    const blank = await prepareDocumentExport(
+      { applicationId: "application-1", documentType: "coverLetter", templateId: "modern", format: "pdf", jobTitle: "   ", candidateName: "", candidateEmail: "  " },
+      { documentRepository: repository([record(1, "coverLetter")]) },
+    );
+    expect(blank.ok).toBe(true);
+    if (blank.ok) {
+      expect(blank.value.jobTitle).toBeUndefined();
+      expect(blank.value.candidateName).toBeUndefined();
+      expect(blank.value.candidateEmail).toBeUndefined();
+    }
+
+    const dirty = await prepareDocumentExport(
+      { applicationId: "application-1", documentType: "coverLetter", templateId: "modern", format: "pdf", jobTitle: "IT-support  , 1st line" },
+      { documentRepository: repository([record(1, "coverLetter")]) },
+    );
+    expect(dirty).toMatchObject({ ok: true, value: { jobTitle: "IT-support  , 1st line" } });
+    const sanitized = dirty.ok ? sanitizedDocumentExportModel(dirty.value) : null;
+    expect(sanitized?.jobTitle).toBe("IT-support , 1st line");
+  });
+
+  it("threads the employer name and city through when supplied by the actual job posting, and omits the city when the posting does not state one", async () => {
+    const withCity = await prepareDocumentExport(
+      { applicationId: "application-1", documentType: "coverLetter", templateId: "modern", format: "pdf", employerName: "Fictional Support Partners AB", employerLocation: "Göteborg" },
+      { documentRepository: repository([record(1, "coverLetter")]) },
+    );
+    expect(withCity).toMatchObject({ ok: true, value: { employerName: "Fictional Support Partners AB", employerLocation: "Göteborg" } });
+
+    const withoutCity = await prepareDocumentExport(
+      { applicationId: "application-1", documentType: "coverLetter", templateId: "modern", format: "pdf", employerName: "Fictional Support Partners AB" },
+      { documentRepository: repository([record(1, "coverLetter")]) },
+    );
+    expect(withoutCity.ok).toBe(true);
+    if (withoutCity.ok) {
+      expect(withoutCity.value.employerName).toBe("Fictional Support Partners AB");
+      expect(withoutCity.value.employerLocation).toBeUndefined();
+    }
+  });
+
+  it("always computes today's date for a cover letter export - never invented job/candidate data, purely a presentation timestamp", async () => {
+    const result = await prepareDocumentExport(
+      { applicationId: "application-1", documentType: "coverLetter", templateId: "modern", format: "pdf" },
+      { documentRepository: repository([record(1, "coverLetter")]) },
+    );
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(typeof result.value.date).toBe("string");
+  });
+
+  it("does not compute a date for a CV export - the date header is cover-letter only", async () => {
+    const result = await prepareDocumentExport(
+      { applicationId: "application-1", documentType: "cv", templateId: "modern", format: "pdf" },
+      { documentRepository: repository([record(1, "cv")]) },
+    );
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.date).toBeUndefined();
   });
 });

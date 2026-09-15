@@ -12,7 +12,7 @@ import {
   WidthType,
 } from "docx";
 
-import { classifyCvSection, cvBodySections, documentContactForCv, documentNameForCv, documentTitleForCv, type DocumentPresentationSection } from "./document-presentation";
+import { classifyCvSection, coverLetterApplicationLabel, cvBodySections, documentContactForCv, documentNameForCv, documentTitleForCv, type DocumentPresentationSection } from "./document-presentation";
 import { sanitizedDocumentExportModel, type DocumentExportModel } from "./document-export";
 
 export interface ExportedDocxDocument {
@@ -63,16 +63,32 @@ function sectionParagraphs(sections: readonly DocumentPresentationSection[], sty
   ]);
 }
 
-function titleParagraph(model: DocumentExportModel, color: string, includeCvTitle: boolean): Paragraph[] {
+function titleParagraph(model: DocumentExportModel, color: string, includeCvTitle: boolean, contactColor?: string): Paragraph[] {
   const title = includeCvTitle ? documentTitleForCv(model.presentation.sections) : undefined;
   const name = includeCvTitle ? documentNameForCv(model.presentation.sections) : undefined;
   const contact = includeCvTitle ? documentContactForCv(model.presentation.sections) : undefined;
   return [
     ...(name ? [new Paragraph({ style: "DocumentTitle", children: [text(name, { bold: true, color })] })] : []),
     ...(!name ? [new Paragraph({ style: "DocumentLabel", children: [text(label(model), { bold: true, color })] })] : []),
-    ...(contact ? [new Paragraph({ style: "DocumentContact", children: [text(contact)] })] : []),
     ...(title ? [new Paragraph({ style: name ? "DocumentSubtitle" : "DocumentTitle", children: [text(title, { bold: true, color })] })] : []),
+    ...(contact ? [new Paragraph({ style: "DocumentContact", children: [text(contact, contactColor ? { color: contactColor } : {})] })] : []),
   ];
+}
+
+/** Name + title only, for the main (light) column - never the sidebar, and never duplicated between the two. */
+function modernNameTitle(model: DocumentExportModel, color: string): Paragraph[] {
+  const name = documentNameForCv(model.presentation.sections);
+  const title = documentTitleForCv(model.presentation.sections);
+  return [
+    ...(name ? [new Paragraph({ style: "DocumentTitle", children: [text(name, { bold: true, color })] })] : []),
+    ...(title ? [new Paragraph({ style: name ? "DocumentSubtitle" : "DocumentTitle", children: [text(title, { bold: true, color: "3F8A6C" })] })] : []),
+  ];
+}
+
+/** Contact details only, for the top of the sidebar - name/title live in the main column instead. */
+function modernContactOnly(model: DocumentExportModel, contactColor: string): Paragraph[] {
+  const contact = documentContactForCv(model.presentation.sections);
+  return contact ? [new Paragraph({ style: "DocumentContact", children: [text(contact, { color: contactColor })] })] : [];
 }
 
 function modernCv(model: DocumentExportModel): Table {
@@ -97,7 +113,7 @@ function modernCv(model: DocumentExportModel): Table {
           shading: { type: ShadingType.CLEAR, fill: MODERN_DARK },
           margins: { top: 220, bottom: 220, left: 220, right: 180 },
           children: [
-            new Paragraph({ style: "SidebarLabel", children: [text("CURRICULUM VITAE", { bold: true, color: "F7F8F9" })] }),
+            ...modernContactOnly(model, "C4D0D0"),
             ...sidebar.flatMap((section) => [
               heading(section, "SidebarHeading"),
               ...section.items.map((item) => new Paragraph({
@@ -110,16 +126,32 @@ function modernCv(model: DocumentExportModel): Table {
         new TableCell({
           width: { size: 6588, type: WidthType.DXA },
           margins: { top: 220, bottom: 220, left: 340, right: 120 },
-          children: [...titleParagraph(model, MODERN_DARK, true), ...sectionParagraphs(main, "ModernHeading")],
+          children: [
+            ...modernNameTitle(model, "1B2528"),
+            ...sectionParagraphs(main, "ModernHeading"),
+          ],
         }),
       ],
     })],
   });
 }
 
+/** Cover-letter header only: candidate name/email, date, and the actual target job title/employer/city (all verified, omitted when unavailable). */
+function coverLetterHeaderParagraphs(model: DocumentExportModel, color: string, metaColor: string): Paragraph[] {
+  if (!model.candidateName && !model.candidateEmail && !model.date && !model.jobTitle && !model.employerName) return [];
+  return [
+    ...(model.candidateName ? [new Paragraph({ style: "DocumentSubtitle", children: [text(model.candidateName, { bold: true, color })] })] : []),
+    ...(model.candidateEmail ? [new Paragraph({ style: "DocumentContact", children: [text(model.candidateEmail, { color: metaColor })] })] : []),
+    ...(model.date ? [new Paragraph({ style: "DocumentContact", children: [text(model.date, { color: metaColor })] })] : []),
+    ...(model.jobTitle ? [new Paragraph({ style: "DocumentContact", children: [text(`${coverLetterApplicationLabel(model.presentation.language)}: ${model.jobTitle}`, { color: metaColor })] })] : []),
+    ...(model.employerName ? [new Paragraph({ style: "DocumentContact", children: [text(`${model.employerName}${model.employerLocation ? `, ${model.employerLocation}` : ""}`, { color: metaColor })] })] : []),
+    new Paragraph({ children: [] }),
+  ];
+}
+
 function modernLetter(model: DocumentExportModel): Paragraph[] {
   return [
-
+    ...coverLetterHeaderParagraphs(model, MODERN_DARK, "65717D"),
     ...model.presentation.sections.flatMap((section) => [
       ...(section.heading ? [heading(section, "ModernHeading")] : []),
       ...section.items.map((item) => new Paragraph({
@@ -136,7 +168,7 @@ function singleColumn(model: DocumentExportModel, variant: "classic" | "minimal"
   const headingStyle = variant === "classic" ? "ClassicHeading" : "MinimalHeading";
   const sections = model.documentType === "cv" ? cvBodySections(model.presentation.sections) : model.presentation.sections;
   return [
-    ...(model.documentType === "cv" ? titleParagraph(model, color, true) : []),
+    ...(model.documentType === "cv" ? titleParagraph(model, color, true) : coverLetterHeaderParagraphs(model, color, "65717D")),
     ...sectionParagraphs(sections, headingStyle, model.documentType === "coverLetter"),
   ];
 }

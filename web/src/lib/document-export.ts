@@ -1,6 +1,6 @@
 import type { DocumentType } from "../../../.agents/job-search/cli/src/application-documents";
 import type { ApplicationDocumentRecord, ApplicationDocumentRepository } from "../../../.agents/job-search/cli/src/application-document-repository";
-import { DOCUMENT_TEMPLATES, resolveDocumentTemplate, toDocumentPresentationModel, type DocumentPresentationModel, type DocumentTemplateId } from "./document-presentation";
+import { coverLetterDate, DOCUMENT_TEMPLATES, resolveDocumentTemplate, toDocumentPresentationModel, type DocumentPresentationModel, type DocumentTemplateId } from "./document-presentation";
 
 export const MAX_DOCUMENT_EXPORT_LENGTH = 20_000;
 
@@ -11,6 +11,12 @@ export interface DocumentExportRequest {
   documentType: DocumentType;
   templateId: DocumentTemplateId;
   format: DocumentExportFormat;
+  /** Cover-letter header only (never invented; omitted fields are simply not shown): the target application's actual job title/employer/city, and the candidate's verified name/email. */
+  jobTitle?: string;
+  employerName?: string;
+  employerLocation?: string;
+  candidateName?: string;
+  candidateEmail?: string;
 }
 
 export interface DocumentExportFormatDefinition {
@@ -27,6 +33,13 @@ export interface DocumentExportModel {
   presentation: DocumentPresentationModel;
   format: DocumentExportFormatDefinition;
   suggestedFilename: string;
+  /** Cover-letter header only - see DocumentExportRequest. date is computed internally (today, in the document's language), never supplied by the caller. */
+  jobTitle?: string;
+  employerName?: string;
+  employerLocation?: string;
+  candidateName?: string;
+  candidateEmail?: string;
+  date?: string;
 }
 
 export type DocumentExportPreparationErrorCode =
@@ -111,6 +124,11 @@ export function sanitizedDocumentExportModel(model: DocumentExportModel): Docume
       rawContent: sanitizeDocumentExportText(model.presentation.rawContent),
       sections,
     },
+    ...(typeof model.jobTitle === "string" ? { jobTitle: sanitizeDocumentExportText(model.jobTitle) } : {}),
+    ...(typeof model.employerName === "string" ? { employerName: sanitizeDocumentExportText(model.employerName) } : {}),
+    ...(typeof model.employerLocation === "string" ? { employerLocation: sanitizeDocumentExportText(model.employerLocation) } : {}),
+    ...(typeof model.candidateName === "string" ? { candidateName: sanitizeDocumentExportText(model.candidateName) } : {}),
+    ...(typeof model.candidateEmail === "string" ? { candidateEmail: sanitizeDocumentExportText(model.candidateEmail) } : {}),
   };
 }
 
@@ -159,6 +177,12 @@ export async function prepareDocumentExport(
         presentation,
         format,
         suggestedFilename: suggestedDocumentFilename(record.documentType, request.templateId, record.version, request.format),
+        ...(request.jobTitle?.trim() ? { jobTitle: request.jobTitle.trim() } : {}),
+        ...(request.employerName?.trim() ? { employerName: request.employerName.trim() } : {}),
+        ...(request.employerLocation?.trim() ? { employerLocation: request.employerLocation.trim() } : {}),
+        ...(request.candidateName?.trim() ? { candidateName: request.candidateName.trim() } : {}),
+        ...(request.candidateEmail?.trim() ? { candidateEmail: request.candidateEmail.trim() } : {}),
+        ...(record.documentType === "coverLetter" ? { date: coverLetterDate(presentation.language) } : {}),
       },
     };
   } catch {

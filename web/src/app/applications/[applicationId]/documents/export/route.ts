@@ -31,6 +31,11 @@ export async function GET(
     documentType: search.get("documentType"),
     templateId: search.get("template"),
     format: search.get("format"),
+    jobTitle: owned.value.application.jobSnapshot.title,
+    employerName: owned.value.application.jobSnapshot.company ?? undefined,
+    employerLocation: owned.value.application.jobSnapshot.location ?? undefined,
+    candidateName: owned.value.context.candidate.displayName,
+    candidateEmail: owned.value.context.user.email,
   }, {
     documentRepository: createFileApplicationDocumentRepository(resolve(documentRepositoryPath)),
   });

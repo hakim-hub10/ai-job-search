@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { loadApplicationDocumentState } from "@/lib/application-documents";
-import { resolveDocumentTemplate, toDocumentPresentationModel } from "@/lib/document-presentation";
+import { coverLetterDate, resolveDocumentTemplate, toDocumentPresentationModel } from "@/lib/document-presentation";
 import { DocumentPreview } from "../document-preview";
 import { configuredAuthorizationDependencies, requireOwnedApplication } from "@/lib/authorization";
 
@@ -30,5 +30,21 @@ export default async function ApplicationCoverLetterPage({
   if (!coverLetter) {
     return <main className="documentPage"><Link href={`/applications/${encodeURIComponent(decodedId)}`}>← Tillbaka till ansökan</Link><h1>Personligt brev är inte skapat ännu</h1><p>Skapa ett personligt brev från ansökan innan du öppnar förhandsvisningen.</p></main>;
   }
-  return <DocumentPreview applicationId={decodedId} presentation={toDocumentPresentationModel(coverLetter)} template={resolution.ok ? resolution.template : resolution.fallback} editPath={`/applications/${encodeURIComponent(decodedId)}/documents/cover-letter/edit`} />;
+  const presentation = toDocumentPresentationModel(coverLetter);
+  return (
+    <DocumentPreview
+      applicationId={decodedId}
+      presentation={presentation}
+      template={resolution.ok ? resolution.template : resolution.fallback}
+      editPath={`/applications/${encodeURIComponent(decodedId)}/documents/cover-letter/edit`}
+      coverLetterHeader={{
+        candidateName: owned.value.context.candidate.displayName,
+        candidateEmail: owned.value.context.user.email,
+        date: coverLetterDate(presentation.language),
+        jobTitle: owned.value.application.jobSnapshot.title,
+        employerName: owned.value.application.jobSnapshot.company ?? undefined,
+        employerLocation: owned.value.application.jobSnapshot.location ?? undefined,
+      }}
+    />
+  );
 }

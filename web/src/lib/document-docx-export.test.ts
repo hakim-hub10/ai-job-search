@@ -117,4 +117,73 @@ describe("Phase 11.7C DOCX export", () => {
     expect(await exportDocumentToDocx({ ...model("cv", "modern"), templateId: "unknown" as never })).toMatchObject({ ok: false, error: { code: "UNSUPPORTED_DOCX_TEMPLATE" } });
     expect(await exportDocumentToDocx({ ...model("cv", "modern"), format: { format: "pdf", extension: "pdf", mediaType: "application/pdf" } })).toMatchObject({ ok: false, error: { code: "INVALID_EXPORT_MODEL" } });
   });
+
+  it.each(["modern", "classic", "minimal"] as const)(
+    "shows the candidate's name, professional title, and contact details in the %s CV Word document, without inventing missing fields",
+    async (templateId) => {
+      const cv: DocumentExportModel = {
+        ...model("cv", templateId),
+        presentation: {
+          ...model("cv", templateId).presentation,
+          sections: [
+            { kind: "identity", heading: "", items: ["Abdi Hakim Faizal", "abdi.faizal@example.com", "Göteborg, Sverige", "linkedin.com/in/abdi-faizal"] },
+            { heading: "Profil", items: ["IT-support | IT Coordinator | Cloud | Cybersäkerhet", "IT-tekniker med erfarenhet av användarsupport och drift av tekniska miljöer."] },
+            { heading: "Kompetenser", items: ["Microsoft 365"] },
+          ],
+        },
+      };
+      const result = await exportDocumentToDocx(cv);
+      expect(result.ok).toBe(true);
+      if (!result.ok) throw new Error(result.error.message);
+      const documentXml = await docxPart(result.value.bytes, "word/document.xml");
+      expect(documentXml).toContain("Abdi Hakim Faizal");
+      expect(documentXml).toContain("IT-support | IT Coordinator | Cloud | Cybersäkerhet");
+      expect(documentXml).toContain("abdi.faizal@example.com");
+      expect(documentXml).toContain("Göteborg, Sverige");
+      expect(documentXml).toContain("linkedin.com/in/abdi-faizal");
+    },
+  );
+
+  it.each(["modern", "classic", "minimal"] as const)(
+    "shows a cover-letter header with the candidate's name/email and the real target job title in the %s Word document",
+    async (templateId) => {
+      const letter: DocumentExportModel = {
+        ...model("coverLetter", templateId),
+        jobTitle: "IT-support, 1st line – deltidsuppdrag i Göteborg",
+        candidateName: "Abdi Hakim Faizal",
+        candidateEmail: "abdi.faizal@example.com",
+        employerName: "Fictional Support Partners AB",
+        employerLocation: "Göteborg",
+        date: "13 september 2026",
+      };
+      const result = await exportDocumentToDocx(letter);
+      expect(result.ok).toBe(true);
+      if (!result.ok) throw new Error(result.error.message);
+      const documentXml = await docxPart(result.value.bytes, "word/document.xml");
+      expect(documentXml).toContain("Abdi Hakim Faizal");
+      expect(documentXml).toContain("abdi.faizal@example.com");
+      expect(documentXml).toContain("13 september 2026");
+      expect(documentXml).toContain("Ansökan: IT-support, 1st line – deltidsuppdrag i Göteborg");
+      expect(documentXml).toContain("Fictional Support Partners AB, Göteborg");
+    },
+  );
+
+  it("shows the employer name without a city when the job posting does not state one", async () => {
+    const letter: DocumentExportModel = { ...model("coverLetter", "modern"), employerName: "Fictional Support Partners AB" };
+    const result = await exportDocumentToDocx(letter);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.error.message);
+    const documentXml = await docxPart(result.value.bytes, "word/document.xml");
+    expect(documentXml).toContain("Fictional Support Partners AB");
+    expect(documentXml).not.toMatch(/Fictional Support Partners AB,/u);
+  });
+
+  it("omits the cover-letter header entirely when no job title, employer, or candidate details are supplied", async () => {
+    const result = await exportDocumentToDocx(model("coverLetter", "modern"));
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.error.message);
+    const documentXml = await docxPart(result.value.bytes, "word/document.xml");
+    expect(documentXml).not.toContain("Ansökan:");
+    expect(documentXml).not.toContain("Application:");
+  });
 });

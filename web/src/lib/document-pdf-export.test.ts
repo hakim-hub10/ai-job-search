@@ -67,6 +67,22 @@ describe("Phase 11.7B PDF export", () => {
     expect(text).toContain("citat");
   });
 
+  it.each(["modern", "classic", "minimal"] as const)(
+    "extracts fi/fl-ligature words intact in the %s template's text layer, for ATS parsers",
+    async (templateId) => {
+      // Headings deliberately avoid the "Profil"/summary heading set, whose
+      // sole item is promoted to the header title and stripped from the
+      // section body (see documentTitleForCv/cvBodySections) - unrelated to
+      // the ligature fix under test here.
+      const content = "## Erfarenhet\n- Snowflake certifiering, Airflow och fem (5) projekt slutförda\n## Certifieringar\n- Certifierad specialist";
+      const result = await exportDocumentToPdf(model("cv", templateId, content));
+      expect(result.ok).toBe(true);
+      if (!result.ok) throw new Error(result.error.message);
+      const text = await pdfText(result.value.bytes);
+      for (const word of ["Erfarenhet", "Snowflake", "certifiering", "Airflow", "Certifieringar", "Certifierad"]) expect(text).toContain(word);
+    },
+  );
+
   it("flows long content to multiple pages without truncating the final section", async () => {
     const content = `## Profil\n- Supporttekniker\n${Array.from({ length: 180 }, (_, index) => `- Rad ${index} åäö med tillräckligt innehåll för sidflöde`).join("\n")}\n## Sista sektionen\n- SLUTORD-11-7B`;
     const result = await exportDocumentToPdf(model("cv", "modern", content));
@@ -106,5 +122,76 @@ describe("Phase 11.7B PDF export", () => {
   it("rejects unsupported template/model combinations without invoking LibreOffice", async () => {
     const result = await exportDocumentToPdf({ ...model("cv", "modern"), templateId: "unknown" as never });
     expect(result).toMatchObject({ ok: false, error: { code: "UNSUPPORTED_PDF_TEMPLATE" } });
+  });
+
+  it.each(["modern", "classic", "minimal"] as const)(
+    "shows the candidate's name, professional title, and contact details in the %s CV, without inventing missing fields",
+    async (templateId) => {
+      const cv: DocumentExportModel = {
+        ...model("cv", templateId),
+        presentation: {
+          ...model("cv", templateId).presentation,
+          sections: [
+            { kind: "identity", heading: "", items: ["Abdi Hakim Faizal", "abdi.faizal@example.com", "Göteborg, Sverige", "linkedin.com/in/abdi-faizal"] },
+            { heading: "Profil", items: ["IT-support | IT Coordinator | Cloud | Cybersäkerhet", "IT-tekniker med erfarenhet av användarsupport och drift av tekniska miljöer."] },
+            { heading: "Kompetenser", items: ["Microsoft 365"] },
+          ],
+        },
+      };
+      const result = await exportDocumentToPdf(cv);
+      expect(result.ok).toBe(true);
+      if (!result.ok) throw new Error(result.error.message);
+      const text = await pdfText(result.value.bytes);
+      expect(text).toContain("Abdi Hakim Faizal");
+      expect(text).toContain("IT-support | IT Coordinator | Cloud | Cybersäkerhet");
+      expect(text).toContain("abdi.faizal@example.com");
+      expect(text).toContain("Göteborg, Sverige");
+      expect(text).toContain("linkedin.com/in/abdi-faizal");
+      // No phone number was supplied - it must not be invented anywhere in the document.
+      expect(text).not.toMatch(/\d{3}[\s-]\d{2,3}[\s-]\d{2}/u);
+    },
+  );
+
+  it.each(["modern", "classic", "minimal"] as const)(
+    "shows a cover-letter header with the candidate's name/email and the real target job title in the %s template",
+    async (templateId) => {
+      const letter: DocumentExportModel = {
+        ...model("coverLetter", templateId),
+        jobTitle: "IT-support, 1st line – deltidsuppdrag i Göteborg",
+        candidateName: "Abdi Hakim Faizal",
+        candidateEmail: "abdi.faizal@example.com",
+        employerName: "Fictional Support Partners AB",
+        employerLocation: "Göteborg",
+        date: "13 september 2026",
+      };
+      const result = await exportDocumentToPdf(letter);
+      expect(result.ok).toBe(true);
+      if (!result.ok) throw new Error(result.error.message);
+      const text = await pdfText(result.value.bytes);
+      expect(text).toContain("Abdi Hakim Faizal");
+      expect(text).toContain("abdi.faizal@example.com");
+      expect(text).toContain("13 september 2026");
+      expect(text).toContain("Ansökan: IT-support, 1st line – deltidsuppdrag i Göteborg");
+      expect(text).toContain("Fictional Support Partners AB, Göteborg");
+    },
+  );
+
+  it("shows the employer name without a city when the job posting does not state one, and never shows a street address (none exists in the data model)", async () => {
+    const letter: DocumentExportModel = { ...model("coverLetter", "modern"), employerName: "Fictional Support Partners AB" };
+    const result = await exportDocumentToPdf(letter);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.error.message);
+    const text = await pdfText(result.value.bytes);
+    expect(text).toContain("Fictional Support Partners AB");
+    expect(text).not.toMatch(/Fictional Support Partners AB,/u);
+  });
+
+  it("omits the cover-letter header entirely when no job title, employer, or candidate details are supplied", async () => {
+    const result = await exportDocumentToPdf(model("coverLetter", "modern"));
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.error.message);
+    const text = await pdfText(result.value.bytes);
+    expect(text).not.toContain("Ansökan:");
+    expect(text).not.toContain("Application:");
   });
 });
